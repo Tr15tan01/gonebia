@@ -1,0 +1,50 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js build output
+/.next/
+/out/
+/build
+
+# environment & secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# testing
+/coverage
+
+# vercel
+.vercel
+
+# supabase cli local state
+supabase/.branches
+supabase/.temp
+
+# local scaffolding (the part scripts used to build the project)
+part*.py
+rename_keys.py
+gonebia-source.md
+gonebia-fixes.md
+
+# editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

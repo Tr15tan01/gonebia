@@ -1,0 +1,205 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui";
+import { MEMORY_TYPES } from "@/lib/types";
+import { localISO } from "@/lib/dates";
+
+interface CaptureResult {
+  id: string;
+  interpretation: string;
+  structured: null | {
+    title: string; type: string; occurred_at: string | null; due_at: string | null; reminder_at: string | null; review_at: string | null;
+  };
+  similar: { id: string; title: string; created_at: string; similarity: number }[];
+}
+
+export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
+  const [text, setText] = useState("");
+  const [listening, setListening] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<CaptureResult | null>(null);
+  const recRef = useRef<any>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  const toast = useToast();
+  const router = useRouter();
+
+  // Prefill support (e.g. "+ Add a book" from the Books page) and ?capture=1 deep link.
+  // Read from the URL on mount instead of useSearchParams to avoid a Suspense boundary.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get("prefill");
+    if (prefill) setText(prefill);
+    if (params.get("capture") === "1" || prefill) areaRef.current?.focus();
+  }, []);
+
+  function toggleMic() {
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SR) { toast("Voice input isn't supported in this browser - try Chrome."); return; }
+    if (listening) { recRef.current?.stop(); setListening(false); return; }
+    const rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.continuous = true; rec.interimResults = true;
+    let final = text;
+    rec.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript + " ";
+        else interim += e.results[i][0].transcript;
+      }
+      setText((final + interim).trimStart());
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => { setListening(false); toast("Couldn't access the microphone."); };
+    recRef.current = rec;
+    rec.start(); setListening(true);
+  }
+
+  async function save() {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          source: listening ? "voice" : "typed",
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setResult(data);
+      setText("");
+      router.refresh();
+    } catch (e: any) { toast(e.message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="card p-4 focus-within:border-ember transition-colors">
+        <textarea
+          ref={areaRef}
+          autoFocus={autoFocus}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save(); }}
+          rows={2}
+          placeholder="Tell Gonebia something..."
+          className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
+        />
+        <div className="flex items-center justify-between mt-2">
+          <button
+            onClick={toggleMic}
+            className={`btn-ghost !px-3 ${listening ? "!border-ember !text-ember animate-pulse" : ""}`}
+            aria-label={listening ? "Stop listening" : "Start voice input"}
+          >🎤 {listening ? "Listening..." : "Voice"}</button>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-2 hidden sm:inline">⌘↵</span>
+            <button onClick={save} disabled={!text.trim() || saving} className="btn-primary">
+              {saving ? "Remembering..." : "Remember"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {result && <Interpretation result={result} onClose={() => setResult(null)} />}
+    </div>
+  );
+}
+
+function Interpretation({ result, onClose }: { result: CaptureResult; onClose: () => void }) {
+  const s = result.structured;
+  const [edit, setEdit] = useState(false);
+  const [title, setTitle] = useState(s?.title ?? "");
+  const [type, setType] = useState(s?.type ?? "thought");
+  const [occurred, setOccurred] = useState(s?.occurred_at ? localISO(new Date(s.occurred_at)) : "");
+  const [due, setDue] = useState(s?.due_at ? localISO(new Date(s.due_at)) : "");
+  const [reminder, setReminder] = useState(s?.reminder_at ? localISO(new Date(s.reminder_at)) : "");
+  const [saving, setSaving] = useState(false);
+  const [goalCreated, setGoalCreated] = useState(false);
+  const toast = useToast();
+
+  async function correct() {
+    setSaving(true);
+    const patch: Record<string, unknown> = {
+      type,
+      occurred_at: occurred ? new Date(occurred).toISOString() : null,
+      due_at: due ? new Date(due).toISOString() : null,
+      reminder_at: reminder ? new Date(reminder).toISOString() : null,
+    };
+    if (title.trim()) patch.title = title.trim();
+    await fetch(`/api/memories/${result.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    setSaving(false); setEdit(false);
+    toast("Corrected - thank you.");
+  }
+
+  async function createGoal() {
+    await fetch("/api/goals", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title || "Untitled goal", from_memory_id: result.id }),
+    });
+    setGoalCreated(true);
+    toast("Goal created.");
+  }
+
+  return (
+    <div className="card p-4 border-ember/40 rise space-y-3">
+      <p className="text-sm">
+        <span className="text-ember font-medium">Got it.</span>{" "}
+        {result.interpretation}
+      </p>
+
+      {result.similar.length >= 1 && (
+        <div className="rounded-xl bg-ember-soft p-3 text-sm">
+          <p className="font-medium">🧠 You've mentioned something similar before.</p>
+          <ul className="mt-1.5 space-y-1 text-ink-2">
+            {result.similar.map((h) => (
+              <li key={h.id}>
+                {new Date(h.created_at).toLocaleDateString()} - "{h.title}"
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-ink-2">This seems to be a recurring thought.</p>
+          <button onClick={createGoal} disabled={goalCreated} className="btn-ghost mt-2 !py-1.5 !text-xs">
+            {goalCreated ? "Goal created ✓" : "Create a goal"}
+          </button>
+        </div>
+      )}
+
+      {edit ? (
+        <div className="space-y-2 text-sm">
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+          <div className="grid grid-cols-2 gap-2">
+            <select className="input" value={type} onChange={(e) => setType(e.target.value as any)} aria-label="Type">
+              {MEMORY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input className="input" value={due} onChange={(e) => setDue(e.target.value)} type="datetime-local" aria-label="Due date" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-ink-2">Happened
+              <input className="input mt-1" type="datetime-local" value={occurred} onChange={(e) => setOccurred(e.target.value)} />
+            </label>
+            <label className="text-xs text-ink-2">Remind me
+              <input className="input mt-1" type="datetime-local" value={reminder} onChange={(e) => setReminder(e.target.value)} />
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={correct} disabled={saving} className="btn-primary !py-1.5 !text-xs">{saving ? "Saving..." : "Save correction"}</button>
+            <button onClick={() => setEdit(false)} className="btn-ghost !py-1.5 !text-xs">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button onClick={() => setEdit(true)} className="btn-ghost !py-1.5 !text-xs">Not quite right? Correct it</button>
+          <button onClick={onClose} className="btn-ghost !py-1.5 !text-xs">Done</button>
+        </div>
+      )}
+    </div>
+  );
+}
