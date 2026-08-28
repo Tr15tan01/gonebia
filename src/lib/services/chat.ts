@@ -13,7 +13,7 @@ export const AIChatService = {
 
     // 1. Plan the retrieval (keywords, filters, date range resolved from natural language)
     let plan: any = { query: question, semantic: true, types: null, person: null, from: null, to: null };
-    try { plan = { ...plan, ...(await geminiJSON(searchPlanPrompt(question, new Date(), timezone))) }; } catch {}
+    try { plan = { ...plan, ...(await geminiJSON<Record<string, unknown>>(searchPlanPrompt(question, new Date(), timezone))) }; } catch {}
 
     // 2. Hybrid retrieval (keyword + semantic + structured filters), RLS-scoped
     const rows = await MemoryRetrievalService.hybrid(sb, {

@@ -114,7 +114,7 @@ function draw(canvas: HTMLCanvasElement, sim: any, hover: any | null) {
   ctx.scale(dpr, dpr);
   const dark = document.documentElement.classList.contains("dark");
   ctx.clearRect(0, 0, sim.w, sim.h);
-  const index = new Map(sim.nodes.map((n: any) => [n.id, n]));
+  const index = new Map<string, any>(sim.nodes.map((n: any) => [n.id, n] as [string, any]));
   ctx.strokeStyle = dark ? "#3a332a" : "#e6dfd2";
   ctx.lineWidth = 1;
   for (const e of sim.edges) {

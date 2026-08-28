@@ -86,7 +86,7 @@ export const InsightService = {
         .in("type", ["task", "promise", "commitment", "question", "decision", "reminder"])
         .order("created_at", { ascending: false })
         .limit(50);
-      for (const m of open ?? []) {
+      for (const m of (open ?? []) as any[]) {
         const overdue = !!m.due_at && new Date(m.due_at) < new Date();
         const age = daysAgo(m.memories?.created_at ?? m.created_at) ?? 0;
         const stale = age >= 6;

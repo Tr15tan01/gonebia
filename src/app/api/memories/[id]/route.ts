@@ -14,13 +14,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .single();
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
+  // supabase-js (without generated DB types) types embeds as arrays, but the API
+  // actually returns a single object here - normalize so TS and runtime agree.
+  const rawMeta: unknown = data.memory_metadata;
+  const meta = (Array.isArray(rawMeta) ? rawMeta[0] : rawMeta) as {
+    type?: string; title?: string; summary?: string; importance?: number;
+    status?: string; due_at?: string | null; people?: string[]; category?: string;
+  } | null | undefined;
   return NextResponse.json({
     memory: {
       id: data.id, original_text: data.original_text, created_at: data.created_at,
-      type: data.memory_metadata?.type ?? "thought", title: data.memory_metadata?.title ?? "",
-      summary: data.memory_metadata?.summary ?? "", importance: data.memory_metadata?.importance ?? 3,
-      status: data.memory_metadata?.status ?? "open", due_at: data.memory_metadata?.due_at ?? null,
-      people: data.memory_metadata?.people ?? [],
+      type: meta?.type ?? "thought", title: meta?.title ?? "",
+      summary: meta?.summary ?? "", importance: meta?.importance ?? 3,
+      status: meta?.status ?? "open", due_at: meta?.due_at ?? null,
+      people: meta?.people ?? [],
     },
   });
 }
