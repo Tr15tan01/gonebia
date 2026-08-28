@@ -12,7 +12,7 @@ export const ReminderService = {
     await admin.from("reminders").update({ status: "cancelled" }).eq("memory_id", memoryId).eq("status", "pending");
   },
 
-  /** Cron: fire due reminders as notifications + web push, honoring quiet hours.
+  /** Fire due reminders as notifications + web push, honoring quiet hours.
    *  During quiet hours a reminder is postponed by one hour, never dropped. */
   async processDue() {
     const admin = createAdmin();
@@ -64,3 +64,35 @@ export const ReminderService = {
     return { fired };
   },
 };
+
+/** Re-activate snoozed notifications whose snooze_until has passed. */
+export async function resurfaceSnoozed(): Promise<number> {
+  const admin = createAdmin();
+  const { data: snoozed } = await admin
+    .from("notifications")
+    .select("id, user_id, kind, title, body, data")
+    .eq("status", "snoozed")
+    .limit(100);
+  const now = Date.now();
+  const pushCache = new Map<string, boolean>();
+  let resurfaced = 0;
+  for (const n of snoozed ?? []) {
+    const until = n.data?.snooze_until ? Date.parse(n.data.snooze_until) : 0;
+    if (!until || until > now) continue;
+    const data = { ...n.data };
+    delete data.snooze_until;
+    await admin.from("notifications").update({ status: "unread", data }).eq("id", n.id);
+    if (!pushCache.has(n.user_id)) {
+      const { data: p } = await admin
+        .from("user_preferences").select("push_enabled").eq("user_id", n.user_id).single();
+      pushCache.set(n.user_id, !!p?.push_enabled);
+    }
+    if (pushCache.get(n.user_id)) {
+      await PushService.pushToUser(n.user_id, {
+        title: `Gonebia - ${n.title}`, body: n.body, url: n.data?.url ?? "/dashboard",
+      });
+    }
+    resurfaced++;
+  }
+  return resurfaced;
+}

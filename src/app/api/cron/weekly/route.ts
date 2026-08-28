@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdmin } from "@/lib/supabase/admin";
+import { isAuthorized } from "@/lib/cron-auth";
 import { geminiJSON } from "@/lib/ai/gemini";
 import { weeklyPrompt } from "@/lib/ai/prompts";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 async function handle(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || (req.headers.get("x-cron-secret") !== secret
-    && req.nextUrl.searchParams.get("secret") !== secret)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  if (!isAuthorized(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const admin = createAdmin();
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const { data: users } = await admin.from("profiles").select("id").limit(500);
