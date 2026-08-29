@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { correctionSchema } from "@/lib/validation";
 import { ReminderService } from "@/lib/services/reminders";
 import { BookService } from "@/lib/services/books";
