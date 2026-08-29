@@ -3,12 +3,11 @@ import { useEffect, useState } from "react";
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
-const DAY = 86_400_000;
+/** Show the banner at most once every SHOW_EVERY_MS (12h => up to twice a day).
+ *  The timestamp is written when the banner is SHOWN, so ignoring it still
+ *  counts - no more banner on every refresh. */
+const SHOW_EVERY_MS = 12 * 60 * 60 * 1000;
 
-/** Install banner. Android/desktop Chrome: beforeinstallprompt with a real
- *  Install button. iOS Safari: an "Add to Home Screen" hint.
- *  Frequency: at most once per day - "Not now" (or dismissing the native
- *  prompt) silences it for 24h, then it may appear once more. */
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [ios, setIos] = useState(false);
@@ -18,14 +17,19 @@ export function InstallPrompt() {
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as any).standalone === true;
-    if (standalone) return; // already installed
+    if (standalone) return;
 
     let lastShown = 0;
     try { lastShown = +(localStorage.getItem("gonebia-install-last") ?? 0); } catch {}
-    if (Date.now() - lastShown < DAY) return; // refused/seen recently - stay quiet today
+    if (Date.now() - lastShown < SHOW_EVERY_MS) return;
+
+    const markShown = () => {
+      try { localStorage.setItem("gonebia-install-last", String(Date.now())); } catch {}
+    };
 
     const onBIP = (e: Event) => {
       e.preventDefault();
+      markShown();
       setDeferred(e as BIPEvent);
       setVisible(true);
     };
@@ -36,7 +40,7 @@ export function InstallPrompt() {
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (isIOS) {
-      timer = setTimeout(() => { setIos(true); setVisible(true); }, 4000);
+      timer = setTimeout(() => { markShown(); setIos(true); setVisible(true); }, 4000);
     }
     return () => {
       window.removeEventListener("beforeinstallprompt", onBIP);
@@ -45,7 +49,7 @@ export function InstallPrompt() {
     };
   }, []);
 
-  function quietForToday() {
+  function dismiss() {
     try { localStorage.setItem("gonebia-install-last", String(Date.now())); } catch {}
     setVisible(false);
   }
@@ -53,8 +57,8 @@ export function InstallPrompt() {
   async function install() {
     if (!deferred) return;
     await deferred.prompt();
-    const choice = await deferred.userChoice;
-    quietForToday(); // whether accepted or dismissed, don't nag again today
+    await deferred.userChoice;
+    dismiss();
   }
 
   if (!visible) return null;
@@ -78,7 +82,7 @@ export function InstallPrompt() {
         )}
         <div className="flex flex-col gap-1.5 shrink-0">
           {!ios && <button onClick={install} className="btn-primary !py-1.5 !text-xs">Install</button>}
-          <button onClick={quietForToday} className="btn-ghost !py-1.5 !text-xs">Not now</button>
+          <button onClick={dismiss} className="btn-ghost !py-1.5 !text-xs">Not now</button>
         </div>
       </div>
     </div>

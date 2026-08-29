@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/theme";
 import { useToast } from "@/components/ui";
 
+type PermState = "unsupported" | "granted" | "denied" | "default" | "loading";
+
 export function SettingsClient({ email, prefs, timezone }: { email: string; prefs: any; timezone: string }) {
   const { theme, apply } = useTheme();
   const [qs, setQs] = useState(prefs?.quiet_hours_start ?? 22);
@@ -11,46 +13,52 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
   const [pushOn, setPushOn] = useState(!!prefs?.push_enabled);
   const [sens, setSens] = useState(prefs?.insight_sensitivity ?? 0.75);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // null = not yet read from localStorage (avoids hydration mismatch)
-  const [fgOn, setFgOn] = useState<boolean | null>(null);
+  const [perm, setPerm] = useState<PermState>("loading");
+  const [appOn, setAppOn] = useState(false);
   const toast = useToast();
   const router = useRouter();
 
-  useEffect(() => {
-    setFgOn(
-      "Notification" in window &&
-      Notification.permission === "granted" &&
-      localStorage.getItem("gonebia-fg-notifs") !== "0"
-    );
-  }, []);
-
-  async function save(patch: object, msg: string) {
-    const res = await fetch("/api/profile", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
-    });
-    toast(res.ok ? msg : "Couldn't save that - please try again.");
-    router.refresh();
+  async function readState() {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setPerm("unsupported"); setAppOn(false); return;
+    }
+    const p = Notification.permission as PermState;
+    setPerm(p);
+    setAppOn(p === "granted" && localStorage.getItem("gonebia-fg-notifs") !== "0");
   }
+  useEffect(() => { readState(); }, []);
 
   async function toggleInApp() {
-    if (!("Notification" in window)) { toast("This browser doesn't support notifications."); return; }
-    if (fgOn) {
-      // app-level off: instant, stays off even with browser permission granted
+    if (perm === "unsupported") { toast("This browser doesn't support notifications (on iPhone, install the app first)."); return; }
+    if (perm === "denied") {
+      toast("Notifications are BLOCKED for this site - see the steps below the switch.");
+      return;
+    }
+    if (appOn) {
       localStorage.setItem("gonebia-fg-notifs", "0");
-      setFgOn(false);
+      setAppOn(false);
       toast("In-app alerts off.");
       return;
     }
-    let perm = Notification.permission;
-    if (perm !== "granted") perm = await Notification.requestPermission();
-    if (perm === "granted") {
+    let p = Notification.permission;
+    if (p !== "granted") p = await Notification.requestPermission();
+    await readState();
+    if (p === "granted") {
       localStorage.removeItem("gonebia-fg-notifs");
-      setFgOn(true);
+      setAppOn(true);
       toast("In-app alerts on.");
       try { new Notification("Gonebia", { body: "Alerts are on.", icon: "/icon.svg" }); } catch {}
     } else {
-      toast("The browser blocked notifications - allow them for this site to use alerts.");
+      toast("The browser blocked notifications - see the steps below.");
     }
+  }
+
+  function testNotification() {
+    if (perm !== "granted") { toast("Enable alerts first."); return; }
+    try {
+      new Notification("Gonebia", { body: "This is a test - if you see this, alerts work.", icon: "/icon.svg" });
+      toast("Sent - check your system notifications.");
+    } catch { toast("Couldn't show a notification."); }
   }
 
   async function togglePush() {
@@ -66,8 +74,8 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
     if (!publicKey) { toast("Push isn't configured on the server yet (set VAPID keys)."); return; }
     try {
       const reg = await navigator.serviceWorker.ready;
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") return;
+      const p = await Notification.requestPermission();
+      if (p !== "granted") return;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: Uint8Array.from(atob(publicKey.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)),
@@ -83,6 +91,18 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
     const ok = await fetch("/api/account", { method: "DELETE" });
     if (ok.ok) { window.location.href = "/"; } else toast("Deletion failed - please try again.");
   }
+
+  const permLabel: Record<PermState, string> = {
+    loading: "checking...",
+    unsupported: "not supported in this browser",
+    granted: "allowed",
+    denied: "BLOCKED by the browser",
+    default: "not asked yet",
+  };
+  const permColor: Record<PermState, string> = {
+    loading: "var(--ink-2)", unsupported: "var(--ink-2)",
+    granted: "var(--success)", denied: "var(--danger)", default: "var(--ink-2)",
+  };
 
   return (
     <div className="space-y-6 max-w-xl">
@@ -101,27 +121,52 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
       <section className="card p-5 space-y-3">
         <p className="label">Notifications</p>
 
+        <div className="flex items-center justify-between text-sm">
+          <span>Browser permission</span>
+          <span className="text-xs font-medium" style={{ color: permColor[perm] }}>{permLabel[perm]}</span>
+        </div>
+
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>
             Alert me while the app is open
             <span className="block text-xs text-ink-2 mt-0.5">
-              System notifications on desktop & mobile. Turn off right here - no browser settings needed.
+              Turn off right here - instant, no browser settings needed.
             </span>
           </span>
           <input
             type="checkbox"
-            checked={fgOn === true}
-            disabled={fgOn === null}
+            checked={appOn}
+            disabled={perm === "unsupported" || perm === "denied" || perm === "loading"}
             onChange={toggleInApp}
             className="size-4 accent-[var(--ember)] shrink-0"
           />
         </label>
 
+        {perm === "denied" && (
+          <div className="rounded-xl p-3 text-xs" style={{ background: "var(--danger-soft)", border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)" }}>
+            <p className="font-medium" style={{ color: "var(--danger)" }}>Notifications are blocked for this site.</p>
+            <ol className="list-decimal list-inside mt-1.5 space-y-0.5 text-ink-2">
+              <li>Click the lock/tune icon <span aria-hidden>🔒</span> left of the address bar</li>
+              <li>Find <b>Notifications</b> and set it to <b>Allow</b></li>
+              <li>Reload this page</li>
+            </ol>
+            <p className="mt-1.5 text-ink-2">
+              (If you dismissed the prompt twice earlier, the browser blocks it silently - only the steps above can undo that.)
+            </p>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button onClick={testNotification} disabled={perm !== "granted"} className="btn-ghost !py-1.5 !text-xs">
+            Send test notification
+          </button>
+        </div>
+
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>
             Web push (background)
             <span className="block text-xs text-ink-2 mt-0.5">
-              Notifications even when the app is closed. Needs VAPID keys on the server.
+              Even when the app is closed. Needs VAPID keys; on iPhone, install the app first.
             </span>
           </span>
           <input type="checkbox" checked={pushOn} onChange={togglePush} className="size-4 accent-[var(--ember)] shrink-0" />
@@ -166,7 +211,6 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
         <button onClick={() => save({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, "Timezone updated.")} className="btn-ghost !py-1.5 !text-xs">
           Use detected timezone
         </button>
-        <p className="text-xs text-ink-2">All natural-language dates are resolved in your timezone.</p>
       </section>
 
       <section className="card p-5 space-y-3">
