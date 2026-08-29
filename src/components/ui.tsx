@@ -39,6 +39,19 @@ export function Spinner() {
   return <span className="inline-block size-4 border-2 border-ink-2/30 border-t-ember rounded-full animate-spin" aria-label="Loading" />;
 }
 
+/* ---------- Big beautiful loader ---------- */
+export function Loader({ label, sub }: { label?: string; sub?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-4 py-2" role="status" aria-live="polite">
+      <div className="loader-ring" />
+      <div>
+        {label && <p className="font-medium text-sm">{label}<span className="loader-dots"><span /><span /><span /></span></p>}
+        {sub && <p className="text-xs text-ink-2 mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Bottom sheet (mobile) / centered dialog (desktop) ---------- */
 export function Sheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
   if (!open) return null;

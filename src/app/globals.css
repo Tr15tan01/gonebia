@@ -2,24 +2,25 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --paper: #faf7f2;
-  --paper-2: #f3eee5;
-  --card: #ffffff;
-  --ink: #1c1917;
-  --ink-2: #6b6257;
-  --line: #e6dfd2;
-  --ember: #b45309;
-  --ember-soft: #fdf0e0;
+  --paper: #faf7f2; --paper-2: #f3eee5; --card: #ffffff;
+  --ink: #1c1917; --ink-2: #6b6257; --line: #e6dfd2;
+  --ember: #b45309; --ember-soft: #fdf0e0;
+  --danger: #dc2626; --danger-soft: #fef2f2;
+  --success: #059669; --success-soft: #ecfdf5;
+  /* memory-type accents */
+  --c-task: #2563eb; --c-book: #dc2626; --c-buy: #059669; --c-decision: #7c3aed;
+  --c-idea: #ea580c; --c-goal: #c026d3; --c-event: #0284c7; --c-person: #b45309;
+  --c-promise: #d97706; --c-ask: #0891b2; --c-know: #4f46e5; --c-place: #16a34a;
 }
 .dark {
-  --paper: #14110e;
-  --paper-2: #1b1713;
-  --card: #1e1a15;
-  --ink: #ece7de;
-  --ink-2: #a39a8c;
-  --line: #2e2820;
-  --ember: #e8963f;
-  --ember-soft: #2a2013;
+  --paper: #14110e; --paper-2: #1b1713; --card: #1e1a15;
+  --ink: #ece7de; --ink-2: #a39a8c; --line: #2e2820;
+  --ember: #e8963f; --ember-soft: #2a2013;
+  --danger: #f87171; --danger-soft: #2a1515;
+  --success: #34d399; --success-soft: #122419;
+  --c-task: #60a5fa; --c-book: #f87171; --c-buy: #34d399; --c-decision: #a78bfa;
+  --c-idea: #fb923c; --c-goal: #e879f9; --c-event: #38bdf8; --c-person: #fbbf24;
+  --c-promise: #fbbf24; --c-ask: #22d3ee; --c-know: #818cf8; --c-place: #4ade80;
 }
 
 @theme inline {
@@ -33,12 +34,11 @@
   --color-line: var(--line);
   --color-ember: var(--ember);
   --color-ember-soft: var(--ember-soft);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
 }
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-}
+body { background: var(--paper); color: var(--ink); }
 
 /* Tailwind v4: @apply may only reference registered utilities.
    Component classes are plain CSS on the theme variables instead. */
@@ -49,9 +49,7 @@ body {
     background: var(--card);
   }
 
-  .btn,
-  .btn-primary,
-  .btn-ghost {
+  .btn, .btn-primary, .btn-ghost {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -60,33 +58,18 @@ body {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
     font-weight: 500;
-    transition:
-      color 0.15s ease,
-      background-color 0.15s ease,
-      border-color 0.15s ease,
-      opacity 0.15s ease;
+    transition: color .15s ease, background-color .15s ease,
+                border-color .15s ease, opacity .15s ease;
     cursor: pointer;
   }
-  .btn:disabled,
-  .btn-primary:disabled,
-  .btn-ghost:disabled {
+  .btn:disabled, .btn-primary:disabled, .btn-ghost:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
-  .btn-primary {
-    background: var(--ember);
-    color: #ffffff;
-  }
-  .btn-primary:hover {
-    opacity: 0.9;
-  }
-  .btn-ghost {
-    border: 1px solid var(--line);
-    color: var(--ink);
-  }
-  .btn-ghost:hover {
-    background: var(--paper-2);
-  }
+  .btn-primary { background: var(--ember); color: #ffffff; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-ghost { border: 1px solid var(--line); color: var(--ink); }
+  .btn-ghost:hover { background: var(--paper-2); }
 
   .input {
     width: 100%;
@@ -97,14 +80,10 @@ body {
     font-size: 0.875rem;
     color: var(--ink);
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color .15s ease;
   }
-  .input:focus {
-    border-color: var(--ember);
-  }
-  .input::placeholder {
-    color: color-mix(in srgb, var(--ink-2) 60%, transparent);
-  }
+  .input:focus { border-color: var(--ember); }
+  .input::placeholder { color: color-mix(in srgb, var(--ink-2) 60%, transparent); }
 
   .chip {
     display: inline-flex;
@@ -116,6 +95,25 @@ body {
     color: var(--ink-2);
   }
 
+  /* colored chips: color is set per type, border/background derive from it */
+  [class*="chip-c-"] {
+    border-color: color-mix(in srgb, currentColor 40%, transparent);
+    background: color-mix(in srgb, currentColor 9%, transparent);
+    font-weight: 500;
+  }
+  .chip-c-task     { color: var(--c-task); }
+  .chip-c-book     { color: var(--c-book); }
+  .chip-c-buy      { color: var(--c-buy); }
+  .chip-c-decision { color: var(--c-decision); }
+  .chip-c-idea     { color: var(--c-idea); }
+  .chip-c-goal     { color: var(--c-goal); }
+  .chip-c-event    { color: var(--c-event); }
+  .chip-c-person   { color: var(--c-person); }
+  .chip-c-promise  { color: var(--c-promise); }
+  .chip-c-ask      { color: var(--c-ask); }
+  .chip-c-know     { color: var(--c-know); }
+  .chip-c-place    { color: var(--c-place); }
+
   .label {
     font-size: 0.75rem;
     font-weight: 500;
@@ -123,18 +121,53 @@ body {
     letter-spacing: 0.05em;
     color: var(--ink-2);
   }
+
+  /* task urgency edges + bold rows */
+  .edge-overdue  { border-left: 3px solid var(--danger); }
+  .edge-today    { border-left: 3px solid var(--ember); }
+  .edge-tomorrow { border-left: 3px solid var(--c-task); }
+  .task-hot {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
 }
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+/* ---------- loaders ---------- */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+.rise { animation: rise .35s ease both; }
+
+.loader-ring {
+  position: relative;
+  width: 52px; height: 52px;
+  flex-shrink: 0;
 }
-.rise {
-  animation: rise 0.35s ease both;
+.loader-ring::before, .loader-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 3px solid transparent;
 }
+.loader-ring::before {
+  border-top-color: var(--ember);
+  border-right-color: color-mix(in srgb, var(--ember) 35%, transparent);
+  animation: spin 1s linear infinite;
+}
+.loader-ring::after {
+  inset: 9px;
+  border-bottom-color: color-mix(in srgb, var(--ember) 60%, transparent);
+  animation: spin 1.5s linear infinite reverse;
+}
+.loader-dots span {
+  display: inline-block;
+  width: 5px; height: 5px;
+  margin-left: 3px;
+  border-radius: 9999px;
+  background: var(--ember);
+  animation: pulse-soft 1.2s ease-in-out infinite;
+}
+.loader-dots span:nth-child(2) { animation-delay: .2s; }
+.loader-dots span:nth-child(3) { animation-delay: .4s; }

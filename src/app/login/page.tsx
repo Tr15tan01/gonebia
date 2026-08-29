@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Loader } from "@/components/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,9 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "1";
+
+  const busyLabel = signup ? "Creating your account"
+    : mode === "password" ? "Signing you in" : "Sending magic link";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,21 +68,26 @@ export default function LoginPage() {
             <p className="text-ink-2 mt-1">{sent}</p>
           </div>
         ) : (
-          <form onSubmit={submit} className="card p-5 space-y-3">
-            <input className="input" type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            {mode === "password" && (
-              <input className="input" type="password" required minLength={8} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <form onSubmit={submit} className="card p-5 space-y-3 relative overflow-hidden">
+            {busy && (
+              <div className="absolute inset-0 z-10 grid place-items-center bg-card/85 backdrop-blur-sm">
+                <Loader label={busyLabel} sub="This only takes a moment." />
+              </div>
             )}
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            <input className="input" type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
+            {mode === "password" && (
+              <input className="input" type="password" required minLength={8} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
+            )}
+            {error && <p className="text-sm text-danger" style={{ color: "var(--danger)" }}>{error}</p>}
             <button type="submit" disabled={busy} className="btn-primary w-full">
-              {busy ? "..." : signup ? "Create account" : mode === "password" ? "Sign in" : "Send magic link"}
+              {busy ? busyLabel + "..." : signup ? "Create account" : mode === "password" ? "Sign in" : "Send magic link"}
             </button>
             <div className="flex justify-between text-xs text-ink-2">
-              <button type="button" onClick={() => { setMode(mode === "password" ? "magic" : "password"); setError(null); }} className="hover:text-ember">
+              <button type="button" disabled={busy} onClick={() => { setMode(mode === "password" ? "magic" : "password"); setError(null); }} className="hover:text-ember">
                 {mode === "password" ? "Use a magic link instead" : "Use email & password instead"}
               </button>
               {mode === "password" && (
-                <button type="button" onClick={() => { setSignup(!signup); setError(null); }} className="hover:text-ember">
+                <button type="button" disabled={busy} onClick={() => { setSignup(!signup); setError(null); }} className="hover:text-ember">
                   {signup ? "Have an account? Sign in" : "New here? Create account"}
                 </button>
               )}
@@ -86,7 +95,7 @@ export default function LoginPage() {
             {googleEnabled && (
               <>
                 <div className="flex items-center gap-3 text-xs text-ink-2"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-                <button type="button" onClick={google} className="btn-ghost w-full">Continue with Google</button>
+                <button type="button" onClick={google} disabled={busy} className="btn-ghost w-full">Continue with Google</button>
               </>
             )}
           </form>

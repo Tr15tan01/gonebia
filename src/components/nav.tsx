@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme";
+import { createClient } from "@/lib/supabase/client";
 import { relTime } from "@/lib/dates";
 
 const LINKS = [
@@ -21,6 +22,7 @@ export function AppNav({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState<any[]>([]);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +43,12 @@ export function AppNav({ children }: { children: React.ReactNode }) {
     setNotifs((n) => n.filter((x) => x.id !== id));
   }
 
+  async function logout() {
+    setLoggingOut(true);
+    try { await createClient().auth.signOut(); } catch {}
+    window.location.href = "/";
+  }
+
   return (
     <div className="min-h-dvh flex">
       {/* Desktop sidebar */}
@@ -52,11 +60,12 @@ export function AppNav({ children }: { children: React.ReactNode }) {
             <span aria-hidden>{l.icon}</span>{l.label}
           </Link>
         ))}
-        <div className="mt-auto flex items-center justify-between px-3">
+        <div className="mt-auto flex items-center justify-between px-3 pt-3 border-t border-line">
           <button onClick={() => setNotifOpen(true)} className="btn-ghost !px-2.5 relative" aria-label="Notifications">
             🔔
             {notifs.length > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-ember text-white text-[10px] grid place-items-center">{notifs.length}</span>}
           </button>
+          <button onClick={logout} disabled={loggingOut} className="btn-ghost !px-2.5" aria-label="Log out" title="Log out">⇥</button>
           <ThemeToggle />
         </div>
       </aside>
@@ -66,7 +75,7 @@ export function AppNav({ children }: { children: React.ReactNode }) {
         <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b border-line bg-paper/90 backdrop-blur">
           <Link href="/dashboard" className="font-display text-lg">Gonebia</Link>
           <div className="flex items-center gap-2">
-            <Link href="/settings" className="btn-ghost !px-2.5" aria-label="Settings">⚙</Link>
+            <button onClick={logout} disabled={loggingOut} className="btn-ghost !px-2.5" aria-label="Log out">⇥</button>
             <button onClick={() => setNotifOpen(true)} className="btn-ghost !px-2.5 relative" aria-label="Notifications">
               🔔
               {notifs.length > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-ember text-white text-[10px] grid place-items-center">{notifs.length}</span>}

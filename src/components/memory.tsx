@@ -9,6 +9,14 @@ export interface Memory {
   importance: number; status: string; due_at: string | null; people: string[];
 }
 
+const CHIP_CLASS: Record<string, string> = {
+  task: "chip-c-task", book: "chip-c-book", purchase: "chip-c-buy", expense: "chip-c-buy",
+  decision: "chip-c-decision", idea: "chip-c-idea", goal: "chip-c-goal", event: "chip-c-event",
+  person: "chip-c-person", promise: "chip-c-promise", commitment: "chip-c-promise",
+  question: "chip-c-ask", knowledge: "chip-c-know", place: "chip-c-place",
+  project: "chip-c-know", habit: "chip-c-goal",
+};
+
 export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => void }) {
   return (
     <button onClick={onOpen} className="card p-4 text-left w-full hover:border-ember/50 transition-colors">
@@ -16,10 +24,10 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => 
         <div className="min-w-0">
           <p className="text-[15px] leading-snug">{memory.original_text}</p>
           <div className="flex flex-wrap gap-1.5 mt-2">
-            <span className="chip">{memory.type}</span>
+            <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{memory.type}</span>
             {memory.status === "open" && (memory.type === "task" || memory.type === "promise" || memory.type === "commitment") && <span className="chip !text-ember !border-ember/40">open</span>}
-            {memory.due_at && <span className="chip">due {relTime(memory.due_at)}</span>}
-            {memory.people.slice(0, 2).map((p) => <span key={p} className="chip">{p}</span>)}
+            {memory.due_at && <span className={`chip ${memory.type === "task" ? "chip-c-task" : ""}`}>due {relTime(memory.due_at)}</span>}
+            {memory.people.slice(0, 2).map((p) => <span key={p} className="chip chip-c-person">{p}</span>)}
             {memory.importance >= 4 && <span className="chip !text-ember !border-ember/40">★</span>}
           </div>
         </div>
@@ -55,7 +63,6 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
         fetch(`/api/memories/${id}`),
         fetch(`/api/memories/${id}/related`),
       ]);
-      // a 404/500 returns an HTML page, not JSON - never crash parsing it
       const mData = mRes.ok ? await mRes.json().catch(() => null) : null;
       const rData = rRes.ok ? await rRes.json().catch(() => null) : null;
       if (!alive) return;
@@ -87,7 +94,7 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
         <div className="space-y-4">
           <p className="font-display text-lg leading-snug">{memory.original_text}</p>
           <div className="flex flex-wrap gap-1.5">
-            <span className="chip">{memory.type}</span>
+            <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{memory.type}</span>
             <span className="chip">importance {memory.importance}/5</span>
             <span className="chip">{fmtDate(memory.created_at)}</span>
             {memory.status !== "open" && <span className="chip">{memory.status}</span>}

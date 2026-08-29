@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/theme";
 import { useToast } from "@/components/ui";
@@ -11,8 +11,18 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
   const [pushOn, setPushOn] = useState(!!prefs?.push_enabled);
   const [sens, setSens] = useState(prefs?.insight_sensitivity ?? 0.75);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // null = not yet read from localStorage (avoids hydration mismatch)
+  const [fgOn, setFgOn] = useState<boolean | null>(null);
   const toast = useToast();
   const router = useRouter();
+
+  useEffect(() => {
+    setFgOn(
+      "Notification" in window &&
+      Notification.permission === "granted" &&
+      localStorage.getItem("gonebia-fg-notifs") !== "0"
+    );
+  }, []);
 
   async function save(patch: object, msg: string) {
     const res = await fetch("/api/profile", {
@@ -20,6 +30,27 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
     });
     toast(res.ok ? msg : "Couldn't save that - please try again.");
     router.refresh();
+  }
+
+  async function toggleInApp() {
+    if (!("Notification" in window)) { toast("This browser doesn't support notifications."); return; }
+    if (fgOn) {
+      // app-level off: instant, stays off even with browser permission granted
+      localStorage.setItem("gonebia-fg-notifs", "0");
+      setFgOn(false);
+      toast("In-app alerts off.");
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm !== "granted") perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      localStorage.removeItem("gonebia-fg-notifs");
+      setFgOn(true);
+      toast("In-app alerts on.");
+      try { new Notification("Gonebia", { body: "Alerts are on.", icon: "/icon.svg" }); } catch {}
+    } else {
+      toast("The browser blocked notifications - allow them for this site to use alerts.");
+    }
   }
 
   async function togglePush() {
@@ -69,10 +100,33 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
 
       <section className="card p-5 space-y-3">
         <p className="label">Notifications</p>
-        <label className="flex items-center justify-between text-sm">
-          <span>Web push notifications</span>
-          <input type="checkbox" checked={pushOn} onChange={togglePush} className="size-4 accent-[var(--ember)]" />
+
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
+            Alert me while the app is open
+            <span className="block text-xs text-ink-2 mt-0.5">
+              System notifications on desktop & mobile. Turn off right here - no browser settings needed.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={fgOn === true}
+            disabled={fgOn === null}
+            onChange={toggleInApp}
+            className="size-4 accent-[var(--ember)] shrink-0"
+          />
         </label>
+
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
+            Web push (background)
+            <span className="block text-xs text-ink-2 mt-0.5">
+              Notifications even when the app is closed. Needs VAPID keys on the server.
+            </span>
+          </span>
+          <input type="checkbox" checked={pushOn} onChange={togglePush} className="size-4 accent-[var(--ember)] shrink-0" />
+        </label>
+
         <div className="grid grid-cols-2 gap-3 text-sm">
           <label>Quiet from
             <select className="input mt-1" value={qs} onChange={(e) => { const v = +e.target.value; setQs(v); save({ quiet_hours_start: v }, "Quiet hours saved."); }}>

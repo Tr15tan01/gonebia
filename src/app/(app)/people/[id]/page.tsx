@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { MemoryList } from "@/components/memory";
+import { Avatar } from "@/components/avatar";
 import { relTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
@@ -55,8 +56,13 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
     <div className="space-y-6">
       <header className="card p-6">
         <p className="label">Before you meet - things you've previously discussed</p>
-        <h1 className="font-display text-3xl mt-2">{person.name}</h1>
-        <p className="text-sm text-ink-2 mt-1">last mentioned {relTime(person.last_mentioned_at)}</p>
+        <div className="flex items-center gap-4 mt-3">
+          <Avatar name={person.name} size={64} />
+          <div>
+            <h1 className="font-display text-3xl">{person.name}</h1>
+            <p className="text-sm text-ink-2 mt-1">last mentioned {relTime(person.last_mentioned_at)}</p>
+          </div>
+        </div>
         {facts.length > 0 && (
           <ul className="mt-4 space-y-1 text-sm list-disc list-inside text-ink-2">
             {facts.map((f, i) => <li key={i}>{f}</li>)}

@@ -15,10 +15,18 @@ interface CaptureResult {
   similar: { id: string; title: string; created_at: string; similarity: number }[];
 }
 
+const PHASES = [
+  "Saving your words",
+  "Understanding what it means",
+  "Extracting dates and people",
+  "Finding connections",
+];
+
 export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [phase, setPhase] = useState(0);
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [atValue, setAtValue] = useState("");
   const recRef = useRef<any>(null);
@@ -26,13 +34,19 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   const toast = useToast();
   const router = useRouter();
 
-  // Prefill support (e.g. "+ Add a book" from the Books page) and ?capture=1 deep link.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const prefill = params.get("prefill");
     if (prefill) setText(prefill);
     if (params.get("capture") === "1" || prefill) areaRef.current?.focus();
   }, []);
+
+  // cycle the phase labels while saving
+  useEffect(() => {
+    if (!saving) { setPhase(0); return; }
+    const t = setInterval(() => setPhase((p) => (p + 1) % PHASES.length), 1400);
+    return () => clearInterval(t);
+  }, [saving]);
 
   function toggleMic() {
     const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
@@ -92,12 +106,14 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           rows={2}
           placeholder="Tell Gonebia something..."
           className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
+          disabled={saving}
         />
 
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-2">
             <button
               onClick={toggleMic}
+              disabled={saving}
               className={`btn-ghost !px-3 ${listening ? "!border-ember !text-ember animate-pulse" : ""}`}
               aria-label={listening ? "Stop listening" : "Start voice input"}
             >🎤 {listening ? "Listening..." : "Voice"}</button>
@@ -111,6 +127,16 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           </div>
         </div>
       </div>
+
+      {saving && (
+        <div className="card p-4 rise flex items-center gap-4">
+          <div className="loader-ring" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{PHASES[phase]}<span className="loader-dots"><span /><span /><span /></span></p>
+            <p className="text-xs text-ink-2 mt-0.5">Gonebia is thinking about this — usually a few seconds.</p>
+          </div>
+        </div>
+      )}
 
       {result && <Interpretation result={result} onClose={() => setResult(null)} />}
     </div>

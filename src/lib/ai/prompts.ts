@@ -52,6 +52,7 @@ Return ONLY a JSON object with these exact fields:
   "last week", "two years ago" against CURRENT DATE/TIME. null if no past event.
 - due_at: ISO 8601 deadline. Resolve "tomorrow", "next Friday", "in three months". null if none.
 - reminder_at: ISO 8601 ONLY if the user explicitly asks to be reminded. null otherwise.
+  Short durations are exact: "in 30 minutes" = CURRENT time + 30 minutes (not tomorrow).
 - review_at: ISO 8601 ONLY for phrases like "show me this in one year". null otherwise.
 - interpretation: ONE short natural confirmation sentence, e.g.
   "Got it - you finished reading Atomic Habits by James Clear."

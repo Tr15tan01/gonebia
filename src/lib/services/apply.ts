@@ -6,7 +6,7 @@ import type { Structured } from "@/lib/types";
 export const TASK_PATTERNS = [
   /\b(asked|told|wants?|needs?|reminded)\s+(me|us)\s+to\b/i,
   /\bmy\s+\w+\s+(asked|wants|told|needs)\b/i,
-  /\b(i\s+need\s+to|i\s+have\s+to|i\s+must|remember\s+to|don'?t\s+forget\s+to)\b/i,
+  /\b(i\s+need\s+to|i\s+have\s+to|i\s+must|remember\s+to|don'?t\s+forget\s+to|remind\s+me\b)\b/i,
 ];
 
 export const ApplyService = {

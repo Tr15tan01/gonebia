@@ -8,7 +8,7 @@ export default async function TasksPage() {
   const sb = await createClient();
   const { data } = await sb
     .from("memories")
-    .select("id, original_text, created_at, memory_metadata(type, title, importance, status, due_at, people)")
+    .select("id, original_text, created_at, memory_metadata(type, title, importance, status, due_at, reminder_at, people)")
     .is("deleted_at", null)
     .in("memory_metadata.type", ["task", "promise", "commitment"])
     .eq("memory_metadata.status", "open")
@@ -18,13 +18,17 @@ export default async function TasksPage() {
   const tasks = (data ?? []).map((m: any) => {
     const raw: unknown = m.memory_metadata;
     const meta = (Array.isArray(raw) ? raw[0] : raw) ?? {};
+    // effective time: a reminder earlier than the due date wins for grouping
+    const due = meta.due_at ? new Date(meta.due_at).getTime() : null;
+    const rem = meta.reminder_at ? new Date(meta.reminder_at).getTime() : null;
+    const eff = due !== null && rem !== null ? Math.min(due, rem) : (due ?? rem);
     return {
       id: m.id,
       text: m.original_text,
       created_at: m.created_at,
       type: meta.type ?? "task",
       title: meta.title ?? "",
-      due_at: meta.due_at ?? null,
+      due_at: eff ? new Date(eff).toISOString() : null,
       people: meta.people ?? [],
     };
   });
