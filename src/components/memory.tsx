@@ -17,7 +17,7 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => 
           <p className="text-[15px] leading-snug">{memory.original_text}</p>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <span className="chip">{memory.type}</span>
-            {memory.status === "open" && (memory.type === "task" || memory.type === "promise") && <span className="chip !text-ember !border-ember/40">open</span>}
+            {memory.status === "open" && (memory.type === "task" || memory.type === "promise" || memory.type === "commitment") && <span className="chip !text-ember !border-ember/40">open</span>}
             {memory.due_at && <span className="chip">due {relTime(memory.due_at)}</span>}
             {memory.people.slice(0, 2).map((p) => <span key={p} className="chip">{p}</span>)}
             {memory.importance >= 4 && <span className="chip !text-ember !border-ember/40">★</span>}
@@ -55,11 +55,12 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
         fetch(`/api/memories/${id}`),
         fetch(`/api/memories/${id}/related`),
       ]);
-      const mData = await mRes.json();
-      const rData = await rRes.json();
+      // a 404/500 returns an HTML page, not JSON - never crash parsing it
+      const mData = mRes.ok ? await mRes.json().catch(() => null) : null;
+      const rData = rRes.ok ? await rRes.json().catch(() => null) : null;
       if (!alive) return;
-      setMemory(mData.memory ?? null);
-      setRelated(rData.related ?? []);
+      setMemory(mData?.memory ?? null);
+      setRelated(rData?.related ?? []);
     })();
     return () => { alive = false; };
   }, [id]);

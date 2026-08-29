@@ -7,6 +7,7 @@ import { relTime } from "@/lib/dates";
 
 const LINKS = [
   { href: "/dashboard", label: "Today", icon: "◍" },
+  { href: "/tasks", label: "Tasks", icon: "☑" },
   { href: "/timeline", label: "Timeline", icon: "≡" },
   { href: "/chat", label: "Ask my memory", icon: "◎" },
   { href: "/insights", label: "Insights", icon: "◈" },
@@ -78,10 +79,10 @@ export function AppNav({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-paper/95 backdrop-blur grid grid-cols-6 h-16 pb-[env(safe-area-inset-bottom)]">
-        {[LINKS[0], LINKS[1], LINKS[2], LINKS[3], LINKS[4], LINKS[7]].map((l) => (
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-paper/95 backdrop-blur grid grid-cols-7 h-16 pb-[env(safe-area-inset-bottom)]">
+        {[LINKS[0], LINKS[1], LINKS[2], LINKS[3], LINKS[4], LINKS[5], LINKS[8]].map((l) => (
           <Link key={l.href} href={l.href}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${path.startsWith(l.href) ? "text-ember" : "text-ink-2"}`}>
+            className={`flex flex-col items-center justify-center gap-0.5 text-[9px] ${path.startsWith(l.href) ? "text-ember" : "text-ink-2"}`}>
             <span className="text-base" aria-hidden>{l.icon}</span>{l.label.split(" ")[0]}
           </Link>
         ))}

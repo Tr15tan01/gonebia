@@ -5,8 +5,8 @@ import { captureSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
 import { MemoryExtractionService } from "@/lib/services/extraction";
 import { EmbeddingService } from "@/lib/services/embedding";
-import { BookService } from "@/lib/services/books";
-import type { Structured, SimilarHit } from "@/lib/types";
+import { ApplyService } from "@/lib/services/apply";
+import type { SimilarHit } from "@/lib/types";
 
 export async function POST(req: Request) {
   const user = await getUser();
@@ -28,78 +28,27 @@ export async function POST(req: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 2. AI extraction - the memory is saved either way, extraction failure is not fatal
-  const structured: Structured | null = await MemoryExtractionService.extract(
-    body.text, new Date(), body.timezone
+  // 2. AI extraction - the memory is saved either way
+  const structured = await MemoryExtractionService.extract(
+    body.text, new Date(), body.timezone, body.at ?? null
   );
 
   if (structured) {
-    // `book` and `interpretation` are NOT columns of memory_metadata - keep them out of the insert
-    const { interpretation, book, ...meta } = structured;
-    await admin.from("memory_metadata").insert({
-      memory_id: mem.id, user_id: user.id, ...meta,
-      occurred_at: meta.occurred_at ?? mem.created_at,
-    });
-
-    if (book) {
-      await BookService.upsertFromCapture(admin, user.id, mem.id, book);
-    }
-    if (["task", "promise", "commitment"].includes(meta.type)) {
-      await admin.from("tasks").insert({ memory_id: mem.id, user_id: user.id, due_at: meta.due_at });
-    }
-    if (meta.type === "event") {
-      await admin.from("events").insert({
-        memory_id: mem.id, user_id: user.id, event_at: meta.occurred_at, place: meta.places[0] ?? null,
-      });
-    }
-    if (meta.type === "purchase" || meta.type === "expense") {
-      await admin.from("purchases").insert({
-        memory_id: mem.id, user_id: user.id,
-        product: meta.products[0] ?? meta.objects[0] ?? meta.title,
-        company: meta.companies[0] ?? null,
-        amount: meta.amounts[0]?.value ?? null,
-        currency: meta.amounts[0]?.currency ?? "GEL",
-        purchased_at: meta.occurred_at,
-      });
-    }
-    if (meta.is_decision) {
-      await admin.from("decisions").insert({
-        memory_id: mem.id, user_id: user.id,
-        decided_at: meta.occurred_at ?? mem.created_at,
-        reason: meta.decision_reason, alternatives: meta.alternatives,
-      });
-    }
-    for (const name of meta.people) {
-      const normalized = name.toLowerCase().trim();
-      const { data: person } = await admin
-        .from("people")
-        .upsert({ user_id: user.id, name, normalized, last_mentioned_at: new Date().toISOString() },
-          { onConflict: "user_id,normalized" })
-        .select().single();
-      if (person) await admin.from("memory_people").upsert({ memory_id: mem.id, person_id: person.id, user_id: user.id });
-    }
-    if (meta.reminder_at) {
-      await admin.from("reminders").insert({ user_id: user.id, memory_id: mem.id, remind_at: meta.reminder_at });
-    }
-    if (meta.review_at) {
-      // Future memory - queue the reveal for the user's future self
-      await admin.from("reminders").insert({ user_id: user.id, memory_id: mem.id, remind_at: meta.review_at });
-      await admin.from("notifications").insert({
-        user_id: user.id, memory_id: mem.id, kind: "future_note",
-        title: "A message from your past self",
-        body: `On ${new Date(mem.created_at).toLocaleDateString()} you wrote: "${body.text.slice(0, 120)}"`,
-        data: { url: "/timeline" },
-      });
+    const applied = await ApplyService.structured(
+      admin, user.id, mem.id, structured, body.text, body.at ?? null, mem.created_at
+    );
+    if (!applied.ok) {
+      console.error("[capture] structured data could not be stored - memory saved unstructured");
     }
   } else {
-    await admin.from("memory_metadata").insert({
+    const { error: metaError } = await admin.from("memory_metadata").insert({
       memory_id: mem.id, user_id: user.id,
       extraction_status: "failed", title: body.text.slice(0, 60),
     });
+    if (metaError) console.error("[capture] fallback metadata insert failed:", metaError);
   }
 
-  // 3. Embedding + "You said this before" - one embed; the similarity RPC runs
-  //    under the user's own session so RLS scopes results to their memories only.
+  // 3. Embedding + "You said this before"
   let similar: SimilarHit[] = [];
   try {
     const embedding = await EmbeddingService.embed(
@@ -108,7 +57,7 @@ export async function POST(req: Request) {
     await admin.from("memory_embeddings").insert({ memory_id: mem.id, user_id: user.id, embedding });
 
     const { data: hits } = await sb.rpc("match_memories", {
-      p_query_embedding: embedding, p_match_count: 4, p_min_similarity: 0.86,
+      p_query_embedding: JSON.stringify(embedding), p_match_count: 4, p_min_similarity: 0.86,
     });
     const others = (hits ?? []).filter((h: any) => h.memory_id !== mem.id).slice(0, 3);
 

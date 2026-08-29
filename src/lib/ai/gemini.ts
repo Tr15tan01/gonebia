@@ -1,7 +1,9 @@
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const KEY = () => process.env.GEMINI_API_KEY;
-const CHAT_MODEL = "gemini-2.0-flash";
-const EMBED_MODEL = "gemini-embedding-001";
+// Override via env if a model is retired or you want a different tier,
+// e.g. GEMINI_CHAT_MODEL=gemini-2.0-flash
+const CHAT_MODEL = () => process.env.GEMINI_CHAT_MODEL ?? "gemini-3.6-flash";
+const EMBED_MODEL = () => process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-001";
 
 async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
   let last: unknown;
@@ -12,8 +14,9 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 }
 
 async function generate(prompt: string, opts: { json?: boolean; temperature?: number } = {}): Promise<string> {
+  const model = CHAT_MODEL();
   return withRetry(async () => {
-    const res = await fetch(`${BASE}/${CHAT_MODEL}:generateContent?key=${KEY()}`, {
+    const res = await fetch(`${BASE}/${model}:generateContent?key=${KEY()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -25,10 +28,13 @@ async function generate(prompt: string, opts: { json?: boolean; temperature?: nu
         },
       }),
     });
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 300);
+      throw new Error(`Gemini ${model} HTTP ${res.status}: ${body}`);
+    }
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
-    if (!text) throw new Error("Gemini returned empty response");
+    if (!text) throw new Error(`Gemini ${model} returned empty response`);
     return text;
   });
 }
@@ -50,18 +56,19 @@ export async function embedDocument(text: string): Promise<number[]> {
 }
 
 async function embedWithTask(text: string, taskType: string): Promise<number[]> {
+  const model = EMBED_MODEL();
   return withRetry(async () => {
-    const res = await fetch(`${BASE}/${EMBED_MODEL}:embedContent?key=${KEY()}`, {
+    const res = await fetch(`${BASE}/${model}:embedContent?key=${KEY()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: `models/${EMBED_MODEL}`,
+        model: `models/${model}`,
         content: { parts: [{ text }] },
         taskType,
         outputDimensionality: 768,
       }),
     });
-    if (!res.ok) throw new Error(`Embedding ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw new Error(`Embedding ${model} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
     const values = data?.embedding?.values;
     if (!Array.isArray(values) || values.length !== 768) throw new Error("Bad embedding response");

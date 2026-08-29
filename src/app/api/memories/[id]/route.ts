@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { correctionSchema } from "@/lib/validation";
 import { ReminderService } from "@/lib/services/reminders";
+import { BookService } from "@/lib/services/books";
+import type { BookStatus } from "@/lib/types";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
@@ -14,8 +16,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .single();
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
-  // supabase-js (without generated DB types) types embeds as arrays, but the API
-  // actually returns a single object here - normalize so TS and runtime agree.
   const rawMeta: unknown = data.memory_metadata;
   const meta = (Array.isArray(rawMeta) ? rawMeta[0] : rawMeta) as {
     type?: string; title?: string; summary?: string; importance?: number;
@@ -32,12 +32,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
 }
 
+/** Best-effort shelf status from the user's own wording (no invention). */
+function deriveBookStatus(text: string): BookStatus {
+  if (/finish|complete/i.test(text)) return "finished";
+  if (/currently reading|reading now|started reading|am reading|i'm reading/i.test(text)) return "reading";
+  if (/want to read|should read|plan to read|recommend/i.test(text)) return "want_to_read";
+  if (/gave up|abandon|couldn'?t finish|dnf/i.test(text)) return "abandoned";
+  if (/\bread\b/i.test(text)) return "finished";
+  return "want_to_read";
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
   const patch = correctionSchema.parse(await req.json());
   const sb = await createClient();
+  const admin = createAdmin();
 
   const metaPatch: Record<string, unknown> = { corrected: true };
   if (patch.title !== undefined) metaPatch.title = patch.title;
@@ -55,9 +66,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (patch.type === "task" || patch.type === "promise" || patch.type === "commitment") {
     await sb.from("tasks").upsert({ memory_id: id, user_id: user.id, due_at: patch.due_at ?? null });
   }
+  if (patch.type === "book") {
+    // create/advance the shelf entry from the user's own words
+    const [{ data: mem }, { data: meta }] = await Promise.all([
+      sb.from("memories").select("original_text").eq("id", id).single(),
+      sb.from("memory_metadata").select("title").eq("memory_id", id).single(),
+    ]);
+    if (mem?.original_text) {
+      const rawTitle = patch.title ?? meta?.title ?? mem.original_text.slice(0, 60);
+      await BookService.upsertFromCapture(admin, user.id, id, {
+        title: rawTitle,
+        author: null,
+        status: deriveBookStatus(mem.original_text),
+        rating: null,
+        recommended_by: null,
+      });
+    }
+  }
   if (patch.status === "done") {
     await sb.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("memory_id", id);
-    // resolving a memory also resolves any "forgotten" insight pointing at it
     await sb.from("insights").update({ status: "done" }).eq("data->>memory_id", id).eq("kind", "forgotten");
   }
   if (patch.reminder_at) {

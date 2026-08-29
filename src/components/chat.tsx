@@ -5,15 +5,15 @@ import { MemorySheet } from "@/components/memory";
 import { Spinner, useToast } from "@/components/ui";
 
 interface Ref { n: number; id: string; title: string; date: string; snippet: string }
-interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[] }
+interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[]; detail?: string }
 
 const EXAMPLES = [
   "What did I buy last month?",
   "What does my wife want me to do?",
+  "What tasks do I have?",
   "What books did I read this year?",
   "What did Giorgi recommend?",
   "What unfinished things do I have?",
-  "What have I been thinking about recently?",
 ];
 
 export function ChatClient() {
@@ -48,7 +48,7 @@ export function ChatClient() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMessages([...next, { role: "assistant", content: data.answer, refs: data.references }]);
+      setMessages([...next, { role: "assistant", content: data.answer, refs: data.references, detail: data.detail }]);
     } catch (e: any) {
       toast(e.message); setMessages(next);
     } finally { setBusy(false); }
@@ -83,6 +83,9 @@ export function ChatClient() {
                     ) : null;
                   })
                 : m.content}
+              {m.detail && (
+                <p className="mt-2 pt-2 border-t border-line text-xs text-ink-2">Technical detail: {m.detail}</p>
+              )}
               {m.refs && m.refs.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3 pt-2 border-t border-line">
                   {m.refs.map((r) => (

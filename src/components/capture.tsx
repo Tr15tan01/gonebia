@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui";
 import { MEMORY_TYPES } from "@/lib/types";
 import { localISO } from "@/lib/dates";
+import { DateTimePicker } from "@/components/date-time-picker";
 
 interface CaptureResult {
   id: string;
@@ -19,13 +20,13 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   const [listening, setListening] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<CaptureResult | null>(null);
+  const [atValue, setAtValue] = useState("");
   const recRef = useRef<any>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
   const router = useRouter();
 
   // Prefill support (e.g. "+ Add a book" from the Books page) and ?capture=1 deep link.
-  // Read from the URL on mount instead of useSearchParams to avoid a Suspense boundary.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const prefill = params.get("prefill");
@@ -66,12 +67,14 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           text,
           source: listening ? "voice" : "typed",
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          at: atValue ? new Date(atValue).toISOString() : null,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       setResult(data);
       setText("");
+      setAtValue("");
       router.refresh();
     } catch (e: any) { toast(e.message); }
     finally { setSaving(false); }
@@ -90,12 +93,16 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           placeholder="Tell Gonebia something..."
           className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
         />
-        <div className="flex items-center justify-between mt-2">
-          <button
-            onClick={toggleMic}
-            className={`btn-ghost !px-3 ${listening ? "!border-ember !text-ember animate-pulse" : ""}`}
-            aria-label={listening ? "Stop listening" : "Start voice input"}
-          >🎤 {listening ? "Listening..." : "Voice"}</button>
+
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleMic}
+              className={`btn-ghost !px-3 ${listening ? "!border-ember !text-ember animate-pulse" : ""}`}
+              aria-label={listening ? "Stop listening" : "Start voice input"}
+            >🎤 {listening ? "Listening..." : "Voice"}</button>
+            <DateTimePicker value={atValue} onChange={setAtValue} />
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-ink-2 hidden sm:inline">⌘↵</span>
             <button onClick={save} disabled={!text.trim() || saving} className="btn-primary">

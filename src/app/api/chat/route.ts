@@ -18,10 +18,14 @@ export async function POST(req: Request) {
   try {
     return NextResponse.json(await AIChatService.answer(sb, messages, timezone));
   } catch (e) {
+    // retrieval itself failed (the LLM fallback lives inside AIChatService).
+    // `detail` shows the root cause in the browser's Network tab; the full
+    // stack is in the server/Vercel logs under "[chat]".
     console.error("[chat]", e);
     return NextResponse.json({
-      answer: "Something went wrong reaching my language model. Please try again.",
+      answer: "I couldn't search your memories just now. Please try again.",
       references: [],
+      detail: e instanceof Error ? e.message : String(e),
     });
   }
 }

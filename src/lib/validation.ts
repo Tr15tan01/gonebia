@@ -42,6 +42,8 @@ export const captureSchema = z.object({
   text: z.string().min(1).max(4000),
   source: z.enum(["typed", "voice"]).default("typed"),
   timezone: z.string().max(64).default("UTC"),
+  at: z.string().nullable().optional()
+    .transform((v) => (v && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : null)),
 });
 
 export const correctionSchema = z.object({
