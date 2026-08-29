@@ -28,6 +28,15 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
   }
   useEffect(() => { readState(); }, []);
 
+  async function save(patch: object, msg: string) {
+    const res = await fetch("/api/profile", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+    });
+    toast(res.ok ? msg : "Couldn't save that - please try again.");
+    router.refresh();
+  }
+
+
   async function toggleInApp() {
     if (perm === "unsupported") { toast("This browser doesn't support notifications (on iPhone, install the app first)."); return; }
     if (perm === "denied") {
