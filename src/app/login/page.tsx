@@ -30,7 +30,7 @@ export default function LoginPage() {
       if (structural) { setError(structural); return; }
     }
 
-    if (!agree) { setError("Please agree to the Terms and Privacy Policy."); return; }
+    if (signup && !agree) { setError("The agreement checkbox must be checked to create an account."); return; }
 
     setBusy(true);
     const sb = createClient();
@@ -80,7 +80,7 @@ export default function LoginPage() {
     <div className="min-h-dvh grid place-items-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center flex flex-col items-center gap-2">
-          <LogoMark size={48} />
+          <Link href="/" aria-label="Back to home" className="hover:opacity-80 transition-opacity cursor-pointer"><LogoMark size={48} /></Link>
           <div>
             <p className="font-display text-3xl">TimelyMemo</p>
             <p className="text-ink-2 text-sm mt-1">Remember things at the right time.</p>
@@ -121,6 +121,7 @@ export default function LoginPage() {
             )}
             {error && <p className="text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
 
+            {signup && (
             <label className="flex items-start gap-2 text-xs text-ink-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -138,16 +139,17 @@ export default function LoginPage() {
                 (including AI processing of submitted content as described there).
               </span>
             </label>
+            )}
 
-            <button type="submit" disabled={busy || !agree} className="btn-primary w-full">
+            <button type="submit" disabled={busy || (signup && !agree)} className="btn-primary w-full">
               {busy ? busyLabel + "..." : signup ? "Create account" : mode === "password" ? "Sign in" : "Send magic link"}
             </button>
             <div className="flex justify-between text-xs text-ink-2">
-              <button type="button" disabled={busy} onClick={() => { setMode(mode === "password" ? "magic" : "password"); setError(null); }} className="hover:text-ember">
+              <button type="button" disabled={busy} onClick={() => { setMode(mode === "password" ? "magic" : "password"); setError(null); }} className="cursor-pointer hover:text-ember">
                 {mode === "password" ? "Use a magic link instead" : "Use email & password instead"}
               </button>
               {mode === "password" && (
-                <button type="button" disabled={busy} onClick={() => { setSignup(!signup); setError(null); }} className="hover:text-ember">
+                <button type="button" disabled={busy} onClick={() => { setSignup(!signup); setError(null); }} className="cursor-pointer hover:text-ember">
                   {signup ? "Have an account? Sign in" : "New here? Create account"}
                 </button>
               )}
@@ -155,7 +157,7 @@ export default function LoginPage() {
             {googleEnabled && (
               <>
                 <div className="flex items-center gap-3 text-xs text-ink-2"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-                <button type="button" onClick={google} disabled={busy || !agree} className="btn-ghost w-full">Continue with Google</button>
+                <button type="button" onClick={google} disabled={busy || (signup && !agree)} className="btn-ghost w-full">Continue with Google</button>
               </>
             )}
           </form>
