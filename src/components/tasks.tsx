@@ -2,15 +2,11 @@
 import { useState } from "react";
 import { useToast, Empty } from "@/components/ui";
 import { relTime } from "@/lib/dates";
+import { TimeChip } from "@/components/time-chip";
 
 interface TaskRow {
-  id: string;
-  text: string;
-  created_at: string;
-  type: string;
-  title: string;
-  due_at: string | null;
-  people: string[];
+  id: string; text: string; created_at: string;
+  type: string; title: string; due_at: string | null; people: string[];
 }
 
 export function TasksClient({ initial }: { initial: TaskRow[] }) {
@@ -41,25 +37,37 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
 
   const groups = [
     {
-      label: "Overdue", edge: "edge-overdue", headerColor: "var(--danger)", hot: true,
-      items: tasks.filter((t) => t.due_at && new Date(t.due_at).getTime() < now),
+      label: "Due now", edge: "edge-overdue", headerColor: "var(--danger)", hot: true, pulse: true,
+      bg: "var(--danger-soft)",
+      items: tasks.filter((t) => t.due_at !== null
+        && new Date(t.due_at).getTime() <= now + 15 * 60_000
+        && new Date(t.due_at).getTime() >= now - 24 * 3600_000),
     },
     {
-      label: "Today", edge: "edge-today", headerColor: "var(--ember)", hot: true,
-      items: tasks.filter((t) => t.due_at && new Date(t.due_at).getTime() >= now
+      label: "Overdue", edge: "edge-overdue", headerColor: "var(--danger)", hot: true, pulse: false,
+      bg: undefined,
+      items: tasks.filter((t) => t.due_at !== null && new Date(t.due_at).getTime() < now - 24 * 3600_000),
+    },
+    {
+      label: "Today", edge: "edge-today", headerColor: "var(--ember)", hot: true, pulse: false,
+      bg: undefined,
+      items: tasks.filter((t) => t.due_at && new Date(t.due_at).getTime() > now + 15 * 60_000
         && new Date(t.due_at).getTime() <= endOfToday.getTime()),
     },
     {
-      label: "Tomorrow", edge: "edge-tomorrow", headerColor: "var(--c-task)", hot: true,
+      label: "Tomorrow", edge: "edge-tomorrow", headerColor: "var(--c-task)", hot: true, pulse: false,
+      bg: undefined,
       items: tasks.filter((t) => t.due_at && new Date(t.due_at).getTime() > endOfToday.getTime()
         && new Date(t.due_at).getTime() <= endOfTomorrow.getTime()),
     },
     {
-      label: "Upcoming", edge: "", headerColor: "var(--ink-2)", hot: false,
+      label: "Upcoming", edge: "", headerColor: "var(--ink-2)", hot: false, pulse: false,
+      bg: undefined,
       items: tasks.filter((t) => t.due_at && new Date(t.due_at).getTime() > endOfTomorrow.getTime()),
     },
     {
-      label: "No date", edge: "", headerColor: "var(--ink-2)", hot: false,
+      label: "No date", edge: "", headerColor: "var(--ink-2)", hot: false, pulse: false,
+      bg: undefined,
       items: tasks.filter((t) => !t.due_at),
     },
   ].filter((g) => g.items.length > 0);
@@ -72,21 +80,21 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
     <div className="space-y-7">
       {groups.map((group) => (
         <section key={group.label}>
-          <h2 className="label mb-3" style={{ color: group.headerColor }}>
+          <h2 className="label mb-3 flex items-center gap-2" style={{ color: group.headerColor }}>
+            {group.pulse && <span className="pulse-dot" />}
             {group.label} <span className="normal-case font-semibold">({group.items.length})</span>
           </h2>
           <ul className="space-y-2">
             {group.items.map((t) => (
               <li key={t.id}
-                className={`card p-4 flex items-start justify-between gap-3 ${group.edge} ${group.hot ? "task-hot" : ""} ${group.label === "Overdue" ? "!bg-[var(--danger-soft)]" : ""}`}>
+                className={`card p-4 flex items-start justify-between gap-3 ${group.edge} ${group.hot ? "task-hot" : ""}`}
+                style={group.bg ? { background: group.bg } : undefined}>
                 <div className="min-w-0">
                   <p className="leading-snug">{t.text}</p>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {t.due_at && (
-                      <span className={`chip font-semibold ${group.label === "Overdue" ? "!text-[var(--danger)]" : group.label === "Today" ? "!text-ember" : group.label === "Tomorrow" ? "chip-c-task" : ""}`}
-                        style={group.label === "Overdue" ? { color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)" } : group.label === "Today" ? { borderColor: "color-mix(in srgb, var(--ember) 45%, transparent)" } : undefined}>
-                        {group.label === "Overdue" ? "⚠ " : ""}{group.label === "Today" ? "today" : group.label === "Tomorrow" ? "tomorrow" : "due"} {relTime(t.due_at) !== group.label.toLowerCase() && relTime(t.due_at) !== "today" ? relTime(t.due_at) : ""}
-                      </span>
+                      <TimeChip iso={t.due_at}
+                        prefix={group.label === "Due now" ? "⚠ now " : group.label === "Overdue" ? "overdue " : "due "} />
                     )}
                     {t.type !== "task" && <span className="chip">{t.type}</span>}
                     {t.people.slice(0, 2).map((p) => <span key={p} className="chip chip-c-person">{p}</span>)}
@@ -95,7 +103,8 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
                 <button
                   onClick={() => done(t.id)}
                   disabled={busyId === t.id}
-                  className={`!py-1.5 !px-3 !text-xs shrink-0 ${group.hot ? "btn-primary" : "btn-ghost"}`}
+                  className="btn !py-1.5 !px-3 !text-xs shrink-0 text-white"
+                  style={{ background: "var(--danger)" }}
                 >Done</button>
               </li>
             ))}

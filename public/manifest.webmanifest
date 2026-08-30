@@ -1,13 +1,13 @@
 {
-  "name": "Gonebia - your external memory",
-  "short_name": "Gonebia",
-  "description": "Tell Gonebia anything. It remembers what matters.",
+  "name": "TimelyMemo - your external memory",
+  "short_name": "TimelyMemo",
+  "description": "Remember things at the right time.",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#faf7f2",
   "theme_color": "#b45309",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }],
   "shortcuts": [
-    { "name": "Tell Gonebia something", "url": "/dashboard?capture=1" }
+    { "name": "Tell TimelyMemo something", "url": "/dashboard?capture=1" }
   ]
 }

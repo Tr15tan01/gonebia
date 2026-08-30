@@ -69,6 +69,13 @@ export function TimelineClient({ initial }: { initial: Memory[] }) {
 
       {items.length ? <MemoryList memories={items} /> :
         <Empty icon="◌" title="No memories match." hint="Try clearing filters - or capture something new." />}
+      {cursor && (
+        <div className="text-center">
+          <button onClick={() => load(false)} disabled={loading} className="btn-ghost">
+            {loading ? "Loading..." : "Load more"}
+          </button>
+        </div>
+      )}
       <div ref={sentinel} className="h-4" />
       {loading && <div className="text-center"><Spinner /></div>}
     </div>

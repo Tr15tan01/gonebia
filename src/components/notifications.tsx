@@ -25,7 +25,7 @@ export function ForegroundNotifier() {
           seenSet.add(n.id);
           changed = true;
           try {
-            new Notification(`Gonebia - ${n.title}`, { body: n.body, icon: "/icon.svg", tag: n.id });
+            new Notification(`TimelyMemo - ${n.title}`, { body: n.body, icon: "/icon.svg", tag: n.id });
           } catch {}
         }
         if (changed) {

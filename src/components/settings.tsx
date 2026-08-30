@@ -56,7 +56,7 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
       localStorage.removeItem("gonebia-fg-notifs");
       setAppOn(true);
       toast("In-app alerts on.");
-      try { new Notification("Gonebia", { body: "Alerts are on.", icon: "/icon.svg" }); } catch {}
+      try { new Notification("TimelyMemo", { body: "Alerts are on.", icon: "/icon.svg" }); } catch {}
     } else {
       toast("The browser blocked notifications - see the steps below.");
     }
@@ -65,7 +65,7 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
   function testNotification() {
     if (perm !== "granted") { toast("Enable alerts first."); return; }
     try {
-      new Notification("Gonebia", { body: "This is a test - if you see this, alerts work.", icon: "/icon.svg" });
+      new Notification("TimelyMemo", { body: "This is a test - if you see this, alerts work.", icon: "/icon.svg" });
       toast("Sent - check your system notifications.");
     } catch { toast("Couldn't show a notification."); }
   }

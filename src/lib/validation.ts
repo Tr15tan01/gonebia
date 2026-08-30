@@ -47,6 +47,7 @@ export const captureSchema = z.object({
 });
 
 export const correctionSchema = z.object({
+  original_text: z.string().min(1).max(4000).optional(),
   title: z.string().min(1).max(140).optional(),
   type: z.enum(MEMORY_TYPES).optional(),
   status: z.enum(["open", "done", "archived"]).optional(),

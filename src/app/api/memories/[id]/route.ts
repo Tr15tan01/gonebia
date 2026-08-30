@@ -64,6 +64,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { error } = await sb.from("memory_metadata").update(metaPatch).eq("memory_id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
+  if (patch.original_text) {
+    const { error: textErr } = await sb.from("memories").update({ original_text: patch.original_text }).eq("id", id);
+    if (textErr) return NextResponse.json({ error: textErr.message }, { status: 400 });
+  }
+
   if (patch.type === "task" || patch.type === "promise" || patch.type === "commitment") {
     await sb.from("tasks").upsert({ memory_id: id, user_id: user.id, due_at: patch.due_at ?? null });
   }
@@ -94,6 +99,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } else if (patch.reminder_at === null) {
     await ReminderService.cancelForMemory(id);
   }
+  // the dashboard reads a cached daily briefing - drop it so Today/
+  // Don't forget reflect this change immediately on refresh
+  await sb.from("daily_briefings").delete().eq("user_id", user.id);
   return NextResponse.json({ ok: true });
 }
 
@@ -104,5 +112,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const sb = await createClient();
   const { error } = await sb.from("memories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  // the dashboard reads a cached daily briefing - drop it so Today/
+  // Don't forget reflect this change immediately on refresh
+  await sb.from("daily_briefings").delete().eq("user_id", user.id);
   return NextResponse.json({ ok: true });
 }

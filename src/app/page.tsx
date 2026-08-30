@@ -6,20 +6,20 @@ export default async function Landing() {
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="flex items-center justify-between px-6 md:px-10 h-16 max-w-5xl mx-auto w-full">
-        <span className="font-display text-xl">Gonebia</span>
+        <span className="font-display text-xl">TimelyMemo</span>
         <Link href={user ? "/dashboard" : "/login"} className="btn-primary !py-2">
-          {user ? "Open Gonebia" : "Sign in"}
+          {user ? "Open TimelyMemo" : "Sign in"}
         </Link>
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 md:px-10 flex flex-col justify-center py-16">
         <h1 className="font-display text-4xl md:text-6xl leading-[1.05] max-w-3xl">
-          Tell Gonebia anything.<br />
-          <span className="text-ember">It remembers what matters.</span>
+          Remember things<br />
+          <span className="text-ember">at the right time.</span>
         </h1>
         <p className="mt-6 text-ink-2 max-w-xl text-lg leading-relaxed">
           An external memory for everyday life. Type or say anything - a purchase, a promise,
-          a stray idea at midnight, a book you finished - and Gonebia understands it, connects it,
+          a stray idea at midnight, a book you finished - and TimelyMemo understands it, connects it,
           and brings it back exactly when it's useful. You never organize anything.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">

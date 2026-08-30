@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sheet, useToast } from "@/components/ui";
 import { relTime, fmtDate } from "@/lib/dates";
+import { TimeChip } from "@/components/time-chip";
 
 export interface Memory {
   id: string; original_text: string; created_at: string;
@@ -19,14 +21,14 @@ const CHIP_CLASS: Record<string, string> = {
 
 export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => void }) {
   return (
-    <button onClick={onOpen} className="card p-4 text-left w-full hover:border-ember/50 transition-colors">
+    <button onClick={onOpen} className="card p-4 text-left w-full hover:border-ember/50 transition-colors cursor-pointer">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[15px] leading-snug">{memory.original_text}</p>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{memory.type}</span>
             {memory.status === "open" && (memory.type === "task" || memory.type === "promise" || memory.type === "commitment") && <span className="chip !text-ember !border-ember/40">open</span>}
-            {memory.due_at && <span className={`chip ${memory.type === "task" ? "chip-c-task" : ""}`}>due {relTime(memory.due_at)}</span>}
+            {memory.due_at && <TimeChip iso={memory.due_at} prefix="due " />}
             {memory.people.slice(0, 2).map((p) => <span key={p} className="chip chip-c-person">{p}</span>)}
             {memory.importance >= 4 && <span className="chip !text-ember !border-ember/40">★</span>}
           </div>
@@ -53,10 +55,14 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
   const [memory, setMemory] = useState<Memory | null>(null);
   const [related, setRelated] = useState<{ id: string; title: string; type?: string; created_at: string; kind?: string }[]>([]);
   const [mergeTarget, setMergeTarget] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const toast = useToast();
+  const router = useRouter();
 
   useEffect(() => {
-    if (!id) { setMemory(null); setRelated([]); return; }
+    if (!id) { setMemory(null); setRelated([]); setEditing(false); return; }
     let alive = true;
     (async () => {
       const [mRes, rRes] = await Promise.all([
@@ -67,24 +73,48 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
       const rData = rRes.ok ? await rRes.json().catch(() => null) : null;
       if (!alive) return;
       setMemory(mData?.memory ?? null);
+      setDraft(mData?.memory?.original_text ?? "");
       setRelated(rData?.related ?? []);
     })();
     return () => { alive = false; };
   }, [id]);
+
+  async function saveEdit() {
+    if (!id || !memory) return;
+    const text = draft.trim();
+    if (!text) { toast("Memory can't be empty."); return; }
+    setSavingEdit(true);
+    const res = await fetch(`/api/memories/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ original_text: text }),
+    });
+    setSavingEdit(false);
+    if (res.ok) {
+      setMemory({ ...memory, original_text: text });
+      setEditing(false);
+      toast("Memory updated.");
+      router.refresh();
+    } else {
+      toast("Couldn't save - please try again.");
+    }
+  }
 
   async function act(action: "done" | "delete" | "merge") {
     if (!id) return;
     if (action === "done") {
       await fetch(`/api/memories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
       toast("Marked as done.");
+      router.refresh();
     } else if (action === "delete") {
       await fetch(`/api/memories/${id}`, { method: "DELETE" });
       toast("Memory deleted.");
       onClose();
+      router.refresh();
     } else if (action === "merge" && mergeTarget) {
       await fetch(`/api/memories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "archived" }) });
       toast("Merged - the duplicate is archived, the original is kept.");
       onClose();
+      router.refresh();
     }
   }
 
@@ -92,7 +122,32 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
     <Sheet open={!!id} onClose={onClose}>
       {!memory ? <p className="text-ink-2 text-sm">Loading...</p> : (
         <div className="space-y-4">
-          <p className="font-display text-lg leading-snug">{memory.original_text}</p>
+          {editing ? (
+            <div className="space-y-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={4}
+                autoFocus
+                className="input !text-[15px] resize-none"
+                aria-label="Edit memory text"
+              />
+              <p className="text-xs text-ink-2">Your original words - edit freely. Search and AI re-index automatically.</p>
+              <div className="flex gap-2">
+                <button onClick={saveEdit} disabled={savingEdit} className="btn-primary !py-1.5 !text-xs">
+                  {savingEdit ? "Saving..." : "Save"}
+                </button>
+                <button onClick={() => { setEditing(false); setDraft(memory.original_text); }} className="btn-ghost !py-1.5 !text-xs">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <p
+              className="font-display text-lg leading-snug cursor-text"
+              onClick={() => setEditing(true)}
+              title="Click to edit"
+            >{memory.original_text}</p>
+          )}
+
           <div className="flex flex-wrap gap-1.5">
             <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{memory.type}</span>
             <span className="chip">importance {memory.importance}/5</span>
@@ -123,11 +178,13 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
+            {!editing && <button onClick={() => setEditing(true)} className="btn-ghost !py-1.5 !text-xs">Edit text</button>}
             {memory.status === "open" && <button onClick={() => act("done")} className="btn-primary !py-1.5 !text-xs">Mark done</button>}
             <button onClick={() => act("delete")} className="btn-ghost !py-1.5 !text-xs !text-red-600 dark:!text-red-400">Delete</button>
+            <button onClick={onClose} className="btn-ghost !py-1.5 !text-xs">Cancel</button>
           </div>
-          <p className="text-xs text-ink-2">AI metadata is a suggestion - your original words above are always kept exactly as written.</p>
+          <p className="text-xs text-ink-2">AI metadata is a suggestion - your words above are the source of truth, editable anytime.</p>
         </div>
       )}
     </Sheet>

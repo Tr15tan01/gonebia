@@ -6,7 +6,7 @@ function ensure() {
   if (configured) return true;
   const pub = process.env.WEB_PUSH_PUBLIC_KEY, priv = process.env.WEB_PUSH_PRIVATE_KEY;
   if (!pub || !priv) return false;
-  webpush.setVapidDetails("mailto:support@gonebia.app", pub, priv);
+  webpush.setVapidDetails("mailto:support@timelymemo.app", pub, priv);
   configured = true;
   return true;
 }

@@ -58,7 +58,7 @@ export default function LoginPage() {
     <div className="min-h-dvh grid place-items-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <p className="font-display text-3xl">Gonebia</p>
+          <p className="font-display text-3xl">TimelyMemo</p>
           <p className="text-ink-2 text-sm mt-1">Your external memory.</p>
         </div>
 

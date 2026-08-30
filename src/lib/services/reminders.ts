@@ -45,17 +45,20 @@ export const ReminderService = {
       }
 
       const { data: meta } = await admin.from("memory_metadata").select("title").eq("memory_id", r.memory_id).single();
+      const dueStr = new Intl.DateTimeFormat("en-GB", {
+        dateStyle: "medium", timeStyle: "short", timeZone: profile?.timezone ?? "UTC",
+      }).format(new Date(r.remind_at));
       const title = meta?.title || "Reminder";
       const { data: notif } = await admin.from("notifications").insert({
         user_id: r.user_id, memory_id: r.memory_id, kind: "reminder",
-        title, body: "You asked to be reminded of this.", data: { url: "/timeline" },
+        title, body: `Due ${dueStr} - you asked to be reminded.`, data: { url: "/timeline" },
       }).select().single();
       await admin.from("reminders").update({ status: "fired" }).eq("id", r.id);
 
       if (notif && prefs?.push_enabled) {
         await PushService.pushToUser(r.user_id, {
-          title: `Gonebia - ${title}`,
-          body: "You asked to be reminded of this.",
+          title: `TimelyMemo - ${title}`,
+          body: `Due ${dueStr} - you asked to be reminded.`,
           url: "/timeline",
         });
       }
@@ -89,7 +92,7 @@ export async function resurfaceSnoozed(): Promise<number> {
     }
     if (pushCache.get(n.user_id)) {
       await PushService.pushToUser(n.user_id, {
-        title: `Gonebia - ${n.title}`, body: n.body, url: n.data?.url ?? "/dashboard",
+        title: `TimelyMemo - ${n.title}`, body: n.body, url: n.data?.url ?? "/dashboard",
       });
     }
     resurfaced++;

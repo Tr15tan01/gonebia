@@ -53,7 +53,7 @@ export function AppNav({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-line p-4 gap-1 sticky top-0 h-dvh">
-        <Link href="/dashboard" className="font-display text-xl px-3 py-4">Gonebia</Link>
+        <Link href="/dashboard" className="font-display text-xl px-3 py-4">TimelyMemo</Link>
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href}
             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${path.startsWith(l.href) ? "bg-ember-soft text-ember font-medium" : "text-ink-2 hover:text-ink hover:bg-paper-2"}`}>
@@ -73,7 +73,7 @@ export function AppNav({ children }: { children: React.ReactNode }) {
       <div className="flex-1 min-w-0">
         {/* Mobile top bar */}
         <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b border-line bg-paper/90 backdrop-blur">
-          <Link href="/dashboard" className="font-display text-lg">Gonebia</Link>
+          <Link href="/dashboard" className="font-display text-lg">TimelyMemo</Link>
           <div className="flex items-center gap-2">
             <button onClick={logout} disabled={loggingOut} className="btn-ghost !px-2.5" aria-label="Log out">⇥</button>
             <button onClick={() => setNotifOpen(true)} className="btn-ghost !px-2.5 relative" aria-label="Notifications">

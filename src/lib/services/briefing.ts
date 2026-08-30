@@ -14,7 +14,7 @@ export const BriefingService = {
       .from("daily_briefings")
       .select("content, created_at")
       .eq("user_id", userId).eq("briefing_date", today).single();
-    if (cached?.content && Date.now() - new Date(cached.created_at).getTime() < 60 * 60 * 1000) {
+    if (cached?.content && Date.now() - new Date(cached.created_at).getTime() < 5 * 60 * 1000) {
       return cached.content;
     }
 
@@ -54,6 +54,7 @@ export const BriefingService = {
       today: (todayRes.data ?? []).map((m: any) => ({
         id: m.memory_id, title: m.title, type: m.type,
         when: m.due_at ? `due ${relTime(m.due_at)}` : m.reminder_at ? `reminder ${relTime(m.reminder_at)}` : "",
+        iso: m.due_at ?? m.reminder_at ?? null,
         text: m.memories?.original_text ?? "",
       })),
       dontForget: (forgottenRes.data ?? []).map((f: any) => ({

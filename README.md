@@ -1,8 +1,8 @@
-# Gonebia - Your external memory
+# TimelyMemo - Your external memory
 
 **Remember. Connect. Notice.**
 
-Gonebia is an AI-powered personal memory assistant. Tell it anything - purchases,
+TimelyMemo is an AI-powered personal memory assistant. Tell it anything - purchases,
 promises, ideas, books, decisions - and it extracts structure, embeds it for semantic
 search, connects related memories, and surfaces what you're likely forgetting.
 You never organize anything manually.

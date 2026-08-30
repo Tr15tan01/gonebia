@@ -17,6 +17,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many captures - take a breath." }, { status: 429 });
   }
 
+  // memories always start with a capital letter
+  body.text = body.text.charAt(0).toUpperCase() + body.text.slice(1);
+
   const sb = await createClient();
   const admin = createAdmin();
 

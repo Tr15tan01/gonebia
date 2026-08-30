@@ -8,11 +8,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: "Gonebia - your external memory",
-  description: "Tell Gonebia anything. It remembers what matters. Remember. Connect. Notice.",
+  title: "TimelyMemo - your external memory",
+  description: "Remember things at the right time. Remember. Connect. Notice.",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg" },
-  appleWebApp: { capable: true, title: "Gonebia", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "TimelyMemo", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

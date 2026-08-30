@@ -19,7 +19,7 @@ self.addEventListener("fetch", (e) => {
   );
 });
 self.addEventListener("push", (e) => {
-  let data = { title: "Gonebia", body: "" };
+  let data = { title: "TimelyMemo", body: "" };
   try { data = e.data.json(); } catch (err) {}
   e.waitUntil(self.registration.showNotification(data.title, {
     body: data.body, icon: "/icon.svg", badge: "/icon.svg", data: { url: data.url || "/dashboard" },
