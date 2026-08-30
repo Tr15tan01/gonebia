@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { playAlert } from "@/lib/sound";
 
 interface UrgentItem { id: string; text: string; title: string; when: number }
 
@@ -13,7 +14,8 @@ function snoozed(id: string) {
 }
 
 /** Red dialog for tasks that are due now (in addition to system notifications).
- *  One task at a time; each dismissal is remembered per task. */
+ *  One task at a time; each dismissal is remembered per task.
+ *  Plays an insistent alert sound when a due task first appears. */
 export function UrgentPopup() {
   const [item, setItem] = useState<UrgentItem | null>(null);
   const router = useRouter();
@@ -33,6 +35,11 @@ export function UrgentPopup() {
     const t = setInterval(poll, 45_000);
     return () => clearInterval(t);
   }, [poll]);
+
+  // sound when a new urgent task first surfaces (not on every poll)
+  useEffect(() => {
+    if (item) playAlert();
+  }, [item?.id]);
 
   function snooze(hours: number) {
     if (!item) return;

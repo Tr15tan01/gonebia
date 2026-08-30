@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/theme";
 import { useToast } from "@/components/ui";
+import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
+import { createClient } from "@/lib/supabase/client";
 
 type PermState = "unsupported" | "granted" | "denied" | "default" | "loading";
 
@@ -15,6 +17,7 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [perm, setPerm] = useState<PermState>("loading");
   const [appOn, setAppOn] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
   const toast = useToast();
   const router = useRouter();
 
@@ -26,7 +29,7 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
     setPerm(p);
     setAppOn(p === "granted" && localStorage.getItem("gonebia-fg-notifs") !== "0");
   }
-  useEffect(() => { readState(); }, []);
+  useEffect(() => { readState(); setSoundOn(soundEnabled()); }, []);
 
   async function save(patch: object, msg: string) {
     const res = await fetch("/api/profile", {
@@ -98,7 +101,13 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
 
   async function deleteAccount() {
     const ok = await fetch("/api/account", { method: "DELETE" });
-    if (ok.ok) { window.location.href = "/"; } else toast("Deletion failed - please try again.");
+    if (ok.ok) {
+      const summary = await ok.json().catch(() => null);
+      try { createClient().auth.signOut(); } catch {}
+      window.location.href = summary?.total
+        ? `/?deleted=${summary.total}`
+        : "/";
+    } else toast("Deletion failed - please try again.");
   }
 
   const permLabel: Record<PermState, string> = {
@@ -173,6 +182,26 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
 
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>
+            Play a sound with alerts
+            <span className="block text-xs text-ink-2 mt-0.5">
+              A short chime when new alerts or urgent tasks appear.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={soundOn}
+            onChange={() => {
+              const next = !soundOn;
+              setSoundEnabled(next);
+              setSoundOn(next);
+              if (next) playChime();
+            }}
+            className="size-4 accent-[var(--ember)] shrink-0"
+          />
+        </label>
+
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
             Web push (background)
             <span className="block text-xs text-ink-2 mt-0.5">
               Even when the app is closed. Needs VAPID keys; on iPhone, install the app first.
@@ -231,7 +260,7 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
         </div>
         {confirmDelete && (
           <div className="rounded-xl border border-red-500/40 p-3 text-sm space-y-2">
-            <p>This permanently deletes your account and every memory, insight, and notification. There is no undo.</p>
+            <p>This permanently deletes your account and every memory, insight, and notification - from every table, with a summary of what was removed. There is no undo.</p>
             <div className="flex gap-2">
               <button onClick={deleteAccount} className="btn-primary !py-1.5 !text-xs !bg-red-600">Yes, delete everything</button>
               <button onClick={() => setConfirmDelete(false)} className="btn-ghost !py-1.5 !text-xs">Cancel</button>

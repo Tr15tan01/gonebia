@@ -1,9 +1,11 @@
 "use client";
 import { useEffect } from "react";
+import { playChime } from "@/lib/sound";
 
 /** System notifications while the app is open (desktop + mobile).
  *  Requires browser permission AND the in-app switch
- *  (Settings -> "Alert me while the app is open") to be on. */
+ *  (Settings -> "Alert me while the app is open") to be on.
+ *  Plays a soft chime for each new notification. */
 export function ForegroundNotifier() {
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -27,6 +29,7 @@ export function ForegroundNotifier() {
           try {
             new Notification(`TimelyMemo - ${n.title}`, { body: n.body, icon: "/icon.svg", tag: n.id });
           } catch {}
+          playChime();
         }
         if (changed) {
           localStorage.setItem("gonebia-seen-notifs", JSON.stringify([...seenSet].slice(-200)));

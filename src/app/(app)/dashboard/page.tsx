@@ -6,6 +6,7 @@ import { Empty } from "@/components/ui";
 import { MemoryOpener } from "@/components/memory-opener";
 import { relTime } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
+import { LogoMark } from "@/components/logo";
 
 export const dynamic = "force-dynamic";
 
@@ -81,9 +82,12 @@ export default async function Dashboard() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="font-display text-2xl md:text-3xl">
-          {greeting()}, <span style={{ color: "var(--ember)" }}>{user!.email?.split("@")[0]}</span>.
-        </h1>
+        <div className="flex items-center gap-3">
+          <LogoMark size={34} />
+          <h1 className="font-display text-2xl md:text-3xl">
+            {greeting()}, <span style={{ color: "var(--ember)" }}>{user!.email?.split("@")[0]}</span>.
+          </h1>
+        </div>
         <p className="text-ink-2 text-sm mt-1">Tell Gonebia anything. It remembers what matters.</p>
       </header>
 

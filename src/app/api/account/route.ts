@@ -22,18 +22,55 @@ export async function GET() {
     {
       headers: {
         "Content-Type": "application/json",
-        "Content-Disposition": 'attachment; filename="gonebia-export.json"',
+        "Content-Disposition": 'attachment; filename="timelymemo-export.json"',
       },
     }
   );
 }
 
-/** Hard account deletion - FK cascades remove every row the user owns. */
+/** Hard account deletion. We do NOT rely on FK cascades alone: every table is
+ *  explicitly wiped by user_id (counted), then the auth user is removed -
+ *  cascading anything that could remain. The response reports what was deleted. */
 export async function DELETE() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const admin = createAdmin();
-  const { error } = await admin.auth.admin.deleteUser(user.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  // children of memories first, then memories, then profile-level rows
+  const TABLES = [
+    "memory_embeddings", "memory_metadata", "memory_people", "memory_relationships",
+    "tasks", "events", "purchases", "decisions", "goals", "books",
+    "reminders", "notifications", "insights", "daily_briefings", "weekly_analyses",
+    "push_subscriptions", "people", "memories", "user_preferences", "profiles",
+  ];
+
+  const deleted: Record<string, number> = {};
+  let total = 0;
+  for (const t of TABLES) {
+    try {
+      const { count, error } = await admin
+        .from(t)
+        .delete({ count: "exact" })
+        .eq("user_id", user.id);
+      if (error) {
+        console.error("[account-delete] failed on", t, error);
+        return NextResponse.json({ error: `deletion failed at ${t}` }, { status: 500 });
+      }
+      deleted[t] = count ?? 0;
+      total += count ?? 0;
+    } catch (e) {
+      console.error("[account-delete] exception on", t, e);
+      return NextResponse.json({ error: `deletion failed at ${t}` }, { status: 500 });
+    }
+  }
+
+  // remove the auth user itself - cascades anything not covered above
+  const { error: authErr } = await admin.auth.admin.deleteUser(user.id);
+  if (authErr) {
+    console.error("[account-delete] auth user deletion failed:", authErr);
+    return NextResponse.json({ error: authErr.message }, { status: 500 });
+  }
+
+  console.log(`[account-delete] user ${user.id}: ${total} rows across ${TABLES.length} tables, account removed.`);
+  return NextResponse.json({ ok: true, total, deleted });
 }

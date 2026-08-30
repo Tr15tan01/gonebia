@@ -1,7 +1,10 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Loader } from "@/components/ui";
+import { LogoMark } from "@/components/logo";
+import { validatePassword, isBreached, PASSWORD_MIN, PASSWORD_MAX } from "@/lib/password";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -10,6 +13,7 @@ export default function LoginPage() {
   const [signup, setSignup] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [agree, setAgree] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "1";
 
@@ -18,11 +22,28 @@ export default function LoginPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true); setError(null);
+    setError(null);
+
+    // password policy applies when a NEW password is chosen
+    if (signup && mode === "password") {
+      const structural = validatePassword(password);
+      if (structural) { setError(structural); return; }
+    }
+
+    if (!agree) { setError("Please agree to the Terms and Privacy Policy."); return; }
+
+    setBusy(true);
     const sb = createClient();
     try {
       if (mode === "password") {
         if (signup) {
+          // k-anonymity breach check: hash prefix only, password never leaves the device
+          const breached = await isBreached(password);
+          if (breached) {
+            setError("This password appears in known data breaches. Please choose a different one.");
+            setBusy(false);
+            return;
+          }
           const { error } = await sb.auth.signUp({
             email, password,
             options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
@@ -47,6 +68,7 @@ export default function LoginPage() {
   }
 
   async function google() {
+    if (!agree) { setError("Please agree to the Terms and Privacy Policy first."); return; }
     const sb = createClient();
     await sb.auth.signInWithOAuth({
       provider: "google",
@@ -57,9 +79,12 @@ export default function LoginPage() {
   return (
     <div className="min-h-dvh grid place-items-center px-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <p className="font-display text-3xl">TimelyMemo</p>
-          <p className="text-ink-2 text-sm mt-1">Your external memory.</p>
+        <div className="text-center flex flex-col items-center gap-2">
+          <LogoMark size={48} />
+          <div>
+            <p className="font-display text-3xl">TimelyMemo</p>
+            <p className="text-ink-2 text-sm mt-1">Remember things at the right time.</p>
+          </div>
         </div>
 
         {sent ? (
@@ -76,10 +101,45 @@ export default function LoginPage() {
             )}
             <input className="input" type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
             {mode === "password" && (
-              <input className="input" type="password" required minLength={8} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
+              <div>
+                <input
+                  className="input"
+                  type="password"
+                  required
+                  placeholder={signup ? `Password (${PASSWORD_MIN}-${PASSWORD_MAX} characters)` : "Password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={busy}
+                  autoComplete={signup ? "new-password" : "current-password"}
+                />
+                {signup && password.length > 0 && password.length < PASSWORD_MIN && (
+                  <p className="text-xs mt-1" style={{ color: "var(--ember)" }}>
+                    {PASSWORD_MIN - password.length} more character{PASSWORD_MIN - password.length === 1 ? "" : "s"}...
+                  </p>
+                )}
+              </div>
             )}
-            {error && <p className="text-sm text-danger" style={{ color: "var(--danger)" }}>{error}</p>}
-            <button type="submit" disabled={busy} className="btn-primary w-full">
+            {error && <p className="text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
+
+            <label className="flex items-start gap-2 text-xs text-ink-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agree}
+                onChange={(e) => setAgree(e.target.checked)}
+                disabled={busy}
+                className="size-4 mt-0.5 accent-[var(--ember)] shrink-0"
+              />
+              <span>
+                I agree to the{" "}
+                <Link href="/terms" target="_blank" className="text-ember underline underline-offset-2">Terms of Service</Link>
+                {" "}and{" "}
+                <Link href="/privacy" target="_blank" className="text-ember underline underline-offset-2">Privacy Policy</Link>
+                {" "}
+                (including AI processing of submitted content as described there).
+              </span>
+            </label>
+
+            <button type="submit" disabled={busy || !agree} className="btn-primary w-full">
               {busy ? busyLabel + "..." : signup ? "Create account" : mode === "password" ? "Sign in" : "Send magic link"}
             </button>
             <div className="flex justify-between text-xs text-ink-2">
@@ -95,7 +155,7 @@ export default function LoginPage() {
             {googleEnabled && (
               <>
                 <div className="flex items-center gap-3 text-xs text-ink-2"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-                <button type="button" onClick={google} disabled={busy} className="btn-ghost w-full">Continue with Google</button>
+                <button type="button" onClick={google} disabled={busy || !agree} className="btn-ghost w-full">Continue with Google</button>
               </>
             )}
           </form>
