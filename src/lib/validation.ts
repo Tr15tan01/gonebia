@@ -73,7 +73,7 @@ export const insightActionSchema = z.object({
 
 export const notificationActionSchema = z.object({
   id: z.string().uuid(),
-  action: z.enum(["done", "snooze", "dismiss", "not_relevant"]),
+  action: z.enum(["done", "snooze", "dismiss", "not_relevant", "read"]),
 });
 
 export const goalSchema = z.object({

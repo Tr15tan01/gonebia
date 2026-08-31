@@ -30,6 +30,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [atValue, setAtValue] = useState("");
   const recRef = useRef<any>(null);
+  const listeningRef = useRef(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
   const router = useRouter();
@@ -51,23 +52,60 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   function toggleMic() {
     const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!SR) { toast("Voice input isn't supported in this browser - try Chrome."); return; }
-    if (listening) { recRef.current?.stop(); setListening(false); return; }
+    if (listening) {
+      listeningRef.current = false;
+      recRef.current?.stop();
+      setListening(false);
+      return;
+    }
     const rec = new SR();
     rec.lang = navigator.language || "en-US";
-    rec.continuous = true; rec.interimResults = true;
-    let final = text;
+    rec.continuous = true;
+    rec.interimResults = true;
+    const base = text.trim() ? text.trim() + " " : "";
+    // Mobile browsers re-send already-final results and silently restart the
+    // recognition session. The old closure-accumulation duplicated words.
+    // Dedupe finals by GLOBAL result index; the offset grows per restart.
+    const finals = new Map<number, string>();
+    let offset = 0;
+    let sessionCount = 0;
     rec.onresult = (e: any) => {
       let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript + " ";
-        else interim += e.results[i][0].transcript;
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) {
+          const t = r[0].transcript.trim();
+          if (t && !finals.has(offset + i)) finals.set(offset + i, t);
+        } else {
+          interim += r[0].transcript;
+        }
       }
-      setText((final + interim).trimStart());
+      sessionCount = e.results.length;
+      const said = [...finals.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v).join(" ");
+      setText((base + said + " " + interim).replace(/\s+/g, " ").trimStart());
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => { setListening(false); toast("Couldn't access the microphone."); };
+    rec.onend = () => {
+      if (listeningRef.current) {
+        // Android Chrome ends sessions aggressively - restart while listening.
+        offset += sessionCount;
+        sessionCount = 0;
+        try { rec.start(); } catch { listeningRef.current = false; setListening(false); }
+      } else {
+        setListening(false);
+      }
+    };
+    rec.onerror = (e: any) => {
+      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
+        listeningRef.current = false;
+        setListening(false);
+        toast("Couldn't access the microphone.");
+      }
+      // "no-speech" / "aborted" are recovered by the onend restart
+    };
     recRef.current = rec;
-    rec.start(); setListening(true);
+    listeningRef.current = true;
+    rec.start();
+    setListening(true);
   }
 
   async function save() {

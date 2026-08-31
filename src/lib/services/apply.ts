@@ -50,7 +50,15 @@ export const ApplyService = {
 
     try {
       if (book && meta.type === "book") {
-        await BookService.upsertFromCapture(admin, userId, memoryId, book);
+        const bookId = await BookService.upsertFromCapture(admin, userId, memoryId, book);
+        if (bookId) {
+          try {
+            const { BookEnrichmentService } = await import("./book-enrich");
+            await BookEnrichmentService.enrich(admin, userId, bookId, book.title, book.author);
+          } catch (e) {
+            console.error("[apply] book enrichment failed:", e);
+          }
+        }
       }
       if (["task", "promise", "commitment"].includes(meta.type)) {
         await admin.from("tasks").insert({ memory_id: memoryId, user_id: userId, due_at: meta.due_at });

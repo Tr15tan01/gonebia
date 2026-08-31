@@ -8,26 +8,24 @@ function fmt(iso: string) {
 }
 
 export const AIChatService = {
-  async answer(sb: any, history: { role: "user" | "assistant"; content: string }[], timezone: string) {
+  async answer(sb: any, history: { role: "user" | "assistant"; content: string }[], timezone: string, plan: string = "pro") {
     const question = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
 
-    // 1. Plan the retrieval (keywords, filters, date range resolved from natural language).
-    //    If planning fails, fall back to using the raw question.
-    let plan: Record<string, unknown> = { query: question, semantic: true, types: null, person: null, from: null, to: null };
+    let plan_: Record<string, unknown> = { query: question, semantic: true, types: null, person: null, from: null, to: null };
     try {
-      plan = { ...plan, ...(await geminiJSON<Record<string, unknown>>(searchPlanPrompt(question, new Date(), timezone))) };
+      plan_ = { ...plan_, ...(await geminiJSON<Record<string, unknown>>(searchPlanPrompt(question, new Date(), timezone))) };
     } catch (e) {
       console.error("[chat] planning failed, using raw question:", e);
     }
 
-    // 2. Hybrid retrieval (keyword + semantic + structured filters), RLS-scoped
     const rows = await MemoryRetrievalService.hybrid(sb, {
-      query: (plan.query as string) || question,
-      types: (plan.types as string[] | null) ?? null,
-      person: (plan.person as string | null) ?? null,
-      from: (plan.from as string | null) ?? null,
-      to: (plan.to as string | null) ?? null,
+      query: (plan_.query as string) || question,
+      types: (plan_.types as string[] | null) ?? null,
+      person: (plan_.person as string | null) ?? null,
+      from: (plan_.from as string | null) ?? null,
+      to: (plan_.to as string | null) ?? null,
       limit: 8,
+      semantic: plan === "pro", // Free = basic keyword search
     });
 
     if (!rows.length) {
@@ -42,8 +40,6 @@ export const AIChatService = {
       date: r.created_at, snippet: r.original_text.slice(0, 120),
     }));
 
-    // 3. Grounded answer with citations. If the LLM is unreachable, degrade gracefully:
-    //    return the retrieved memories themselves - chat still works.
     let answer: string;
     try {
       const context = rows.map((r: any, i: number) =>
@@ -54,9 +50,7 @@ export const AIChatService = {
     } catch (e) {
       console.error("[chat] LLM answer failed, using retrieval fallback:", e);
       answer = "My language model couldn't be reached just now, but I did find these memories:\n\n" +
-        rows.map((r: any, i: number) =>
-          `[${i + 1}] ${r.title || r.original_text.slice(0, 60)} - ${fmt(r.created_at)}`
-        ).join("\n") +
+        rows.map((r: any, i: number) => `[${i + 1}] ${r.title || r.original_text.slice(0, 60)} - ${fmt(r.created_at)}`).join("\n") +
         "\n\nTry again in a moment for a full answer.";
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
+import { getPlan, LIMITS, activeReminderCount } from "@/lib/limits";
 import { correctionSchema } from "@/lib/validation";
 import { ReminderService } from "@/lib/services/reminders";
 import { BookService } from "@/lib/services/books";
@@ -94,6 +95,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await sb.from("insights").update({ status: "done" }).eq("data->>memory_id", id).eq("kind", "forgotten");
   }
   if (patch.reminder_at) {
+    const plan = await getPlan(sb, user.id);
+    if ((await activeReminderCount(admin, user.id)) >= LIMITS[plan].activeReminders) {
+      return NextResponse.json({ error: `Reminder limit reached (${LIMITS[plan].activeReminders} on the ${plan === "free" ? "Free" : "Pro"} plan).`, code: "limit", upgrade: plan === "free" }, { status: 402 });
+    }
     await ReminderService.cancelForMemory(id);
     await ReminderService.schedule(user.id, id, patch.reminder_at);
   } else if (patch.reminder_at === null) {

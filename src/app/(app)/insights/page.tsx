@@ -1,4 +1,5 @@
 import { getUser, createClient } from "@/lib/supabase/server";
+import { getPlan } from "@/lib/limits";
 import { InsightsClient } from "@/components/insights";
 import { ActivityChart, TypeBreakdown, type ActivityDay, type TypeCount } from "@/components/charts";
 
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function InsightsPage() {
   const user = await getUser();
   const sb = await createClient();
+  const plan = await getPlan(sb, user!.id);
   const [{ data: insights }, { data: weekly }, { data: mems }] = await Promise.all([
     sb.from("insights").select("*")
       .in("status", ["new", "goal_created"])

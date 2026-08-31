@@ -2,10 +2,11 @@ import { createAdmin } from "@/lib/supabase/admin";
 import { geminiText } from "@/lib/ai/gemini";
 import { clusterNamePrompt } from "@/lib/ai/prompts";
 import { daysAgo } from "@/lib/dates";
+import { getPlan, LIMITS } from "@/lib/limits";
+import { createNotification } from "@/lib/notifications";
 
 const DAY = 86_400_000;
 
-/** pgvector columns come back from PostgREST as "[0.1,0.2,...]" strings - parse before math. */
 function parseVec(v: unknown): number[] {
   if (Array.isArray(v)) return v as number[];
   if (typeof v === "string") { try { return JSON.parse(v); } catch { return []; } }
@@ -18,12 +19,8 @@ function cosine(a: number[], b: number[]) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
 }
 
-interface ClusterItem {
-  id: string; embedding: number[]; title: string; created_at: string;
-  type?: string; status?: string;
-}
+interface ClusterItem { id: string; embedding: number[]; title: string; created_at: string; type?: string; status?: string }
 
-/** Greedy single-pass clustering; adequate for personal-scale data (hundreds to low thousands). */
 function cluster(items: ClusterItem[], threshold: number): ClusterItem[][] {
   const clusters: ClusterItem[][] = [];
   for (const it of items) {
@@ -36,31 +33,27 @@ function cluster(items: ClusterItem[], threshold: number): ClusterItem[][] {
   return clusters;
 }
 
-/** Insert an insight unless a live insight of the same kind already draws on largely the same memories. */
 async function insertInsight(admin: any, userId: string, row: {
   kind: string; title: string; body: string; data: object; source: string[];
-}): Promise<boolean> {
+}): Promise<string | null> {
   const { data: existing } = await admin
-    .from("insights")
-    .select("id, source_memory_ids")
-    .eq("user_id", userId)
-    .eq("kind", row.kind)
-    .in("status", ["new", "goal_created"]);
+    .from("insights").select("id, source_memory_ids")
+    .eq("user_id", userId).eq("kind", row.kind).in("status", ["new", "goal_created"]);
   const sourceSet = new Set(row.source);
   const dup = (existing ?? []).some((e: any) => {
     const prev: string[] = e.source_memory_ids ?? [];
     const overlap = prev.filter((id) => sourceSet.has(id)).length;
     return overlap / Math.max(1, Math.min(prev.length, row.source.length)) > 0.6;
   });
-  if (dup) return false;
-  await admin.from("insights").insert({
+  if (dup) return null;
+  const { data, error } = await admin.from("insights").insert({
     user_id: userId, kind: row.kind, title: row.title, body: row.body,
     data: row.data, source_memory_ids: row.source,
-  });
-  return true;
+  }).select().single();
+  if (error) { console.error("[insights] insert failed:", error); return null; }
+  return data.id;
 }
 
-/** If the user keeps dismissing a kind of insight, quiet down (learn from behaviour). */
 async function kindSuppressed(admin: any, userId: string, kind: string) {
   const { count } = await admin.from("insights")
     .select("id", { count: "exact", head: true })
@@ -68,32 +61,38 @@ async function kindSuppressed(admin: any, userId: string, kind: string) {
   return (count ?? 0) >= 5;
 }
 
+async function countInsightsSince(admin: any, userId: string, kind: string, sinceISO: string) {
+  const { count } = await admin.from("insights")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId).eq("kind", kind).gte("created_at", sinceISO);
+  return count ?? 0;
+}
+
 export const InsightService = {
   async runForUser(userId: string) {
     const admin = createAdmin();
-    const { data: prefs } = await admin
-      .from("user_preferences").select("insight_sensitivity").eq("user_id", userId).single();
-    const sens = prefs?.insight_sensitivity ?? 0.75;
+    const plan = await getPlan(admin, userId);
+    const lim = LIMITS[plan];
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
     let created = 0;
 
-    // ---- 1. WHAT AM I FORGETTING? --------------------------------------
-    if (!(await kindSuppressed(admin, userId, "forgotten"))) {
+    // ---- 1. WHAT AM I FORGETTING? (free: 1/week, pro: unlimited) --------
+    if (!(await kindSuppressed(admin, userId, "forgotten"))
+        && (plan === "pro" || (await countInsightsSince(admin, userId, "forgotten", weekAgo)) < lim.forgottenPerWeek)) {
       const { data: open } = await admin
         .from("memory_metadata")
         .select("memory_id, title, type, importance, due_at, created_at, memories!inner(original_text, created_at)")
-        .eq("user_id", userId)
-        .eq("status", "open")
+        .eq("user_id", userId).eq("status", "open")
         .in("type", ["task", "promise", "commitment", "question", "decision", "reminder"])
-        .order("created_at", { ascending: false })
-        .limit(50);
-      for (const m of (open ?? []) as any[]) {
+        .order("created_at", { ascending: false }).limit(50);
+      for (const m of open ?? []) {
         const overdue = !!m.due_at && new Date(m.due_at) < new Date();
         const age = daysAgo(m.memories?.created_at ?? m.created_at) ?? 0;
-        const stale = age >= 6;
-        if (!overdue && !stale) continue;
+        if (!overdue && age < 6) continue;
         const score = (overdue ? 2 : 0) + (m.importance >= 4 ? 1 : 0) + Math.min(age / 10, 2);
         if (score < 1) continue;
-        if (await insertInsight(admin, userId, {
+        const insightId = await insertInsight(admin, userId, {
           kind: "forgotten",
           title: m.title || "Open item",
           body: overdue
@@ -101,12 +100,22 @@ export const InsightService = {
             : `You mentioned this ${age} days ago and it's still open. Still needed?`,
           data: { memory_id: m.memory_id, days: age, overdue },
           source: [m.memory_id],
-        })) created++;
+        });
+        if (insightId) {
+          created++;
+          await createNotification(admin, {
+            userId, kind: "forgotten_memory", insightId, memoryId: m.memory_id,
+            title: "You may have forgotten something",
+            body: m.title || "An open item needs your attention",
+            url: "/insights", dedupeKey: `insight:${insightId}`,
+          });
+        }
       }
     }
 
-    // ---- 2. CONNECT THE DOTS -------------------------------------------
-    if (!(await kindSuppressed(admin, userId, "connection"))) {
+    // ---- 2. CONNECT THE DOTS (free: 3/month, pro: unlimited) ------------
+    if (!(await kindSuppressed(admin, userId, "connection"))
+        && (plan === "pro" || (await countInsightsSince(admin, userId, "connection", monthStart)) < lim.connectDotsPerMonth)) {
       const { data: rows } = await admin
         .from("memory_embeddings")
         .select("memory_id, embedding, memories!inner(created_at, memory_metadata(title))")
@@ -114,78 +123,75 @@ export const InsightService = {
         .gte("created_at", new Date(Date.now() - 90 * DAY).toISOString())
         .limit(120);
       const items: ClusterItem[] = (rows ?? []).map((r: any) => ({
-        id: r.memory_id,
-        embedding: parseVec(r.embedding),
-        title: r.memories?.memory_metadata?.title || "",
-        created_at: r.memories?.created_at,
+        id: r.memory_id, embedding: parseVec(r.embedding),
+        title: r.memories?.memory_metadata?.title || "", created_at: r.memories?.created_at,
       })).filter((m) => m.embedding.length > 0);
 
-      for (const c of cluster(items, 0.82 - (1 - sens) * 0.1)) {
+      for (const c of cluster(items, 0.82 - (1 - 0.75) * 0.1)) {
         if (c.length < 3) continue;
         const spanDays = (Date.now() - Math.min(...c.map((m) => +new Date(m.created_at)))) / DAY;
-        if (spanDays < 3) continue; // same-day repeats are not "connections"
+        if (spanDays < 3) continue;
         let label = "A recurring thread";
         try {
           label = (await geminiText(clusterNamePrompt(c.map((m) => m.title || "Untitled"))))
             .replace(/["'.]/g, "").slice(0, 80);
         } catch {}
-        if (await insertInsight(admin, userId, {
-          kind: "connection",
-          title: label,
+        const insightId = await insertInsight(admin, userId, {
+          kind: "connection", title: label,
           body: `You've mentioned this ${c.length} times recently. These may all be part of one larger theme.`,
           data: { members: c.map((m) => ({ id: m.id, title: m.title, created_at: m.created_at })) },
           source: c.slice(0, 12).map((m) => m.id),
-        })) created++;
+        });
+        if (insightId) {
+          created++;
+          await createNotification(admin, {
+            userId, kind: "connection", insightId,
+            title: "I noticed a connection", body: label, url: "/insights",
+            dedupeKey: `insight:${insightId}`,
+          });
+        }
       }
     }
 
-    // ---- 3. INTENTION VS REALITY ----------------------------------------
-    if (!(await kindSuppressed(admin, userId, "intention"))) {
+    // ---- 3. INTENTION VS REALITY (pro only) ------------------------------
+    if (plan === "pro" && !(await kindSuppressed(admin, userId, "intention"))) {
       const { data: rows } = await admin
         .from("memory_embeddings")
         .select("memory_id, embedding, memories!inner(created_at, memory_metadata!inner(type, status, title))")
-        .eq("user_id", userId)
-        .limit(150);
+        .eq("user_id", userId).limit(150);
       const items: ClusterItem[] = (rows ?? []).map((r: any) => ({
-        id: r.memory_id,
-        embedding: parseVec(r.embedding),
-        title: r.memories?.memory_metadata?.title || "",
-        created_at: r.memories?.created_at,
-        type: r.memories?.memory_metadata?.type,
-        status: r.memories?.memory_metadata?.status,
-      })).filter((m) =>
-        m.embedding.length > 0 &&
-        ["goal", "habit", "task", "idea"].includes(m.type ?? "") &&
-        m.status === "open"
-      );
+        id: r.memory_id, embedding: parseVec(r.embedding),
+        title: r.memories?.memory_metadata?.title || "", created_at: r.memories?.created_at,
+        type: r.memories?.memory_metadata?.type, status: r.memories?.memory_metadata?.status,
+      })).filter((m) => m.embedding.length > 0 && ["goal", "habit", "task", "idea"].includes(m.type ?? "") && m.status === "open");
 
       for (const c of cluster(items, 0.88)) {
         if (c.length < 3) continue;
         const times = c.map((m) => +new Date(m.created_at));
         const span = (Math.max(...times) - Math.min(...times)) / DAY;
-        if (span < 30) continue; // must be a durable intention, not a week's mood
-        const first = new Date(Math.min(...times)).toISOString();
-        if (await insertInsight(admin, userId, {
-          kind: "intention",
-          title: c[0].title || "A recurring intention",
+        if (span < 30) continue;
+        const insightId = await insertInsight(admin, userId, {
+          kind: "intention", title: c[0].title || "A recurring intention",
           body: `You've expressed this intention ${c.length} times over ${Math.round(span)} days, and it's still open. No judgment - just noticing.`,
-          data: {
-            occurrences: c.length, span_days: Math.round(span), first_mentioned: first,
-            members: c.map((m) => ({ id: m.id, title: m.title, created_at: m.created_at })),
-          },
+          data: { occurrences: c.length, span_days: Math.round(span), members: c.map((m) => ({ id: m.id, title: m.title, created_at: m.created_at })) },
           source: c.slice(0, 12).map((m) => m.id),
-        })) created++;
+        });
+        if (insightId) {
+          created++;
+          await createNotification(admin, {
+            userId, kind: "insight", insightId,
+            title: "Intention worth revisiting", body: c[0].title || "A recurring intention",
+            url: "/insights", dedupeKey: `insight:${insightId}`,
+          });
+        }
       }
     }
 
-    // ---- 4. RECURRING PATTERNS ------------------------------------------
-    if (!(await kindSuppressed(admin, userId, "pattern"))) {
+    // ---- 4. RECURRING PATTERNS (pro only) --------------------------------
+    if (plan === "pro" && !(await kindSuppressed(admin, userId, "pattern"))) {
       const { data: buys } = await admin
-        .from("purchases")
-        .select("memory_id, product, purchased_at")
-        .eq("user_id", userId)
-        .not("product", "is", null)
-        .limit(200);
+        .from("purchases").select("memory_id, product, purchased_at")
+        .eq("user_id", userId).not("product", "is", null).limit(200);
       const groups = new Map<string, { memory_id: string; purchased_at: string | null }[]>();
       for (const b of buys ?? []) {
         const k = (b.product as string).toLowerCase().trim();
@@ -194,24 +200,31 @@ export const InsightService = {
         groups.get(k)!.push(b);
       }
       for (const [product, list] of groups) {
-        if (list.length < 3) continue; // sufficient evidence only
+        if (list.length < 3) continue;
         const times = list.map((b) => +new Date(b.purchased_at ?? 0)).filter((t) => t > 0).sort((a, b) => a - b);
         if (times.length < 3) continue;
         const gaps: number[] = [];
         for (let i = 1; i < times.length; i++) gaps.push((times[i] - times[i - 1]) / DAY);
         const avg = gaps.reduce((a, b) => a + b, 0) / gaps.length;
         const spread = Math.max(...gaps) - Math.min(...gaps);
-        if (avg < 7 || avg > 180 || spread > avg * 0.6) continue; // too irregular to be a pattern
-        if (await insertInsight(admin, userId, {
-          kind: "pattern",
-          title: `Recurring: ${product}`,
+        if (avg < 7 || avg > 180 || spread > avg * 0.6) continue;
+        const insightId = await insertInsight(admin, userId, {
+          kind: "pattern", title: `Recurring: ${product}`,
           body: `You usually buy this every ${Math.max(1, Math.round(avg - spread / 2))}-${Math.round(avg + spread / 2)} days. Want a reminder around day ${Math.max(1, Math.round(avg) - 3)}?`,
           data: { product, avg_interval_days: Math.round(avg), occurrences: list.length, memory_ids: list.map((b) => b.memory_id) },
           source: list.map((b) => b.memory_id),
-        })) created++;
+        });
+        if (insightId) {
+          created++;
+          await createNotification(admin, {
+            userId, kind: "recurring_pattern", insightId,
+            title: "Pattern detected", body: `Recurring: ${product}`, url: "/insights",
+            dedupeKey: `insight:${insightId}`,
+          });
+        }
       }
     }
 
-    return { created };
+    return { created, plan };
   },
 };

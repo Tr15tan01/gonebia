@@ -3,6 +3,7 @@ import { getUser } from "@/lib/supabase/server";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { LandingVisual } from "@/components/landing-visual";
 import { sortedPosts } from "@/lib/blog";
+import { UpgradeButton } from "@/components/upgrade-button";
 
 const EXAMPLES = [
   { text: "I bought a computer from Alta for 2300 GEL.", result: "Filed as a purchase - store, amount and date extracted. Ask 'where did I buy my computer?' months later.", chip: "chip-c-buy", type: "purchase" },
@@ -91,6 +92,48 @@ export default async function Landing() {
                 <p className="text-sm text-ink-2 mt-2 leading-relaxed">{a.short}</p>
               </Link>
             ))}
+          </div>
+        </section>
+
+        {/* PRICING */}
+        <section id="pricing" className="max-w-5xl mx-auto px-6 md:px-10 py-14 border-t border-line">
+          <h2 className="font-display text-3xl">Simple pricing</h2>
+          <p className="text-ink-2 mt-2">Start free. Upgrade when your memory becomes essential. Cancel anytime from the customer portal.</p>
+          <div className="grid md:grid-cols-2 gap-4 mt-8 max-w-3xl mx-auto">
+            <div className="card p-6">
+              <p className="font-display text-xl">Free</p>
+              <p className="font-display text-4xl mt-2">$0</p>
+              <ul className="mt-5 space-y-2 text-sm text-ink-2">
+                <li>100 text + 20 voice memories / month</li>
+                <li>Basic search and timeline</li>
+                <li>20 AI questions / month (max 10/day)</li>
+                <li>20 active reminders</li>
+                <li>Connect the Dots - 3/month</li>
+                <li>What am I forgetting - 1/week</li>
+                <li>3 Discover analyses / month - 2 agent runs</li>
+                <li>Export and delete anytime</li>
+              </ul>
+            </div>
+            <div className="card p-6 soft-shadow" style={{ borderColor: "color-mix(in srgb, var(--ember) 45%, transparent)" }}>
+              <div className="flex items-center justify-between">
+                <p className="font-display text-xl">Pro</p>
+                <span className="chip !text-ember !border-ember/50 font-semibold">Most popular</span>
+              </div>
+              <p className="font-display text-4xl mt-2">$7.99<span className="text-base text-ink-2">/mo</span></p>
+              <ul className="mt-5 space-y-2 text-sm">
+                <li>1,000 memories + 200 voice / month</li>
+                <li>Semantic search + memory graph</li>
+                <li>500 AI questions / month</li>
+                <li>Unlimited reminders</li>
+                <li>All insights: Dots, Intentions, Patterns</li>
+                <li>Daily briefing + weekly reflection</li>
+                <li>200 Discover analyses - 50 agent runs / month</li>
+                <li>Price tracking (10 products)</li>
+                <li>Google Calendar + Gmail context for agents</li>
+              </ul>
+              <UpgradeButton className="mt-5 w-full" />
+              <p className="text-xs text-ink-2 mt-3 text-center">Secure payments by Paddle. Prices in USD.</p>
+            </div>
           </div>
         </section>
 

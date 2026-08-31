@@ -203,3 +203,57 @@ body { background: var(--paper); color: var(--ink); }
 :root { --shadow-soft: 0 1px 2px rgba(28, 25, 23, 0.05), 0 4px 14px rgba(28, 25, 23, 0.07); }
 .dark { --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.35); }
 .soft-shadow { box-shadow: var(--shadow-soft); }
+
+
+
+.card { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+@media (hover: hover) {
+  .card:hover { transform: translateY(-2px); }
+}
+.btn, .btn-primary, .btn-ghost {
+  transition: transform .08s ease, background-color .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.btn:active, .btn-primary:active, .btn-ghost:active { transform: scale(.97); }
+.chip { transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+
+@keyframes slideIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.notif-item { animation: slideIn .32s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .btn, .btn-primary, .btn-ghost, .chip, .notif-item, .rise,
+  .skeleton, .loader-ring, .loader-ring::before, .loader-ring::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* ---------- big run-loader (Discover/Agents analysis states) ---------- */
+.run-ring {
+  position: relative;
+  width: 64px; height: 64px;
+  border-radius: 9999px;
+  border: 3px solid color-mix(in srgb, var(--ink-2) 12%, transparent);
+}
+.run-ring::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg,
+    transparent 0%,
+    color-mix(in srgb, var(--ember) 45%, transparent) 55%,
+    var(--ember) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+  animation: spin 0.9s linear infinite;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ember) 40%, transparent));
+}
+.run-ring::after {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border-radius: 9999px;
+  background: var(--ember);
+  animation: pulseDot 1.2s ease-in-out infinite;
+}

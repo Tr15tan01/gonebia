@@ -17,6 +17,12 @@ export interface BookRow {
   started_at: string | null;
   finished_at: string | null;
   updated_at: string;
+  topic?: string | null;
+  pub_year?: number | null;
+  description?: string | null;
+  cover_url?: string | null;
+  isbn?: string | null;
+  enrich_status?: string;
 }
 
 const STATUSES = ["want_to_read", "reading", "finished", "abandoned"] as const;
@@ -30,6 +36,7 @@ const STATUS_LABEL: Record<string, string> = {
 export function BooksClient({ initial }: { initial: BookRow[] }) {
   const [books, setBooks] = useState<BookRow[]>(initial);
   const [openMemory, setOpenMemory] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const toast = useToast();
 
   async function patch(id: string, p: Partial<BookRow>) {
@@ -42,6 +49,25 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
     if (!res.ok) toast("Couldn't save that change.");
   }
 
+  async function replaceBook(book: BookRow) {
+    setBooks((bs) => bs.map((b) => (b.id === book.id ? { ...b, ...book } : b)));
+  }
+
+  async function relookup(id: string) {
+    setRetrying(id);
+    const res = await fetch("/api/books/enrich", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setRetrying(null);
+    if (d.book) {
+      replaceBook(d.book);
+      if (d.ok) toast("Found it online - details added.");
+      else toast("Still not in the book databases - your entry stays as you wrote it.");
+    } else toast("Lookup failed - please try again.");
+  }
+
   const reading = books.filter((b) => b.status === "reading");
   const nextUp = books.filter((b) => b.status === "want_to_read");
   const done = books.filter((b) => b.status === "finished" || b.status === "abandoned");
@@ -52,7 +78,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         href={`/dashboard?prefill=${encodeURIComponent("I finished reading ")}`}
         className="btn-ghost !py-1.5 !text-xs w-fit"
       >
-        + Add a book (just tell Gonebia about it)
+        + Add a book (just tell TimelyMemo about it)
       </Link>
 
       {books.length === 0 && (
@@ -60,7 +86,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
           <div className="text-3xl mb-3">📖</div>
           <p className="font-medium">Your shelf is empty.</p>
           <p className="text-sm text-ink-2 mt-1">
-            Say something like "I'm reading Sapiens by Harari" and it will appear here.
+            Say something like "I'm reading Sapiens by Harari" and it will appear here -
+            with cover, topic and details looked up online.
           </p>
         </div>
       )}
@@ -68,7 +95,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
       {reading.length > 0 && (
         <Section title="Reading now" count={reading.length}>
           {reading.map((b) => (
-            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory} />
+            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onRelookup={relookup} retrying={retrying === b.id} />
           ))}
         </Section>
       )}
@@ -76,7 +104,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
       {nextUp.length > 0 && (
         <Section title="Up next" count={nextUp.length}>
           {nextUp.map((b) => (
-            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory} />
+            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onRelookup={relookup} retrying={retrying === b.id} />
           ))}
         </Section>
       )}
@@ -84,7 +113,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
       {done.length > 0 && (
         <Section title="Finished & paused" count={done.length}>
           {done.map((b) => (
-            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory} />
+            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onRelookup={relookup} retrying={retrying === b.id} />
           ))}
         </Section>
       )}
@@ -115,41 +145,94 @@ function Stars({ value, onSet }: { value: number | null; onSet: (n: number | nul
   );
 }
 
-function BookCard({ book, onPatch, onOpenMemory }: {
+function Cover({ book }: { book: BookRow }) {
+  if (book.cover_url) {
+    return (
+      <img
+        src={book.cover_url}
+        alt=""
+        referrerPolicy="no-referrer"
+        className="w-14 h-20 rounded-lg object-cover shrink-0 bg-paper-2"
+        onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
+      />
+    );
+  }
+  return (
+    <div className="w-14 h-20 rounded-lg shrink-0 grid place-items-center text-xl"
+      style={{ background: "color-mix(in srgb, var(--c-book) 12%, transparent)", color: "var(--c-book)" }}
+      aria-hidden>▤</div>
+  );
+}
+
+function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying }: {
   book: BookRow;
   onPatch: (id: string, p: Partial<BookRow>) => void;
   onOpenMemory: (id: string) => void;
+  onRelookup: (id: string) => void;
+  retrying: boolean;
 }) {
   return (
-    <div className="card p-4 space-y-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-display text-lg leading-snug">{book.title}</p>
-          {book.author && <p className="text-sm text-ink-2">{book.author}</p>}
+    <div className="card p-4 soft-shadow">
+      <div className="flex gap-3">
+        <Cover book={book} />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-display text-lg leading-snug">{book.title}</p>
+              {book.author && <p className="text-sm text-ink-2">{book.author}</p>}
+            </div>
+            <select
+              value={book.status}
+              onChange={(e) => onPatch(book.id, { status: e.target.value })}
+              className="input !py-1 !px-2 !text-xs w-auto shrink-0"
+              aria-label="Status"
+            >
+              {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-2">
+            <Stars value={book.rating} onSet={(n) => onPatch(book.id, { rating: n })} />
+            {book.finished_at && <span>finished {fmtDate(book.finished_at)}</span>}
+            {book.started_at && !book.finished_at && <span>started {fmtDate(book.started_at)}</span>}
+            {book.recommended_by && <span className="chip chip-c-person">recommended by {book.recommended_by}</span>}
+            {book.memory_id && (
+              <button onClick={() => onOpenMemory(book.memory_id!)} className="text-ember hover:underline cursor-pointer">
+                memories →
+              </button>
+            )}
+          </div>
+
+          {book.topic && <div className="flex flex-wrap gap-1.5">
+            {book.topic.split(",").map((t) => <span key={t} className="chip chip-c-know !text-[11px]">{t.trim()}</span>)}
+            {book.pub_year ? <span className="chip !text-[11px]">{book.pub_year}</span> : null}
+          </div>}
+
+          {book.description && (
+            <p className="text-xs text-ink-2 leading-relaxed" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {book.description}
+            </p>
+          )}
+
+          {book.enrich_status === "not_found" && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-ink-2">Not found in book databases - kept from your words.</span>
+              <button onClick={() => onRelookup(book.id)} disabled={retrying} className="btn-ghost !py-1 !px-2 !text-[11px] cursor-pointer">
+                {retrying ? "Looking..." : "Look up online"}
+              </button>
+            </div>
+          )}
+          {(!book.enrich_status || book.enrich_status === "none") && (
+            <div className="text-xs">
+              <button onClick={() => onRelookup(book.id)} disabled={retrying} className="btn-ghost !py-1 !px-2 !text-[11px] cursor-pointer">
+                {retrying ? "Looking..." : "Look up online"}
+              </button>
+            </div>
+          )}
+
+          {book.notes && <p className="text-sm text-ink-2">{book.notes}</p>}
         </div>
-        <select
-          value={book.status}
-          onChange={(e) => onPatch(book.id, { status: e.target.value })}
-          className="input !py-1 !px-2 !text-xs w-auto shrink-0"
-          aria-label="Status"
-        >
-          {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-        </select>
       </div>
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-2">
-        <Stars value={book.rating} onSet={(n) => onPatch(book.id, { rating: n })} />
-        {book.finished_at && <span>finished {fmtDate(book.finished_at)}</span>}
-        {book.started_at && !book.finished_at && <span>started {fmtDate(book.started_at)}</span>}
-        {book.recommended_by && <span className="chip">recommended by {book.recommended_by}</span>}
-        {book.memory_id && (
-          <button onClick={() => onOpenMemory(book.memory_id!)} className="text-ember hover:underline">
-            memories →
-          </button>
-        )}
-      </div>
-
-      {book.notes && <p className="text-sm text-ink-2">{book.notes}</p>}
     </div>
   );
 }

@@ -11,6 +11,7 @@ export function PublicHeader({ cta }: { cta?: string }) {
           <Link href="/#examples" className="text-ink-2 hover:text-ember">Examples</Link>
           <Link href="/why" className="text-ink-2 hover:text-ember">Why it matters</Link>
           <Link href="/blog" className="text-ink-2 hover:text-ember">Blog</Link>
+          <Link href="/pricing" className="text-ink-2 hover:text-ember">Pricing</Link>
           <Link href={cta ?? "/login"} className="btn-primary !py-2">{cta ?? "Sign in"}</Link>
         </nav>
         <MobileMenu cta={cta} />
@@ -27,6 +28,7 @@ export function PublicFooter() {
         <nav className="flex items-center gap-5">
           <Link href="/why" className="hover:text-ember">Why it matters</Link>
           <Link href="/blog" className="hover:text-ember">Blog</Link>
+          <Link href="/pricing" className="hover:text-ember">Pricing</Link>
           <Link href="/terms" className="hover:text-ember">Terms</Link>
           <Link href="/privacy" className="hover:text-ember">Privacy</Link>
           <Link href="/login" className="hover:text-ember">Sign in</Link>

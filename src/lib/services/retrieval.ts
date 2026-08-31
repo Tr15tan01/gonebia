@@ -9,6 +9,8 @@ export interface SearchFilters {
   from?: string | null;
   to?: string | null;
   limit?: number;
+  /** Free plan: keyword-only (basic search). Pro: hybrid semantic. */
+  semantic?: boolean;
 }
 
 const STOPWORDS = new Set([
@@ -32,14 +34,11 @@ function normalizeRows(data: any[]): MemoryRow[] {
 }
 
 export const MemoryRetrievalService = {
-  /** Hybrid retrieval: keyword + semantic + filters, RLS-scoped via the RPC.
-   *  The embedding is sent as a pgvector text literal ("[0.1,0.2,...]") and cast
-   *  inside the SQL function (see migration 0003). If the RPC ever fails, a
-   *  plain keyword/recent query keeps search and chat working, degraded but alive. */
   async hybrid(sb: any, f: SearchFilters): Promise<MemoryRow[]> {
     const query = (f.query ?? "").trim();
+    const wantSemantic = f.semantic !== false;
     let embedding: number[] | null = null;
-    if (query) {
+    if (query && wantSemantic) {
       try { embedding = await embedQuery(query); } catch { /* keyword-only */ }
     }
     try {
@@ -61,7 +60,6 @@ export const MemoryRetrievalService = {
     }
   },
 
-  /** Plain fallback: keyword OR-match on recent memories. No vectors required. */
   async basicFallback(sb: any, f: SearchFilters): Promise<MemoryRow[]> {
     let q = sb
       .from("memories")
@@ -83,7 +81,6 @@ export const MemoryRetrievalService = {
     return normalizeRows(data ?? []);
   },
 
-  /** Semantic neighbours via pgvector RPC (capture-time similarity detection). */
   async similar(sb: any, embedding: number[], minSim: number, limit: number) {
     const { data, error } = await sb.rpc("match_memories", {
       p_query_embedding: JSON.stringify(embedding), p_match_count: limit, p_min_similarity: minSim,

@@ -47,7 +47,14 @@ export function ChatClient() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (data.code === "limit") {
+          setMessages([...next, { role: "assistant", content: data.error }]);
+          if (data.upgrade) toast("Upgrade to Pro from Settings or the landing page for 500 questions/month.");
+          return;
+        }
+        throw new Error(data.error);
+      }
       setMessages([...next, { role: "assistant", content: data.answer, refs: data.references, detail: data.detail }]);
     } catch (e: any) {
       toast(e.message); setMessages(next);

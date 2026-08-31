@@ -1,11 +1,11 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { daysAgo, relTime } from "@/lib/dates";
+import { getPlan, LIMITS } from "@/lib/limits";
+import { createNotification } from "@/lib/notifications";
 
 const DAY = 86_400_000;
 
 export const BriefingService = {
-  /** Deterministic assembly - fast, no LLM in the render path.
-   *  Cached per user/day, but refreshed hourly so new reminders and insights appear. */
   async getForUser(userId: string) {
     const admin = createAdmin();
     const today = new Date().toISOString().slice(0, 10);
@@ -18,16 +18,16 @@ export const BriefingService = {
       return cached.content;
     }
 
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    const plan = await getPlan(admin, userId);
+    const lim = LIMITS[plan];
+    const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
 
     const [todayRes, forgottenRes, futureRes, revisitRes, connRes] = await Promise.all([
       admin.from("memory_metadata")
         .select("memory_id, title, type, due_at, reminder_at, memories(original_text)")
         .eq("user_id", userId).eq("status", "open")
         .or(`due_at.lte.${endOfToday.toISOString()},reminder_at.lte.${endOfToday.toISOString()}`)
-        .order("importance", { ascending: false })
-        .limit(5),
+        .order("importance", { ascending: false }).limit(5),
       admin.from("insights")
         .select("id, title, body, data")
         .eq("user_id", userId).eq("kind", "forgotten").eq("status", "new")
@@ -35,8 +35,7 @@ export const BriefingService = {
       admin.from("memory_metadata")
         .select("memory_id, review_at, memories(original_text, created_at)")
         .eq("user_id", userId).eq("status", "open")
-        .lte("review_at", new Date().toISOString())
-        .limit(3),
+        .lte("review_at", new Date().toISOString()).limit(3),
       admin.from("memory_metadata")
         .select("memory_id, title, type, importance, created_at, memories(original_text)")
         .eq("user_id", userId).eq("status", "open").gte("importance", 4)
@@ -81,6 +80,18 @@ export const BriefingService = {
       { user_id: userId, briefing_date: today, content },
       { onConflict: "user_id,briefing_date" }
     );
+
+    // Daily briefing NOTIFICATION - Pro only, deduped per day
+    if (lim.dailyBriefingNotification
+        && (content.today.length > 0 || content.dontForget.length > 0)) {
+      await createNotification(admin, {
+        userId, kind: "daily_briefing",
+        title: "Your daily briefing is ready",
+        body: `${content.today.length} due today - ${content.dontForget.length} forgotten item${content.dontForget.length === 1 ? "" : "s"}`,
+        url: "/dashboard", dedupeKey: `briefing:${today}`,
+      });
+    }
+
     return content;
   },
 };

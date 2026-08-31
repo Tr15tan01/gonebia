@@ -9,6 +9,7 @@ export function MobileMenu({ cta }: { cta?: string }) {
     { href: "/#examples", label: "Examples" },
     { href: "/why", label: "Why it matters" },
     { href: "/blog", label: "Blog" },
+    { href: "/pricing", label: "Pricing" },
     { href: "/terms", label: "Terms" },
     { href: "/privacy", label: "Privacy" },
   ];

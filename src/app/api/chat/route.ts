@@ -3,6 +3,7 @@ import { getUser, createClient } from "@/lib/supabase/server";
 import { chatSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
 import { AIChatService } from "@/lib/services/chat";
+import { getPlan, getUsage, bumpChatUsage, LIMITS } from "@/lib/limits";
 
 export async function POST(req: Request) {
   const user = await getUser();
@@ -15,12 +16,29 @@ export async function POST(req: Request) {
   }
   const { messages, timezone } = chatSchema.parse(await req.json());
   const sb = await createClient();
+
+  // server-side AI question limits (daily + monthly)
+  const plan = await getPlan(sb, user.id);
+  const lim = LIMITS[plan];
+  const usage = await getUsage(sb, user.id);
+  if (usage.chatToday >= lim.chatPerDay) {
+    return NextResponse.json({
+      error: `You've used all ${lim.chatPerDay} AI questions for today on the ${plan === "free" ? "Free" : "Pro"} plan. ${plan === "free" ? "Upgrade to Pro for 500/month." : "They reset at midnight."}`,
+      code: "limit", feature: "chat", limit: lim.chatPerDay, period: "day", upgrade: plan === "free",
+    }, { status: 402 });
+  }
+  if (usage.chatMonth >= lim.chatPerMonth) {
+    return NextResponse.json({
+      error: `You've used all ${lim.chatPerMonth} AI questions this month on the ${plan === "free" ? "Free" : "Pro"} plan. ${plan === "free" ? "Upgrade to Pro for 500/month." : "They reset next month."}`,
+      code: "limit", feature: "chat", limit: lim.chatPerMonth, period: "month", upgrade: plan === "free",
+    }, { status: 402 });
+  }
+
   try {
-    return NextResponse.json(await AIChatService.answer(sb, messages, timezone));
+    const result = await AIChatService.answer(sb, messages, timezone, plan);
+    await bumpChatUsage(sb, user.id);
+    return NextResponse.json(result);
   } catch (e) {
-    // retrieval itself failed (the LLM fallback lives inside AIChatService).
-    // `detail` shows the root cause in the browser's Network tab; the full
-    // stack is in the server/Vercel logs under "[chat]".
     console.error("[chat]", e);
     return NextResponse.json({
       answer: "I couldn't search your memories just now. Please try again.",

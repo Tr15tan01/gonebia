@@ -5,10 +5,13 @@ import { useTheme } from "@/components/theme";
 import { useToast } from "@/components/ui";
 import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
 import { createClient } from "@/lib/supabase/client";
+import { UpgradeButton } from "@/components/upgrade-button";
+import { GoogleCard } from "@/components/google-card";
+import { ManageBillingButton } from "@/components/manage-billing";
 
 type PermState = "unsupported" | "granted" | "denied" | "default" | "loading";
 
-export function SettingsClient({ email, prefs, timezone }: { email: string; prefs: any; timezone: string }) {
+export function SettingsClient({ email, prefs, timezone, plan = "free", usage, limits }: { email: string; prefs: any; timezone: string; plan?: string; usage?: any; limits?: any }) {
   const { theme, apply } = useTheme();
   const [qs, setQs] = useState(prefs?.quiet_hours_start ?? 22);
   const [qe, setQe] = useState(prefs?.quiet_hours_end ?? 8);
@@ -225,6 +228,40 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
         <p className="text-xs text-ink-2">During quiet hours reminders are postponed, never dropped.</p>
       </section>
 
+      <section className="card p-5 space-y-3" style={plan === "pro" ? { borderColor: "color-mix(in srgb, var(--ember) 40%, transparent)" } : undefined}>
+        <div className="flex items-center justify-between">
+          <p className="label">Plan</p>
+          <span className={`chip ${plan === "pro" ? "!text-ember !border-ember/50 font-semibold" : ""}`}>
+            {plan === "pro" ? "⭐ Pro" : "Free"}
+          </span>
+        </div>
+        {usage && limits && (
+          <div className="space-y-2 text-sm">
+            {[
+              { label: "memories this month", used: (usage.text ?? 0) + (usage.voice ?? 0), max: limits.textPerMonth },
+              { label: "AI questions", used: usage.chatMonth ?? 0, max: limits.chatPerMonth },
+              { label: "agent runs", used: usage.agents ?? 0, max: limits.agentRunsPerMonth },
+            ].map((row) => (
+              <div key={row.label}>
+                <div className="flex justify-between text-xs text-ink-2">
+                  <span>{row.label}</span>
+                  <span>{row.used} / {row.max >= 9999 ? "∞" : row.max}</span>
+                </div>
+                <div className="h-1.5 rounded-full mt-1" style={{ background: "color-mix(in srgb, var(--ink-2) 12%, transparent)" }}>
+                  <div className="h-full rounded-full" style={{
+                    width: `${Math.min(100, (row.used / Math.max(1, row.max)) * 100)}%`,
+                    background: row.used / Math.max(1, row.max) > 0.85 ? "var(--danger)" : "var(--ember)",
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {plan === "free" ? <UpgradeButton className="w-full" /> : (
+          <ManageBillingButton />
+        )}
+      </section>
+
       <section className="card p-5 space-y-3">
         <p className="label">Insight sensitivity</p>
         <input type="range" min="0.5" max="0.95" step="0.05" value={sens}
@@ -239,6 +276,8 @@ export function SettingsClient({ email, prefs, timezone }: { email: string; pref
           Save sensitivity
         </button>
       </section>
+
+      <GoogleCard />
 
       <section className="card p-5 space-y-3">
         <p className="label">Timezone</p>

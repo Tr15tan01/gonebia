@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Sheet, useToast, Empty, Spinner } from "@/components/ui";
 import { MemoryList, type Memory } from "@/components/memory";
 import { relTime } from "@/lib/dates";
+import { UpgradeButton } from "@/components/upgrade-button";
 
 const KIND_META: Record<string, { icon: string; label: string }> = {
   forgotten: { icon: "🔔", label: "You may have forgotten" },
@@ -12,7 +13,7 @@ const KIND_META: Record<string, { icon: string; label: string }> = {
   future_note: { icon: "🕰️", label: "Future memory" },
 };
 
-export function InsightsClient({ initial, weekly }: { initial: any[]; weekly: any | null }) {
+export function InsightsClient({ initial, weekly, plan = "pro" }: { initial: any[]; weekly: any | null; plan?: string }) {
   const [insights, setInsights] = useState(initial);
   const [why, setWhy] = useState<any | null>(null);
   const [sources, setSources] = useState<Memory[] | null>(null);
@@ -47,6 +48,13 @@ export function InsightsClient({ initial, weekly }: { initial: any[]; weekly: an
       <header>
         <h1 className="font-display text-2xl">Insights</h1>
         <p className="text-sm text-ink-2 mt-1">Observations, not diagnoses. Every insight links to the memories behind it.</p>
+        {plan === "free" && (
+          <div className="card p-4 mt-3 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
+            <p className="font-medium">You're on the Free plan</p>
+            <p className="text-ink-2 mt-1">Intention vs Reality, Recurring Patterns and the Weekly Reflection are Pro features. Free includes Connect the Dots (3/month) and the forgotten check (1/week).</p>
+            <UpgradeButton className="mt-3 !py-1.5 !text-xs" />
+          </div>
+        )}
       </header>
 
       {weekly && (

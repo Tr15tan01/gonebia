@@ -47,7 +47,7 @@ export default async function Dashboard() {
   const b = briefing ?? { date: "", today: [], dontForget: [], revisit: [], interesting: null };
 
   const [{ data: recent }, { data: upcomingRems }, { data: readingBooks },
-    { count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }] =
+    { count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }, { count: booksWant }, { data: wantBooks }] =
     await Promise.all([
       sb.from("memories").select("id, original_text, created_at, memory_metadata(type, title)")
         .is("deleted_at", null).order("created_at", { ascending: false }).limit(5),
@@ -63,6 +63,11 @@ export default async function Dashboard() {
       sb.from("books").select("id", { count: "exact", head: true })
         .eq("user_id", user!.id).eq("status", "finished"),
       sb.from("people").select("id", { count: "exact", head: true }).eq("user_id", user!.id),
+      sb.from("books").select("id", { count: "exact", head: true })
+        .eq("user_id", user!.id).eq("status", "want_to_read"),
+      sb.from("books").select("id, title, author")
+        .eq("user_id", user!.id).eq("status", "want_to_read")
+        .order("updated_at", { ascending: false }).limit(3),
     ]);
 
   const remIds = (upcomingRems ?? []).map((r: any) => r.memory_id).filter(Boolean) as string[];
@@ -75,8 +80,8 @@ export default async function Dashboard() {
   const stats = [
     { label: "open tasks", value: openTasks ?? 0, color: "var(--c-task)", href: "/tasks" },
     { label: "memories", value: totalMems ?? 0, color: "var(--ember)", href: "/timeline" },
-    { label: "books finished", value: booksDone ?? 0, color: "var(--c-book)", href: "/books" },
-    { label: "people", value: peopleN ?? 0, color: "var(--c-person)", href: "/people" },
+    { label: "books finished", value: booksDone ?? 0, color: "var(--success)", href: "/books" },
+    { label: "people", value: peopleN ?? 0, color: "var(--c-decision)", href: "/people" },
   ];
 
   return (
@@ -127,14 +132,26 @@ export default async function Dashboard() {
         ) : <Empty icon="~" title="Nothing urgent today." hint="A quiet day is a good day." />}
       </Section>
 
-      {readingBooks && readingBooks.length > 0 && (
-        <Section title="Reading now" href="/books" color="var(--c-book)">
-          <div className="card p-4 flex flex-wrap gap-2 text-sm">
-            {readingBooks.map((bk: any) => (
-              <span key={bk.id} className="chip chip-c-book !text-sm">
-                {bk.title}{bk.author ? <span className="text-ink-2"> - {bk.author}</span> : null}
-              </span>
-            ))}
+      {((readingBooks && readingBooks.length > 0) || (booksWant ?? 0) > 0) && (
+        <Section title="Books" href="/books" color="var(--success)">
+          <div className="card p-4 space-y-2.5 text-sm soft-shadow">
+            <p className="text-xs text-ink-2">
+              <span className="font-semibold" style={{ color: "var(--success)" }}>{booksDone ?? 0} finished</span>
+              {" - "}{readingBooks?.length ?? 0} reading now
+              {" - "}{booksWant ?? 0} not finished yet
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(readingBooks ?? []).map((bk: any) => (
+                <span key={bk.id} className="chip chip-c-buy !text-sm">
+                  {bk.title}{bk.author ? <span className="text-ink-2"> - {bk.author}</span> : null}
+                </span>
+              ))}
+              {(wantBooks ?? []).map((bk: any) => (
+                <span key={bk.id} className="chip !text-sm">
+                  up next: {bk.title}
+                </span>
+              ))}
+            </div>
           </div>
         </Section>
       )}
