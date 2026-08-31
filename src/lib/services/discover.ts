@@ -134,7 +134,7 @@ Max 4 items per list. Honest but kind. No diagnoses.`);
       if (overdue.data?.length) parts.push("OVERDUE:\n" + overdue.data.map((t: any) =>
         `- [${t.memory_id.slice(0, 8)}] ${t.title || t.memories?.original_text} (due ${(t.due_at ?? "").slice(0, 10)})`).join("\n"));
       if (conn.data?.length) parts.push("EMERGING THEMES:\n" + conn.data.map((c: any) => `- ${c.title}: ${c.body}`).join("\n"));
-      if (upcoming.length) parts.push("COMING UP:\n" + upcoming.map((e) => `- [${e.id.slice(0, 8)}] ${e.text}`).join("\n"));
+      if (upcoming.length) parts.push("COMING UP:\n" + upcoming.map((e: any) => `- [${e.id.slice(0, 8)}] ${e.text}`).join("\n"));
       if (!parts.length) return { error: "Your radar is clear - nothing urgent, forgotten, or emerging right now." };
 
       const result = await geminiJSON(`Radar sweep of this person's life signals. Prioritize what needs ATTENTION this week.

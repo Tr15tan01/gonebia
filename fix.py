@@ -1,54 +1,36 @@
 #!/usr/bin/env python3
-"""TimelyMemo - clear the 6 TypeScript build errors from the upgrade round.
-Run from the PROJECT ROOT:  python part47_tsfixes.py"""
+"""TimelyMemo - fix the last implicit-any at discover.ts:137 by locating the
+actual callback text. Run from the PROJECT ROOT:  python part48_lastfix.py"""
 
-PATCHES = [
-    # 1. watch route: dead === 0 check is type-invalid now that Free allows 3
-    ("src/app/api/agents/watch/route.ts",
-     "  if (lim.priceWatches === 0) {",
-     "  if ((lim.priceWatches as number) === 0) {"),
-    #    ...and its message described the wrong situation anyway
-    ("src/app/api/agents/watch/route.ts",
-     '      error: "You\'re already tracking 3 products on the Free plan - stop one to add another. Pro tracks 10 with daily checks and deal alerts.",',
-     '      error: "Price tracking is disabled for this plan.",'),
-    #    ...and the cap message below should name the actual plan
-    ("src/app/api/agents/watch/route.ts",
-     'return NextResponse.json({ error: `You\'re already tracking ${lim.priceWatches} products (Pro limit). Stop one first.` }, { status: 402 });',
-     'return NextResponse.json({ error: `You\'re already tracking ${lim.priceWatches} products on the ${plan === "free" ? "Free" : "Pro"} plan - stop one to add another.` }, { status: 402 });'),
+import re
 
-    # 2. agents.ts: type the three plain geminiJSON calls (research/buying fallbacks + solver)
-    ("src/lib/services/agents.ts",
-     "const data = await geminiJSON(prompt);",
-     "const data = await geminiJSON<Record<string, unknown>>(prompt);"),
+p = "src/lib/services/discover.ts"
+with open(p, "r", encoding="utf-8") as fh:
+    lines = fh.readlines()
 
-    # 3. discover.ts: type the radar callback param(s)
-    ("src/lib/services/discover.ts",
-     "((e) =>",
-     "((e: any) =>"),
+idx = 136  # 0-based for line 137
+line = lines[idx]
+print("  BEFORE:", line.rstrip())
 
-    # 4. insights.ts: embed comes back typed as an array - cast the loop (restores part-8 fix)
-    ("src/lib/services/insights.ts",
-     "      for (const m of open ?? []) {",
-     "      for (const m of (open ?? []) as any[]) {"),
-]
+# Show the whole radar block for context if the line doesn't look like a callback
+if "(e)" not in line and "=>" not in line:
+    print("\n  !! Line 137 is not a callback line - context around it:")
+    for i in range(max(0, idx - 4), min(len(lines), idx + 3)):
+        print(f"  {i+1:4d}: {lines[i].rstrip()}")
+    print("\n  Paste this output and I'll write the exact patch.")
+    raise SystemExit(1)
 
-for path, old, new in PATCHES:
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            text = fh.read()
-    except FileNotFoundError:
-        print(f"  MISSING           {path}")
-        continue
-    if new in text:
-        print(f"  already patched   {path}")
-        continue
-    n = text.count(old)
-    if n >= 1:
-        with open(path, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(text.replace(old, new))
-        print(f"  patched ({n}x)     {path}")
-    else:
-        print(f"  !! MISMATCH       {path} - paste the file and I'll adapt")
+# Add explicit any to the first untyped single-letter param on this line
+new = re.sub(r"\(((?:\w+))\)", r"(\1: any)", line, count=1)
+if new == line:
+    new = re.sub(r"\b(e)\b(?=\s*=>)", r"\1: any", line, count=1)
+if new == line:
+    print("  !! Could not transform the line automatically - paste it and I'll adapt")
+    raise SystemExit(1)
 
+lines[idx] = new
+with open(p, "w", encoding="utf-8", newline="\n") as fh:
+    fh.writelines(lines)
+print("  AFTER: ", new.rstrip())
 print("\n  npm run build")
-print('  git add -A && git commit -m "Fix 6 TypeScript errors from upgrade round" && git push')
+print('  git add -A && git commit -m "Fix implicit any in discover radar" && git push')
