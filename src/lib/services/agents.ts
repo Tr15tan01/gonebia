@@ -41,7 +41,7 @@ Return ONLY JSON:
       return { result: data, sources, memoryIds: ids, grounded: true };
     } catch (e) {
       console.error("[agents] grounding unavailable, plain fallback:", e);
-      const data = await geminiJSON(prompt);
+      const data = await geminiJSON<Record<string, unknown>>(prompt);
       // model-provided links render clickable, clearly labeled as such
       const modelSources = Array.isArray((data as any).sources)
         ? (data as any).sources.filter((s: any) => s?.uri).slice(0, 6)
@@ -68,7 +68,7 @@ Return ONLY JSON:
       return { result: data, sources, memoryIds: ids, grounded: true };
     } catch (e) {
       console.error("[agents] grounding unavailable, plain fallback:", e);
-      const data = await geminiJSON(prompt);
+      const data = await geminiJSON<Record<string, unknown>>(prompt);
       const modelSources = Array.isArray((data as any).sources)
         ? (data as any).sources.filter((s: any) => s?.uri).slice(0, 6)
         : [];
@@ -128,7 +128,7 @@ Return ONLY JSON:
   "steps": [ { "action": string, "detail": string, "effort": "quick"|"medium"|"big" } ] (3-6, ordered),
   "first_move": string (the single best next action),
   "uses_calendar": boolean, "uses_email": boolean }`;
-    const data = await geminiJSON(prompt); // no web needed - internal investigation
+    const data = await geminiJSON<Record<string, unknown>>(prompt); // no web needed - internal investigation
     return { result: data, sources: [], memoryIds: ids, grounded: false };
   },
 };

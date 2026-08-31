@@ -22,16 +22,16 @@ export async function POST(req: NextRequest) {
 
   const plan = await getPlan(sb, user.id);
   const lim = LIMITS[plan];
-  if (lim.priceWatches === 0) {
+  if ((lim.priceWatches as number) === 0) {
     return NextResponse.json({
-      error: "You're already tracking 3 products on the Free plan - stop one to add another. Pro tracks 10 with daily checks and deal alerts.",
+      error: "Price tracking is disabled for this plan.",
       code: "limit", feature: "watch", upgrade: true,
     }, { status: 402 });
   }
   const { count } = await sb.from("price_watches")
     .select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "active");
   if ((count ?? 0) >= lim.priceWatches) {
-    return NextResponse.json({ error: `You're already tracking ${lim.priceWatches} products (Pro limit). Stop one first.` }, { status: 402 });
+    return NextResponse.json({ error: `You're already tracking ${lim.priceWatches} products on the ${plan === "free" ? "Free" : "Pro"} plan - stop one to add another.` }, { status: 402 });
   }
   const { data, error } = await sb.from("price_watches")
     .insert({ user_id: user.id, query, target_price: target }).select().single();
