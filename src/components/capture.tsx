@@ -5,6 +5,7 @@ import { useToast } from "@/components/ui";
 import { MEMORY_TYPES } from "@/lib/types";
 import { localISO } from "@/lib/dates";
 import { DateTimePicker } from "@/components/date-time-picker";
+import posthog from "posthog-js";
 
 interface CaptureResult {
   id: string;
@@ -124,6 +125,14 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
+      posthog.capture("memory_captured", {
+        source: listening ? "voice" : "typed",
+        has_reminder: !!data.structured?.reminder_at,
+        has_due_date: !!data.structured?.due_at,
+        memory_type: data.structured?.type ?? "thought",
+        similar_count: data.similar?.length ?? 0,
+        plan: data.plan,
+      });
       setResult(data);
       setText("");
       setAtValue("");
@@ -206,6 +215,7 @@ function Interpretation({ result, onClose }: { result: CaptureResult; onClose: (
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
+    posthog.capture("memory_corrected", { new_type: type });
     setSaving(false); setEdit(false);
     toast("Corrected - thank you.");
   }
@@ -215,6 +225,7 @@ function Interpretation({ result, onClose }: { result: CaptureResult; onClose: (
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: title || "Untitled goal", from_memory_id: result.id }),
     });
+    posthog.capture("goal_created_from_memory", { similar_count: result.similar.length });
     setGoalCreated(true);
     toast("Goal created.");
   }

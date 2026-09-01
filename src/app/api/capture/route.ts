@@ -8,6 +8,7 @@ import { EmbeddingService } from "@/lib/services/embedding";
 import { ApplyService } from "@/lib/services/apply";
 import { getPlan, getUsage, bumpUsage, LIMITS, activeReminderCount, limitResponse } from "@/lib/limits";
 import type { SimilarHit } from "@/lib/types";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(req: Request) {
   const user = await getUser();
@@ -118,6 +119,24 @@ export async function POST(req: Request) {
     }
   } catch (e) {
     console.error("[capture] embedding/similar failed:", e);
+  }
+
+  const ph = getPostHogClient();
+  if (ph) {
+    ph.capture({
+      distinctId: user.id,
+      event: "memory_captured_server",
+      properties: {
+        source: body.source,
+        plan,
+        memory_type: structured?.type ?? "thought",
+        has_reminder: !!structured?.reminder_at,
+        has_due_date: !!structured?.due_at,
+        similar_count: similar.length,
+        extraction_success: !!structured,
+      },
+    });
+    await ph.flush();
   }
 
   return NextResponse.json({

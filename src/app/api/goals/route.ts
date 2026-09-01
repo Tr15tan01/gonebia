@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { goalSchema } from "@/lib/validation";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(req: Request) {
   const user = await getUser();
@@ -13,5 +14,14 @@ export async function POST(req: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  const ph = getPostHogClient();
+  if (ph) {
+    ph.capture({
+      distinctId: user.id,
+      event: "goal_created",
+      properties: { from_memory: !!from_memory_id },
+    });
+    await ph.flush();
+  }
   return NextResponse.json({ goal: data });
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MemorySheet } from "@/components/memory";
 import { Spinner, useToast } from "@/components/ui";
+import posthog from "posthog-js";
 
 interface Ref { n: number; id: string; title: string; date: string; snippet: string }
 interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[]; detail?: string }
@@ -37,6 +38,9 @@ export function ChatClient() {
     const content = text ?? input.trim();
     if (!content || busy) return;
     const next: Msg[] = [...history, { role: "user", content }];
+    posthog.capture("chat_question_asked", {
+      turn_number: next.filter((m) => m.role === "user").length,
+    });
     setMessages(next); setInput(""); setBusy(true);
     try {
       const res = await fetch("/api/chat", {

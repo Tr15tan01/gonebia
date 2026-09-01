@@ -4,6 +4,7 @@ import { chatSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
 import { AIChatService } from "@/lib/services/chat";
 import { getPlan, getUsage, bumpChatUsage, LIMITS } from "@/lib/limits";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(req: Request) {
   const user = await getUser();
@@ -37,6 +38,19 @@ export async function POST(req: Request) {
   try {
     const result = await AIChatService.answer(sb, messages, timezone, plan);
     await bumpChatUsage(sb, user.id);
+    const ph = getPostHogClient();
+    if (ph) {
+      ph.capture({
+        distinctId: user.id,
+        event: "chat_answered_server",
+        properties: {
+          plan,
+          reference_count: (result as any).references?.length ?? 0,
+          turn_number: messages.filter((m: any) => m.role === "user").length,
+        },
+      });
+      await ph.flush();
+    }
     return NextResponse.json(result);
   } catch (e) {
     console.error("[chat]", e);

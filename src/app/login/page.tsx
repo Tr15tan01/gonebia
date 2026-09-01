@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Loader } from "@/components/ui";
 import { LogoMark } from "@/components/logo";
 import { validatePassword, isBreached, PASSWORD_MIN, PASSWORD_MAX } from "@/lib/password";
+import posthog from "posthog-js";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -49,10 +50,13 @@ export default function LoginPage() {
             options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
           });
           if (error) throw error;
+          posthog.capture("signed_up", { method: "password" });
           setSent(`Account created for ${email}. Check your inbox to confirm, then sign in.`);
         } else {
           const { error } = await sb.auth.signInWithPassword({ email, password });
           if (error) throw error;
+          posthog.identify(email, {});
+          posthog.capture("signed_in", { method: "password" });
           window.location.href = "/dashboard";
         }
       } else {
@@ -61,6 +65,7 @@ export default function LoginPage() {
           options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
         });
         if (error) throw error;
+        posthog.capture("signed_up", { method: "magic_link" });
         setSent(`We sent a magic sign-in link to ${email}. First time? The link creates your account.`);
       }
     } catch (err: any) { setError(err.message); }

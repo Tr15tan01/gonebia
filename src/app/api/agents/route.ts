@@ -3,6 +3,7 @@ import { getUser, createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
 import { getPlan, getUsage, bumpUsage, LIMITS } from "@/lib/limits";
 import { AgentService } from "@/lib/services/agents";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const maxDuration = 60;
 
@@ -83,6 +84,22 @@ export async function POST(req: NextRequest) {
     }
   } else if (saved) {
     run = saved;
+  }
+
+  const ph = getPostHogClient();
+  if (ph) {
+    ph.capture({
+      distinctId: user.id,
+      event: "agent_run_completed",
+      properties: {
+        agent_kind: kind,
+        plan,
+        grounded: outcome.grounded,
+        source_count: outcome.sources?.length ?? 0,
+        memory_count: outcome.memoryIds?.length ?? 0,
+      },
+    });
+    await ph.flush();
   }
 
   return NextResponse.json({ run, grounded: outcome.grounded, sources: outcome.sources });

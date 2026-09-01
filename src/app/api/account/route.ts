@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 /** Full data export - only the caller's own rows, via service role scoped to their user_id. */
 export async function GET() {
@@ -76,6 +77,17 @@ export async function DELETE() {
   if (authErr) {
     console.error("[account-delete] auth user deletion failed:", authErr);
     return NextResponse.json({ error: authErr.message }, { status: 500 });
+  }
+
+  // Capture churn event before the auth user is gone so distinctId is still valid
+  const ph = getPostHogClient();
+  if (ph) {
+    ph.capture({
+      distinctId: user.id,
+      event: "account_deleted",
+      properties: { total_rows_deleted: total },
+    });
+    await ph.flush();
   }
 
   console.log(`[account-delete] user ${user.id}: ${total} rows across ${TABLES.length} tables, account removed.`);

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useToast } from "@/components/ui";
+import posthog from "posthog-js";
 
 /** Upgrade CTA. If Paddle is configured (part 34) this opens real checkout;
  *  until then it says so honestly instead of faking a purchase. */
@@ -12,6 +13,7 @@ export function UpgradeButton({ className = "" }: { className?: string }) {
   return (
     <button
       onClick={() => {
+        posthog.capture("upgrade_clicked", { billing_configured: configured });
         if (!configured) { toast("Billing isn't configured yet - add your Paddle keys to enable checkout."); return; }
         setBusy(true);
         window.dispatchEvent(new CustomEvent("timelymemo:checkout"));
