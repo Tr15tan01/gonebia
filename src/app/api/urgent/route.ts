@@ -11,7 +11,7 @@ export async function GET() {
   const sb = await createClient();
   const { data } = await sb
     .from("memories")
-    .select("id, original_text, memory_metadata(title, type, status, due_at, reminder_at)")
+    .select("id, original_text, memory_metadata!inner(title, type, status, due_at, reminder_at)")
     .is("deleted_at", null)
     .eq("memory_metadata.status", "open")
     .in("memory_metadata.type", ["task", "promise", "commitment"])

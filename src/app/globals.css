@@ -126,6 +126,7 @@ body { background: var(--paper); color: var(--ink); }
   .edge-overdue  { border-left: 3px solid var(--danger); }
   .edge-today    { border-left: 3px solid var(--ember); }
   .edge-tomorrow { border-left: 3px solid var(--c-task); }
+  .edge-type     { border-left: 3px solid var(--c-task); } /* color overridden per-item inline by task type */
   .task-hot {
     font-size: 0.95rem;
     font-weight: 600;
@@ -138,6 +139,13 @@ body { background: var(--paper); color: var(--ink); }
 @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 .rise { animation: rise .35s ease both; }
+
+@keyframes toastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.97); } }
+/* keep this duration in sync with TOAST_EXIT_MS in ui.tsx */
+.toast-out { animation: toastOut .18s ease both; }
+
+@keyframes popOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.94); } }
+.pop-out { animation: popOut .2s ease both; }
 
 .loader-ring {
   position: relative;
@@ -220,7 +228,7 @@ body { background: var(--paper); color: var(--ink); }
 .notif-item { animation: slideIn .32s ease both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .btn, .btn-primary, .btn-ghost, .chip, .notif-item, .rise,
+  .card, .btn, .btn-primary, .btn-ghost, .chip, .notif-item, .rise, .toast-out, .pop-out,
   .skeleton, .loader-ring, .loader-ring::before, .loader-ring::after {
     animation: none !important;
     transition: none !important;

@@ -5,19 +5,36 @@ import { createContext, useCallback, useContext, useState } from "react";
 const ToastCtx = createContext<(msg: string) => void>(() => {});
 export const useToast = () => useContext(ToastCtx);
 
+const TOAST_LIFETIME_MS = 2200; // how long a toast stays fully visible
+const TOAST_EXIT_MS = 180; // fade-out duration before it's removed - keep in sync with .toast-out below
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; msg: string; leaving: boolean }[]>([]);
+
+  const remove = useCallback((id: number) => {
+    // start the exit animation first, then drop it from the list once it's done
+    setToasts((t) => t.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), TOAST_EXIT_MS);
+  }, []);
+
   const push = useCallback((msg: string) => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
-  }, []);
+    setToasts((t) => [...t, { id, msg, leaving: false }]);
+    setTimeout(() => remove(id), TOAST_LIFETIME_MS);
+  }, [remove]);
+
   return (
     <ToastCtx.Provider value={push}>
       {children}
       <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center px-4">
         {toasts.map((t) => (
-          <div key={t.id} className="rise card px-4 py-2.5 text-sm shadow-lg">{t.msg}</div>
+          <button
+            key={t.id}
+            onClick={() => remove(t.id)}
+            className={`card px-4 py-2.5 text-sm shadow-lg cursor-pointer ${t.leaving ? "toast-out" : "rise"}`}
+          >
+            {t.msg}
+          </button>
         ))}
       </div>
     </ToastCtx.Provider>

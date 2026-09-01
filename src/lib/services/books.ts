@@ -11,11 +11,29 @@ export const BookService = {
 
   /** Create or advance a shelf entry from a captured book memory.
    *  Status only ever moves forward (want_to_read -> reading -> finished);
-   *  re-mentioning a book never downgrades it. The original memory is linked. */
+   *  re-mentioning a book never downgrades it.
+   *  mention_only (a thought/quote/reflection ABOUT a book, not a status update):
+   *  links to an existing shelf entry if one matches, but never creates a new
+   *  entry and never touches status/rating for a title the user hasn't
+   *  actually added yet. Returns the book id to link on memory_metadata.book_id,
+   *  or null if there's nothing to link. */
   async upsertFromCapture(admin: any, userId: string, memoryId: string, book: BookInfo): Promise<string | null> {
     const title = book.title?.trim();
     if (!title) return null;
     const title_normalized = this.normalizeTitle(title);
+
+    const { data: existing } = await admin
+      .from("books")
+      .select("id, status")
+      .eq("user_id", userId)
+      .eq("title_normalized", title_normalized)
+      .maybeSingle();
+
+    if (book.mention_only) {
+      // just connect this note to the book if it's already on the shelf -
+      // a passing reflection shouldn't silently create/alter a shelf entry.
+      return existing ? existing.id : null;
+    }
 
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (book.author) patch.author = book.author.trim();
@@ -26,13 +44,6 @@ export const BookService = {
       if (book.status === "reading" ) patch.started_at = new Date().toISOString();
       if (book.status === "finished") patch.finished_at = new Date().toISOString();
     }
-
-    const { data: existing } = await admin
-      .from("books")
-      .select("id, status")
-      .eq("user_id", userId)
-      .eq("title_normalized", title_normalized)
-      .maybeSingle();
 
     if (existing) {
       if (book.status && STATUS_ORDER[book.status] < STATUS_ORDER[existing.status]) {

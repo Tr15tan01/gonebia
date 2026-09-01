@@ -8,7 +8,7 @@ export default async function TasksPage() {
   const sb = await createClient();
   const { data } = await sb
     .from("memories")
-    .select("id, original_text, created_at, memory_metadata(type, title, importance, status, due_at, reminder_at, people)")
+    .select("id, original_text, created_at, memory_metadata!inner(type, title, importance, status, due_at, reminder_at, people)")
     .is("deleted_at", null)
     .in("memory_metadata.type", ["task", "promise", "commitment"])
     .eq("memory_metadata.status", "open")

@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const query = String(body.query ?? "").trim().slice(0, 300);
   const target = body.target_price ? Number(body.target_price) : null;
+  const imageUrl = typeof body.image_url === "string" && /^https?:\/\//.test(body.image_url) ? body.image_url.slice(0, 1000) : null;
+  const productUrl = typeof body.product_url === "string" && /^https?:\/\//.test(body.product_url) ? body.product_url.slice(0, 1000) : null;
   if (!query) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   const plan = await getPlan(sb, user.id);
@@ -34,7 +36,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `You're already tracking ${lim.priceWatches} products on the ${plan === "free" ? "Free" : "Pro"} plan - stop one to add another.` }, { status: 402 });
   }
   const { data, error } = await sb.from("price_watches")
-    .insert({ user_id: user.id, query, target_price: target }).select().single();
+    .insert({ user_id: user.id, query, target_price: target, image_url: imageUrl, product_url: productUrl })
+    .select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ watch: data });
 }

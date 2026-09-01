@@ -23,6 +23,7 @@ export interface BookRow {
   cover_url?: string | null;
   isbn?: string | null;
   enrich_status?: string;
+  notes_list?: { id: string; title: string; text: string; created_at: string }[];
 }
 
 const STATUSES = ["want_to_read", "reading", "finished", "abandoned"] as const;
@@ -70,7 +71,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
 
   const reading = books.filter((b) => b.status === "reading");
   const nextUp = books.filter((b) => b.status === "want_to_read");
-  const done = books.filter((b) => b.status === "finished" || b.status === "abandoned");
+  const finished = books.filter((b) => b.status === "finished");
+  const abandoned = books.filter((b) => b.status === "abandoned");
 
   return (
     <div className="space-y-8">
@@ -93,7 +95,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
       )}
 
       {reading.length > 0 && (
-        <Section title="Reading now" count={reading.length}>
+        <Section title="📖 Reading now" count={reading.length}>
           {reading.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
               onRelookup={relookup} retrying={retrying === b.id} />
@@ -102,7 +104,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
       )}
 
       {nextUp.length > 0 && (
-        <Section title="Up next" count={nextUp.length}>
+        <Section title="🔖 Up next" count={nextUp.length}>
           {nextUp.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
               onRelookup={relookup} retrying={retrying === b.id} />
@@ -110,9 +112,18 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         </Section>
       )}
 
-      {done.length > 0 && (
-        <Section title="Finished & paused" count={done.length}>
-          {done.map((b) => (
+      {finished.length > 0 && (
+        <Section title="📗 Finished" count={finished.length}>
+          {finished.map((b) => (
+            <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onRelookup={relookup} retrying={retrying === b.id} />
+          ))}
+        </Section>
+      )}
+
+      {abandoned.length > 0 && (
+        <Section title="⏸ Paused / not finished" count={abandoned.length}>
+          {abandoned.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
               onRelookup={relookup} retrying={retrying === b.id} />
           ))}
@@ -141,6 +152,35 @@ function Stars({ value, onSet }: { value: number | null; onSet: (n: number | nul
           <span className={value && n <= value ? "text-ember" : "text-ink-2/30"}>★</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+function NotesList({ notes, onOpenMemory }: {
+  notes: { id: string; title: string; text: string; created_at: string }[];
+  onOpenMemory: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="text-xs">
+      <button onClick={() => setOpen((o) => !o)} className="text-ember hover:underline cursor-pointer">
+        {open ? "hide" : `${notes.length} note${notes.length === 1 ? "" : "s"} about this book`} {open ? "↑" : "↓"}
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1.5">
+          {notes.map((n) => (
+            <li key={n.id}>
+              <button
+                onClick={() => onOpenMemory(n.id)}
+                className="w-full text-left rounded-lg px-2.5 py-1.5 hover:bg-paper-2 cursor-pointer"
+              >
+                <span className="text-ink-2">{fmtDate(n.created_at)} · </span>
+                {n.title || n.text.slice(0, 80)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -196,12 +236,11 @@ function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying }: {
             {book.finished_at && <span>finished {fmtDate(book.finished_at)}</span>}
             {book.started_at && !book.finished_at && <span>started {fmtDate(book.started_at)}</span>}
             {book.recommended_by && <span className="chip chip-c-person">recommended by {book.recommended_by}</span>}
-            {book.memory_id && (
-              <button onClick={() => onOpenMemory(book.memory_id!)} className="text-ember hover:underline cursor-pointer">
-                memories →
-              </button>
-            )}
           </div>
+
+          {(book.notes_list?.length ?? 0) > 0 && (
+            <NotesList notes={book.notes_list!} onOpenMemory={onOpenMemory} />
+          )}
 
           {book.topic && <div className="flex flex-wrap gap-1.5">
             {book.topic.split(",").map((t) => <span key={t} className="chip chip-c-know !text-[11px]">{t.trim()}</span>)}

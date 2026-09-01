@@ -25,8 +25,10 @@ export const ApplyService = {
     // interpretation and book are NOT memory_metadata columns - strip them
     const { interpretation: _interp, book, ...meta } = structured;
 
-    // Deterministic rule 1: any book info => this memory IS a book memory
-    if (book) meta.type = "book";
+    // Deterministic rule 1: a book STATUS update (reading/finished/want_to_read/etc.)
+    // makes this memory a book memory. A plain mention/reflection about a book
+    // (mention_only) does NOT change the type - it just gets linked below.
+    if (book && !book.mention_only) meta.type = "book";
 
     // Deterministic rule 2: assignment / self-to-do patterns => task
     if (!book && TASK_PATTERNS.some((re) => re.test(originalText))) {
@@ -39,8 +41,17 @@ export const ApplyService = {
       meta.occurred_at = pickedAt;
     }
 
+    // Resolve the book link BEFORE inserting metadata, so every memory about a
+    // book - a status update OR just a thought/quote about it - carries book_id
+    // and shows up when you open that book.
+    let bookId: string | null = null;
+    if (book) {
+      bookId = await BookService.upsertFromCapture(admin, userId, memoryId, book);
+    }
+
     const { error } = await admin.from("memory_metadata").insert({
       memory_id: memoryId, user_id: userId, ...meta,
+      book_id: bookId,
       occurred_at: meta.occurred_at ?? memoryCreatedAt,
     });
     if (error) {
@@ -49,15 +60,12 @@ export const ApplyService = {
     }
 
     try {
-      if (book && meta.type === "book") {
-        const bookId = await BookService.upsertFromCapture(admin, userId, memoryId, book);
-        if (bookId) {
-          try {
-            const { BookEnrichmentService } = await import("./book-enrich");
-            await BookEnrichmentService.enrich(admin, userId, bookId, book.title, book.author);
-          } catch (e) {
-            console.error("[apply] book enrichment failed:", e);
-          }
+      if (book && meta.type === "book" && bookId) {
+        try {
+          const { BookEnrichmentService } = await import("./book-enrich");
+          await BookEnrichmentService.enrich(admin, userId, bookId, book.title, book.author);
+        } catch (e) {
+          console.error("[apply] book enrichment failed:", e);
         }
       }
       if (["task", "promise", "commitment"].includes(meta.type)) {

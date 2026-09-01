@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
-/** Show the banner at most once every SHOW_EVERY_MS (12h => up to twice a day).
+/** Show the banner at most once every SHOW_EVERY_MS (24h => once a day, max).
  *  The timestamp is written when the banner is SHOWN, so ignoring it still
  *  counts - no more banner on every refresh. */
-const SHOW_EVERY_MS = 12 * 60 * 60 * 1000;
+const SHOW_EVERY_MS = 24 * 60 * 60 * 1000;
 
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);

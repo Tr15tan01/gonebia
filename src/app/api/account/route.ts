@@ -36,12 +36,19 @@ export async function DELETE() {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const admin = createAdmin();
 
-  // children of memories first, then memories, then profile-level rows
+  // children of memories first, then memories, then profile-level & account-state rows.
+  // NOTE: every table below also has "on delete cascade" to auth.users, so
+  // deleteUser() at the end would clean these up on its own - but we still wipe
+  // them explicitly (and count them) rather than trust that alone, in case a
+  // future migration ever loosens a constraint.
   const TABLES = [
     "memory_embeddings", "memory_metadata", "memory_people", "memory_relationships",
     "tasks", "events", "purchases", "decisions", "goals", "books",
     "reminders", "notifications", "insights", "daily_briefings", "weekly_analyses",
     "push_subscriptions", "people", "memories", "user_preferences", "profiles",
+    // account-state / billing / integration tables - previously left behind:
+    "price_watches", "agent_runs", "discover_results", "usage_counters",
+    "google_integrations", "subscriptions",
   ];
 
   const deleted: Record<string, number> = {};

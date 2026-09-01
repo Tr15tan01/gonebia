@@ -23,7 +23,7 @@ function safeUrl(u: unknown): string | null {
 }
 
 function optionHref(o: any): string {
-  const direct = safeUrl(o?.url);
+  const direct = safeUrl(o?.product_url) ?? safeUrl(o?.url);
   if (direct) return direct;
   const q = String(o?.model || o?.name || "").trim();
   return `https://www.amazon.com/s?k=${encodeURIComponent(q)}`;
@@ -58,6 +58,62 @@ function storeLinks(q: string) {
   ];
 }
 
+/** A single shoppable product from the buying agent: real photo (with a
+ *  graceful icon fallback if it fails to load or wasn't found), price,
+ *  rating, key specs, and buttons to open the store page or track its price -
+ *  this ONE product, not the whole search. */
+function ProductCard({ o, onTrack, tracking }: { o: any; onTrack: () => void; tracking: boolean }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const img = safeUrl(o?.image_url);
+  return (
+    <div className="card p-4 text-sm">
+      <div className="flex gap-3">
+        {img && !imgFailed ? (
+          <img src={img} alt="" referrerPolicy="no-referrer" onError={() => setImgFailed(true)}
+            className="w-16 h-16 rounded-lg object-cover shrink-0 bg-paper-2" />
+        ) : (
+          <div className="w-16 h-16 rounded-lg shrink-0 grid place-items-center text-xl"
+            style={{ background: "color-mix(in srgb, var(--c-buy) 12%, transparent)", color: "var(--c-buy)" }}
+            aria-hidden>🛒</div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <a href={optionHref(o)} target="_blank" rel="noopener noreferrer"
+                className="font-medium cursor-pointer hover:text-ember hover:underline underline-offset-2"
+                title={safeUrl(o?.product_url) ? "Open product page (model-provided - verify it loaded correctly)" : "Search this exact model online"}>
+                {o.name} {'\u2197'}
+              </a>
+              {o.brand && <p className="text-xs text-ink-2">{o.brand}</p>}
+            </div>
+            <span className="chip shrink-0">{o.approx_price}{o.currency && o.currency !== "USD" ? ` ${o.currency}` : ""}</span>
+          </div>
+          {o.rating && <p className="text-xs text-ink-2 mt-1">⭐ {o.rating}</p>}
+        </div>
+      </div>
+
+      {(o.specs ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2.5">
+          {o.specs.map((s: string) => <span key={s} className="chip !text-[11px]">{s}</span>)}
+        </div>
+      )}
+
+      <p className="text-ink-2 mt-2"><span style={{ color: "var(--success)" }}>+</span> {o.pros}</p>
+      <p className="text-ink-2"><span style={{ color: "var(--danger)" }}>-</span> {o.cons}</p>
+
+      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+        {optionStores(o).map((s) => (
+          <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
+            className="chip !text-[11px] cursor-pointer hover:!border-ember hover:!text-ember">{s.name}</a>
+        ))}
+        <button onClick={onTrack} disabled={tracking} className="btn-ghost !py-1 !px-2.5 !text-[11px] ml-auto">
+          {tracking ? "Tracking..." : "📉 Track this price"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AgentsClient({ plan, used, limit }: { plan: string; used: number; limit: number }) {
   const [kind, setKind] = useState("research");
   const [input, setInput] = useState("");
@@ -69,6 +125,7 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
   const [history, setHistory] = useState<any[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
   const [watchError, setWatchError] = useState<string | null>(null);
+  const [trackingKey, setTrackingKey] = useState<string | null>(null);
   const toast = useToast();
   const outOfRuns = used >= limit;
   const current = KINDS.find((k) => k.kind === kind)!;
@@ -115,20 +172,27 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
     toast(res.ok ? "Saved as a task in your memory." : (d.error ?? "Couldn't save."));
   }
 
-  async function track() {
-    if (!input.trim()) return;
-    setWatchError(null);
-    const res = await fetch("/api/agents/watch", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: input }),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (d.code === "limit" || d.error) {
-      setWatchError(d.error ?? "Couldn't start tracking.");
-      return;
-    }
-    toast("Tracking - you'll get a notification if the price drops meaningfully (checked daily).");
-    loadSide();
+  /** Track ONE specific product the agent found - not the whole free-text
+   *  query - so the user picks exactly which item to watch, with its own
+   *  photo and store link carried along for the watch list. */
+  async function trackProduct(o: any, key: string) {
+    setWatchError(null); setTrackingKey(key);
+    const priceNum = parseFloat(String(o.approx_price ?? "").replace(/[^0-9.]/g, ""));
+    try {
+      const res = await fetch("/api/agents/watch", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: o.name || input,
+          target_price: Number.isFinite(priceNum) ? priceNum : undefined,
+          image_url: safeUrl(o.image_url),
+          product_url: optionHref(o),
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (d.code === "limit" || d.error) { setWatchError(d.error ?? "Couldn't start tracking."); return; }
+      toast(`Tracking "${o.name}" - you'll get a notification if the price drops meaningfully (checked daily).`);
+      loadSide();
+    } finally { setTrackingKey(null); }
   }
 
   const result = run?.result ?? {};
@@ -169,12 +233,10 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
           <button onClick={go} disabled={busy || !input.trim() || outOfRuns} className="btn-primary flex-1">
             {busy ? "Working..." : "Run agent"}
           </button>
-          {kind === "buying" && (
-            <button onClick={track} disabled={busy || !input.trim()} className="btn-ghost" title="Check daily, notify on deals">
-              Track price
-            </button>
-          )}
         </div>
+        {kind === "buying" && !run && (
+          <p className="text-xs text-ink-2">Run it to see specific products with photos and prices - then pick exactly which one to track.</p>
+        )}
         {busy && (
           <div className="text-center py-8 flex flex-col items-center gap-3">
             <div className="run-ring" />
@@ -202,14 +264,31 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
             {new Date(run.created_at).toLocaleTimeString()}
           </p>
 
+          {result.image_url && safeUrl(result.image_url) && (
+            <img src={result.image_url} alt="" referrerPolicy="no-referrer"
+              className="w-full max-h-56 object-cover rounded-xl bg-paper-2"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          )}
+
           {result.answer && <p className="text-[15px] leading-relaxed">{result.answer}</p>}
           {result.recommendation && <p className="font-display text-lg">{result.recommendation}</p>}
           {result.understanding && <p className="text-[15px] leading-relaxed">{result.understanding}</p>}
 
           {(result.key_points ?? []).length > 0 && (
-            <ul className="list-disc list-inside text-sm text-ink-2 space-y-1">
-              {result.key_points.map((p: string) => <li key={p}>{p}</li>)}
+            <ul className="space-y-1.5 text-sm">
+              {result.key_points.map((p: any, i: number) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="shrink-0" aria-hidden>{typeof p === "string" ? "•" : (p.icon || "•")}</span>
+                  <span className="text-ink-2">{typeof p === "string" ? p : p.point}</span>
+                </li>
+              ))}
             </ul>
+          )}
+
+          {result.surprising_fact && (
+            <div className="card p-4 text-sm" style={{ background: "color-mix(in srgb, var(--c-idea) 10%, transparent)", borderLeft: "3px solid var(--c-idea)" }}>
+              <p className="label mb-1" style={{ color: "var(--c-idea)" }}>💡 Didn't know that</p>{result.surprising_fact}
+            </div>
           )}
 
           {result.so_what && (
@@ -218,25 +297,21 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
             </div>
           )}
 
-          {(result.options ?? []).map((o: any, i: number) => (
-            <div key={i} className="card p-4 text-sm">
-              <div className="flex justify-between gap-2">
-                <a href={optionHref(o)} target="_blank" rel="noopener noreferrer"
-                  className="font-medium cursor-pointer hover:text-ember hover:underline underline-offset-2"
-                  title={safeUrl(o?.url) ? "Open product page (model-provided - verify it loaded correctly)" : "Search this exact model on Amazon"}>
-                  {o.name} {'\u2197'}
-                </a>
-                <span className="chip">{o.approx_price}</span>
-              </div>
-              <p className="text-ink-2 mt-1"><span style={{ color: "var(--success)" }}>+</span> {o.pros}</p>
-              <p className="text-ink-2"><span style={{ color: "var(--danger)" }}>-</span> {o.cons}</p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {optionStores(o).map((s) => (
-                  <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
-                    className="chip !text-[11px] cursor-pointer hover:!border-ember hover:!text-ember">{s.name}</a>
+          {(result.follow_up_questions ?? []).length > 0 && (
+            <div>
+              <p className="label mb-2">Keep digging</p>
+              <div className="flex flex-wrap gap-2">
+                {result.follow_up_questions.map((q: string) => (
+                  <button key={q} onClick={() => { setInput(q); setTimeout(go, 0); }}
+                    className="chip cursor-pointer hover:!border-ember hover:!text-ember">{q} →</button>
                 ))}
               </div>
             </div>
+          )}
+
+          {(result.options ?? []).map((o: any, i: number) => (
+            <ProductCard key={i} o={o} onTrack={() => trackProduct(o, `${run.id}-${i}`)}
+              tracking={trackingKey === `${run.id}-${i}`} />
           ))}
 
           {result.first_move && (
@@ -269,7 +344,7 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
 
           {result.advice && <p className="text-sm text-ink-2">{result.advice}</p>}
 
-          {kind === "buying" && input.trim() && (
+          {kind === "buying" && input.trim() && (result.options ?? []).length === 0 && (
             <div>
               <p className="label mb-2">Compare on stores <span className="normal-case">(opens store search)</span></p>
               <div className="flex flex-wrap gap-2">
@@ -298,31 +373,24 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
         </div>
       )}
 
-      {kind === "buying" && input.trim() && (
-        <div className="card p-5 space-y-3 soft-shadow">
-          <div>
-            <p className="label mb-2">Compare "{input.slice(0, 60)}" on stores <span className="normal-case">(opens store search)</span></p>
-            <div className="flex flex-wrap gap-2">
-              {storeLinks(input).map((s) => (
-                <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
-                  className="chip cursor-pointer hover:!border-ember hover:!text-ember">
-                  {s.name} {'\u2197'}
-                </a>
-              ))}
-            </div>
+      {kind === "buying" && input.trim() && !run && (
+        <div className="card p-5 space-y-2 soft-shadow">
+          <p className="label">Or jump straight to stores <span className="normal-case">(opens store search for "{input.slice(0, 60)}")</span></p>
+          <div className="flex flex-wrap gap-2">
+            {storeLinks(input).map((s) => (
+              <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
+                className="chip cursor-pointer hover:!border-ember hover:!text-ember">
+                {s.name} {'\u2197'}
+              </a>
+            ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={track} className="btn-ghost !py-1.5 !text-xs">
-              Track "{input.slice(0, 30)}" for price drops
-            </button>
-            <span className="text-xs text-ink-2">checked daily - you'll get a notification on meaningful drops</span>
-          </div>
-          {watchError && (
-            <div className="rounded-xl p-3 text-sm" style={{ background: "var(--danger-soft)", borderLeft: "3px solid var(--danger)" }}>
-              <p style={{ color: "var(--danger)" }} className="font-medium">Watch limit</p>
-              <p className="text-ink-2 mt-0.5">{watchError}</p>
-            </div>
-          )}
+        </div>
+      )}
+
+      {watchError && (
+        <div className="rounded-xl p-3 text-sm card" style={{ background: "var(--danger-soft)", borderLeft: "3px solid var(--danger)" }}>
+          <p style={{ color: "var(--danger)" }} className="font-medium">Watch limit</p>
+          <p className="text-ink-2 mt-0.5">{watchError}</p>
         </div>
       )}
 
@@ -330,21 +398,38 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
         <section>
           <h2 className="label mb-2.5">Price watches ({watches.filter((w) => w.status === "active").length} active)</h2>
           <ul className="space-y-2">
-            {watches.map((w) => (
-              <li key={w.id} className="card p-4 text-sm flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{w.query}</p>
-                  <p className="text-xs text-ink-2 mt-0.5">
-                    {w.status === "active" ? "checking daily" : "stopped"}
-                    {w.last_price != null && ` - last estimate: ${w.last_price}`}
-                    {w.last_checked && ` - ${relTime(w.last_checked)}`}
-                  </p>
-                </div>
-                {w.status === "active" && (
-                  <button onClick={() => stopWatch(w.id)} className="btn-ghost !py-1 !px-2 !text-xs shrink-0">Stop</button>
-                )}
-              </li>
-            ))}
+            {watches.map((w) => {
+              const img = safeUrl(w.image_url);
+              const link = safeUrl(w.product_url);
+              return (
+                <li key={w.id} className="card p-4 text-sm flex items-center gap-3">
+                  {img ? (
+                    <img src={img} alt="" referrerPolicy="no-referrer"
+                      className="w-10 h-10 rounded-lg object-cover shrink-0 bg-paper-2"
+                      onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }} />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg shrink-0 grid place-items-center text-base"
+                      style={{ background: "color-mix(in srgb, var(--c-buy) 12%, transparent)", color: "var(--c-buy)" }}
+                      aria-hidden>🛒</div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    {link ? (
+                      <a href={link} target="_blank" rel="noopener noreferrer" className="font-medium truncate block hover:text-ember hover:underline">{w.query} {'\u2197'}</a>
+                    ) : (
+                      <p className="font-medium truncate">{w.query}</p>
+                    )}
+                    <p className="text-xs text-ink-2 mt-0.5">
+                      {w.status === "active" ? "checking daily" : "stopped"}
+                      {w.last_price != null && ` - last estimate: ${w.last_price}`}
+                      {w.last_checked && ` - ${relTime(w.last_checked)}`}
+                    </p>
+                  </div>
+                  {w.status === "active" && (
+                    <button onClick={() => stopWatch(w.id)} className="btn-ghost !py-1 !px-2 !text-xs shrink-0">Stop</button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

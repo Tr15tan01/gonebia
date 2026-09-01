@@ -9,21 +9,29 @@ interface TaskRow {
   type: string; title: string; due_at: string | null; people: string[];
 }
 
+// a splash of per-type color/icon so the list reads at a glance, not just a wall of white cards
+const TYPE_CHIP_CLASS: Record<string, string> = { task: "chip-c-task", promise: "chip-c-promise", commitment: "chip-c-promise" };
+const TYPE_ACCENT: Record<string, string> = { task: "var(--c-task)", promise: "var(--c-promise)", commitment: "var(--c-promise)" };
+const TYPE_ICON: Record<string, string> = { task: "☑", promise: "🤝", commitment: "🤝" };
+
 export function TasksClient({ initial }: { initial: TaskRow[] }) {
   const [tasks, setTasks] = useState(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [leavingId, setLeavingId] = useState<string | null>(null);
   const toast = useToast();
 
   async function done(id: string) {
     setBusyId(id);
     const prev = tasks;
-    setTasks((t) => t.filter((x) => x.id !== id));
     try {
       const res = await fetch(`/api/memories/${id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "done" }),
       });
       if (!res.ok) throw new Error();
+      // quick fade-out, then drop it from the list - no lingering
+      setLeavingId(id);
+      setTimeout(() => { setTasks((t) => t.filter((x) => x.id !== id)); setLeavingId(null); }, 180);
       toast("Done.");
     } catch {
       setTasks(prev);
@@ -87,8 +95,8 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
           <ul className="space-y-2">
             {group.items.map((t) => (
               <li key={t.id}
-                className={`card p-4 flex items-start justify-between gap-3 ${group.edge} ${group.hot ? "task-hot" : ""}`}
-                style={group.bg ? { background: group.bg } : undefined}>
+                className={`card p-4 flex items-start justify-between gap-3 ${group.edge || "edge-type"} ${group.hot ? "task-hot" : ""} ${leavingId === t.id ? "toast-out" : ""}`}
+                style={{ ...(group.bg ? { background: group.bg } : {}), ...(!group.edge ? { borderLeftColor: TYPE_ACCENT[t.type] ?? "var(--c-task)" } : {}) }}>
                 <div className="min-w-0">
                   <p className="leading-snug">{t.text}</p>
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -96,16 +104,20 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
                       <TimeChip iso={t.due_at}
                         prefix={group.label === "Due now" ? "⚠ now " : group.label === "Overdue" ? "overdue " : "due "} />
                     )}
-                    {t.type !== "task" && <span className="chip">{t.type}</span>}
+                    <span className={`chip ${TYPE_CHIP_CLASS[t.type] ?? ""}`}>{TYPE_ICON[t.type] ?? "☑"} {t.type}</span>
                     {t.people.slice(0, 2).map((p) => <span key={p} className="chip chip-c-person">{p}</span>)}
                   </div>
                 </div>
                 <button
                   onClick={() => done(t.id)}
                   disabled={busyId === t.id}
-                  className="btn !py-1.5 !px-3 !text-xs shrink-0 text-white"
+                  className="btn !py-1.5 !px-3 !text-xs shrink-0 text-white flex items-center gap-1.5"
                   style={{ background: "var(--danger)" }}
-                >Done</button>
+                >
+                  {busyId === t.id
+                    ? <span className="inline-block size-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-label="Working" />
+                    : "Done"}
+                </button>
               </li>
             ))}
           </ul>

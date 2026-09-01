@@ -102,10 +102,33 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
     } catch { toast("Couldn't enable push."); }
   }
 
+  /** Best-effort cleanup of everything that lives OUTSIDE the database and
+   *  therefore can't be wiped server-side: the browser's push subscription
+   *  (otherwise it silently keeps "belonging" to the deleted account) and
+   *  every gonebia-* localStorage key (seen notifications, snoozes, etc).
+   *  Device-only preferences (theme, sound) are intentionally left - they're
+   *  not account data. */
+  async function clearLocalTraces() {
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = await reg?.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+      }
+    } catch {}
+    try {
+      const keep = new Set(["gonebia-theme", "gonebia-sound"]);
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("gonebia-") && !keep.has(key)) localStorage.removeItem(key);
+      }
+    } catch {}
+  }
+
   async function deleteAccount() {
     const ok = await fetch("/api/account", { method: "DELETE" });
     if (ok.ok) {
       const summary = await ok.json().catch(() => null);
+      await clearLocalTraces();
       try { createClient().auth.signOut(); } catch {}
       window.location.href = summary?.total
         ? `/?deleted=${summary.total}`

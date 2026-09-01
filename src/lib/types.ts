@@ -10,9 +10,13 @@ export type BookStatus = "want_to_read" | "reading" | "finished" | "abandoned";
 export interface BookInfo {
   title: string;
   author: string | null;
-  status: BookStatus;
+  status: BookStatus | null;
   rating: number | null;
   recommended_by: string | null;
+  /** true when the note just REFERENCES a book already on the shelf (a thought,
+   *  quote, opinion) rather than reporting a reading-status update. In this case
+   *  the memory's own type/status is left alone - it's only LINKED to the book. */
+  mention_only?: boolean;
 }
 
 export interface Amount { value: number; currency: string; label?: string }

@@ -18,13 +18,20 @@ USER'S NOTE:
 
 Return ONLY a JSON object with these exact fields:
 - type: one of [${MEMORY_TYPES.join(", ")}]. Choose the single best fit.
-  BOOK RULE (very important): if the note mentions any BOOK - reading one, finishing one,
-  wanting to read one, or a book recommendation - type MUST be "book" and the book field
-  MUST be filled. Examples:
+  BOOK RULE (very important): if the note reports a READING-STATUS UPDATE for a book -
+  starting it, finishing it, wanting to read it, rating it, or someone recommending one -
+  type MUST be "book" and the book field MUST be filled with a "status". Examples:
     "I read Atomic Habits by James Clear" => type "book", book {"title":"Atomic Habits","author":"James Clear","status":"finished"}
     "I'm reading Sapiens"                 => type "book", book {"title":"Sapiens","status":"reading"}
     "I want to read Deep Work"            => type "book", book {"title":"Deep Work","status":"want_to_read"}
     "Giorgi recommended a psychology book"=> type "book", book {"status":"want_to_read","recommended_by":"Giorgi"} (and people ["Giorgi"])
+  BOOK MENTION RULE (also important): if the note is instead a THOUGHT, OPINION, QUOTE
+  or REFLECTION *about* a book - not a status update - keep the type as whatever fits best
+  (usually "thought"/"reflection"/"idea"), but STILL fill the book field so the note gets
+  connected to that book on the shelf: set book.status to null and book.mention_only to true.
+  Example: "the ending of Sapiens really got me thinking" => type "thought",
+    book {"title":"Sapiens","status":null,"mention_only":true}
+  If the note doesn't reference any book at all: book = null.
   TASK RULE (important): if someone asked or assigned the user to do something
   ("my wife asked me to clean the stove", "my boss wants the report by Friday"),
   type MUST be "task", with that person in people. Reserve "promise"/"commitment"
@@ -45,8 +52,9 @@ Return ONLY a JSON object with these exact fields:
 - is_decision: true if the user made a choice between options
 - decision_reason: why they chose it, or null
 - alternatives: options they rejected, or []
-- book: fill whenever the note is about a book (see BOOK RULE):
-  {"title","author" or null,"status":"want_to_read"|"reading"|"finished"|"abandoned","rating" 1-5 or null,"recommended_by" or null}
+- book: fill whenever the note is about a book (see BOOK RULE and BOOK MENTION RULE):
+  {"title","author" or null,"status":"want_to_read"|"reading"|"finished"|"abandoned"|null,
+   "rating" 1-5 or null,"recommended_by" or null,"mention_only": boolean}
   If the note is not about a book: book = null.
 - occurred_at: ISO 8601 when the event happened (past events). Resolve "yesterday",
   "last week", "two years ago" against CURRENT DATE/TIME. null if no past event.

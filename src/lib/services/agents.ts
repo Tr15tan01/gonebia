@@ -22,10 +22,13 @@ async function memoryContext(sb: any, userId: string, query: string, limit = 5):
 }
 
 export const AgentService = {
-  /** Online Research Agent - grounded web search + user memory context. */
+  /** Online Research Agent - grounded web search + user memory context.
+   *  Asked for a livelier, more visual structure: a lead image, a few
+   *  interesting "did you know" angles, and follow-up threads to pull on -
+   *  not just a flat wall of bullet points. */
   async research(sb: any, userId: string, query: string): Promise<AgentOutcome> {
     const { block, ids } = await memoryContext(sb, userId, query);
-    const prompt = `You are a research agent with web access. Research this topic for the user:
+    const prompt = `You are an engaging research agent with web access. Research this topic for the user:
 "${query}"
 
 Context from the user's own memories (may be relevant, may be empty):
@@ -33,8 +36,13 @@ Context from the user's own memories (may be relevant, may be empty):
 
 Return ONLY JSON:
 { "answer": string (direct answer, 2-5 sentences),
-  "key_points": [string] (3-6),
+  "image_url": string|null (a real, directly-loadable image URL - e.g. a Wikipedia/Wikimedia
+    thumbnail - that visually represents the topic; use https URLs only; null if unsure),
+  "key_points": [ { "point": string, "icon": string (ONE emoji that fits this point) } ] (3-6),
+  "surprising_fact": string|null (one genuinely interesting or little-known fact worth
+    highlighting, or null if nothing stands out),
   "so_what": string (practical implication for THIS user given their memories),
+  "follow_up_questions": [string] (2-3 natural next questions the user could ask to dig deeper),
   "search_queries_used": [string] }`;
     try {
       const { data, sources } = await geminiGroundedJSON(prompt);
@@ -50,18 +58,39 @@ Return ONLY JSON:
     }
   },
 
-  /** Buying Research Agent - one-shot comparison. */
+  /** Buying Research Agent - one-shot comparison with concrete, shoppable
+   *  products: real photo, real price, real product/store link, and specs -
+   *  so the user can pick exactly which one (if any) to track. */
   async buying(sb: any, userId: string, query: string): Promise<AgentOutcome> {
     const { block, ids } = await memoryContext(sb, userId, query, 4);
-    const prompt = `You are a buying-research agent with web access. Compare current options for:
-"${query}"
+    const prompt = `You are a buying-research agent with web access. Find real, currently-purchasable
+options for: "${query}"
 
 User context from memories (budgets, prior purchases, preferences):
  ${block}
 
+For EACH option, search for and use the REAL product from actual retailer/review pages you find -
+never invent a product, price, image, or link. If you can't confirm a real image or product page
+for an option, set that field to null rather than guessing.
+
 Return ONLY JSON:
 { "recommendation": string,
-  "options": [ { "name": string, "approx_price": string, "pros": string, "cons": string } ] (2-4),
+  "options": [
+    {
+      "name": string (specific model name, e.g. "Sony WH-1000XM5"),
+      "brand": string|null,
+      "approx_price": string (e.g. "$349"),
+      "currency": string (ISO code, best guess e.g. "USD"),
+      "image_url": string|null (a real, directly-loadable product photo URL found while
+        searching - https only; null if none found),
+      "product_url": string|null (a real https link to buy or view this exact product;
+        null if none found),
+      "rating": string|null (e.g. "4.6/5 (3,200 reviews)" if you found one),
+      "specs": [string] (2-4 short key specs),
+      "pros": string,
+      "cons": string
+    }
+  ] (2-4),
   "advice": string (what to check before buying, warranty/timing tips) }`;
     try {
       const { data, sources } = await geminiGroundedJSON(prompt);
