@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 /** Logged-in diagnostics: tests the Gemini key/models directly and reports
- *  recent extraction health. Visit /api/debug/gemini in your browser. */
+ *  recent extraction health. Visit /api/debug/gemini in your browser.
+ *  Rate-limited: this makes real (billed) Gemini calls on the shared server
+ *  key, so without a limit any signed-up user could hammer it to run up
+ *  usage/cost outside the app's own per-plan limits. */
 export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized - log in first" }, { status: 401 });
+  if (!rateLimit(`debug-gemini:${user.id}`, 5, 3600_000)) {
+    return NextResponse.json({ error: "Rate limited - try again in a bit." }, { status: 429 });
+  }
 
   const key = process.env.GEMINI_API_KEY;
   const chatModel = process.env.GEMINI_CHAT_MODEL ?? "gemini-3.6-flash";

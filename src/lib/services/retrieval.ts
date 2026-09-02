@@ -61,9 +61,13 @@ export const MemoryRetrievalService = {
   },
 
   async basicFallback(sb: any, f: SearchFilters): Promise<MemoryRow[]> {
+    // !inner is required here: without it, Supabase/PostgREST ignores a filter
+    // on an embedded table for the PARENT rows and silently returns every
+    // memory instead of just ones matching the type/status filter - the same
+    // bug class fixed elsewhere in this app (tasks page, /api/urgent).
     let q = sb
       .from("memories")
-      .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, occurred_at, people)")
+      .select("id, original_text, created_at, memory_metadata!inner(type, title, summary, importance, status, due_at, occurred_at, people)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(f.limit ?? 20);

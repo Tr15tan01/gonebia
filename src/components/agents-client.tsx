@@ -163,6 +163,19 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
     loadSide();
   }
 
+  async function removeWatch(id: string) {
+    if (!confirm("Remove this from your list?")) return;
+    setWatches((w) => w.filter((x) => x.id !== id)); // optimistic
+    await fetch(`/api/agents/watch?id=${id}&hard=1`, { method: "DELETE" });
+    loadSide();
+  }
+
+  async function removeRun(id: string) {
+    if (!confirm("Remove this from your history?")) return;
+    setHistory((h) => h.filter((x) => x.id !== id)); // optimistic
+    await fetch(`/api/agents?id=${id}`, { method: "DELETE" });
+  }
+
   async function addTask(action: string) {
     const res = await fetch("/api/capture", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -424,8 +437,11 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
                       {w.last_checked && ` - ${relTime(w.last_checked)}`}
                     </p>
                   </div>
-                  {w.status === "active" && (
+                  {w.status === "active" ? (
                     <button onClick={() => stopWatch(w.id)} className="btn-ghost !py-1 !px-2 !text-xs shrink-0">Stop</button>
+                  ) : (
+                    <button onClick={() => removeWatch(w.id)} aria-label="Remove" title="Remove from list"
+                      className="btn-ghost !py-1 !px-1.5 !text-xs shrink-0 cursor-pointer text-ink-2 hover:!text-[var(--danger)]">🗑</button>
                   )}
                 </li>
               );
@@ -439,9 +455,13 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
           <h2 className="label mb-2.5">Recent runs</h2>
           <ul className="card divide-y divide-line">
             {history.map((h) => (
-              <li key={h.id} className="p-4 text-sm flex justify-between gap-3">
+              <li key={h.id} className="p-4 text-sm flex items-center justify-between gap-3">
                 <span className="min-w-0 truncate">{KINDS.find((k) => k.kind === h.kind)?.icon} {h.input}</span>
-                <span className="text-xs text-ink-2 whitespace-nowrap">{relTime(h.created_at)}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-ink-2 whitespace-nowrap">{relTime(h.created_at)}</span>
+                  <button onClick={() => removeRun(h.id)} aria-label="Remove from history" title="Remove from history"
+                    className="text-ink-2 hover:!text-[var(--danger)] cursor-pointer">🗑</button>
+                </span>
               </li>
             ))}
           </ul>

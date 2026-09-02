@@ -38,7 +38,7 @@ export default async function TasksPage() {
       <header>
         <h1 className="font-display text-2xl">Tasks</h1>
         <p className="text-sm text-ink-2 mt-1">
-          Everything you or someone else put on your plate - extracted automatically from what you tell Gonebia.
+          Everything you or someone else put on your plate - extracted automatically from what you tell TimelyMemo.
         </p>
       </header>
       <TasksClient initial={tasks} />

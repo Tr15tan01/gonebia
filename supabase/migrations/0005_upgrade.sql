@@ -1,4 +1,9 @@
 -- ============ TimelyMemo upgrade: billing, usage, notifications, agents, google ============
+-- This file is safe to run multiple times: every "create policy" is preceded
+-- by "drop policy if exists" (unlike "create table", Postgres has no
+-- "create policy if not exists", so re-running an unmodified copy of this
+-- file used to fail with "policy already exists" once it got partway through
+-- on a previous attempt).
 
 -- subscription state (written ONLY by Paddle webhooks via service role)
 create table if not exists subscriptions (
@@ -12,6 +17,7 @@ create table if not exists subscriptions (
   updated_at timestamptz not null default now()
 );
 alter table subscriptions enable row level security;
+drop policy if exists "owner read" on subscriptions;
 create policy "owner read" on subscriptions for select using (auth.uid() = user_id);
 
 -- monthly usage counters (incremented by RPC)
@@ -29,6 +35,7 @@ create table if not exists usage_counters (
   primary key (user_id, month)
 );
 alter table usage_counters enable row level security;
+drop policy if exists "owner read" on usage_counters;
 create policy "owner read" on usage_counters for select using (auth.uid() = user_id);
 
 create or replace function bump_usage(p_user uuid, p_field text, p_amount int default 1)
@@ -69,13 +76,14 @@ create unique index if not exists notifications_dedupe_idx
 create table if not exists discover_results (
   user_id uuid not null references auth.users(id) on delete cascade,
   kind text not null,
-  window text not null default 'all',
+  time_window text not null default 'all',
   result jsonb not null default '{}',
   source_ids uuid[] not null default '{}',
   created_at timestamptz not null default now(),
-  primary key (user_id, kind, window)
+  primary key (user_id, kind, time_window)
 );
 alter table discover_results enable row level security;
+drop policy if exists "owner all" on discover_results;
 create policy "owner all" on discover_results for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -91,6 +99,7 @@ create table if not exists agent_runs (
   created_at timestamptz not null default now()
 );
 alter table agent_runs enable row level security;
+drop policy if exists "owner all" on agent_runs;
 create policy "owner all" on agent_runs for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -107,6 +116,7 @@ create table if not exists price_watches (
   created_at timestamptz not null default now()
 );
 alter table price_watches enable row level security;
+drop policy if exists "owner all" on price_watches;
 create policy "owner all" on price_watches for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -123,5 +133,7 @@ create table if not exists google_integrations (
   updated_at timestamptz not null default now()
 );
 alter table google_integrations enable row level security;
+drop policy if exists "owner read" on google_integrations;
 create policy "owner read" on google_integrations for select using (auth.uid() = user_id);
+drop policy if exists "owner delete" on google_integrations;
 create policy "owner delete" on google_integrations for delete using (auth.uid() = user_id);

@@ -45,9 +45,16 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = new URL(req.url).searchParams.get("id");
+  const url = new URL(req.url);
+  const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "invalid" }, { status: 400 });
   const sb = await createClient();
-  await sb.from("price_watches").update({ status: "stopped" }).eq("id", id).eq("user_id", user.id);
+  if (url.searchParams.get("hard") === "1") {
+    // fully remove it from the list - used for "stopped" watches that would
+    // otherwise sit there forever with nothing left to do to them.
+    await sb.from("price_watches").delete().eq("id", id).eq("user_id", user.id);
+  } else {
+    await sb.from("price_watches").update({ status: "stopped" }).eq("id", id).eq("user_id", user.id);
+  }
   return NextResponse.json({ ok: true });
 }

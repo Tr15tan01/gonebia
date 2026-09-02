@@ -21,13 +21,29 @@ const nextConfig: NextConfig = {
   // Required to support PostHog trailing slash API requests
   skipTrailingSlashRedirect: true,
   async headers() {
-    return [{
-      source: "/sw.js",
-      headers: [
-        { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-        { key: "Service-Worker-Allowed", value: "/" },
-      ],
-    }];
+    return [
+      {
+        // Applied to every route. Deliberately NOT including a Content-Security-Policy
+        // here: this app loads Google Fonts, PostHog, Sentry, and (if configured)
+        // a Paddle checkout iframe/script, and a CSP tight enough to matter but
+        // wrong for any one of those would silently break real functionality -
+        // that needs to be authored and tested against the live app, not guessed.
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
+        ],
+      },
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+    ];
   },
 };
 

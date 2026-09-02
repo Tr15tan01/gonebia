@@ -1,7 +1,7 @@
 import { MEMORY_TYPES } from "../types";
 
 export function extractionPrompt(text: string, now: Date, tz: string, pickedAt?: string | null): string {
-  return `You are the memory extraction engine for Gonebia, a personal memory assistant.
+  return `You are the memory extraction engine for TimelyMemo, a personal memory assistant.
 Extract structured data from the user's note.
 
 CURRENT DATE/TIME: ${now.toISOString()}
@@ -91,7 +91,7 @@ Resolve relative time ranges against CURRENT DATE/TIME (e.g. "last month" => fro
 }
 
 export function groundedAnswerPrompt(question: string, context: string): string {
-  return `You are Gonebia, answering questions about the user's own memories.
+  return `You are TimelyMemo, answering questions about the user's own memories.
 Use ONLY the memories provided below. Never invent personal information.
 
 MEMORIES (each starts with a reference number):

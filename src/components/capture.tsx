@@ -151,7 +151,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save(); }}
           rows={2}
-          placeholder="Tell Gonebia something..."
+          placeholder="Tell TimelyMemo something..."
           className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
           disabled={saving}
         />
@@ -180,7 +180,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           <div className="loader-ring" />
           <div className="min-w-0">
             <p className="text-sm font-medium">{PHASES[phase]}<span className="loader-dots"><span /><span /><span /></span></p>
-            <p className="text-xs text-ink-2 mt-0.5">Gonebia is thinking about this — usually a few seconds.</p>
+            <p className="text-xs text-ink-2 mt-0.5">TimelyMemo is thinking about this — usually a few seconds.</p>
           </div>
         </div>
       )}

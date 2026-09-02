@@ -56,7 +56,7 @@ export default async function Dashboard() {
         .order("remind_at").limit(4),
       sb.from("books").select("id, title, author")
         .eq("status", "reading").order("updated_at", { ascending: false }).limit(3),
-      sb.from("memory_metadata").select("id", { count: "exact", head: true })
+      sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
         .eq("user_id", user!.id).eq("status", "open").in("type", ["task", "promise", "commitment"]),
       sb.from("memories").select("id", { count: "exact", head: true })
         .eq("user_id", user!.id).is("deleted_at", null),
@@ -93,7 +93,7 @@ export default async function Dashboard() {
             {greeting()}, <span style={{ color: "var(--ember)" }}>{user!.email?.split("@")[0]}</span>.
           </h1>
         </div>
-        <p className="text-ink-2 text-sm mt-1">Tell Gonebia anything. It remembers what matters.</p>
+        <p className="text-ink-2 text-sm mt-1">Tell TimelyMemo anything. It remembers what matters.</p>
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -241,7 +241,7 @@ export default async function Dashboard() {
               );
             })}
           </div>
-        ) : <Empty icon="*" title="Your memory is empty." hint="Start by telling Gonebia something above." />}
+        ) : <Empty icon="*" title="Your memory is empty." hint="Start by telling TimelyMemo something above." />}
       </Section>
 
       <Link href="/chat" className="card p-5 flex items-center justify-between group"

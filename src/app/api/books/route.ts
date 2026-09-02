@@ -21,6 +21,22 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ books: data ?? [] });
 }
 
+export async function DELETE(req: NextRequest) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id || !z.string().uuid().safeParse(id).success) {
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  }
+  const sb = await createClient();
+  // unlink any notes pointing at this book rather than deleting the notes themselves -
+  // the thought/memory is still valid, it just isn't tied to a shelf entry anymore.
+  await sb.from("memory_metadata").update({ book_id: null }).eq("book_id", id);
+  const { error } = await sb.from("books").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}
+
 export async function PATCH(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });

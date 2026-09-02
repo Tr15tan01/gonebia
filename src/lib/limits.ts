@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { createAdmin } from "@/lib/supabase/admin";
 import { LIMITS, type Plan } from "@/lib/plans";
 
@@ -19,8 +20,15 @@ export async function getPlan(sb: any, userId: string): Promise<Plan> {
 
 export async function getUsage(sb: any, userId: string) {
   const month = new Date().toISOString().slice(0, 7);
-  const { data } = await sb
+  const { data, error } = await sb
     .from("usage_counters").select("*").eq("user_id", userId).eq("month", month).maybeSingle();
+  if (error) {
+    // Previously silently swallowed - if this table/RLS/RPC ever has an issue,
+    // usage would just look like "0 used" forever with zero visibility. Now it
+    // shows up in Sentry instead of only ever being reported as "doesn't count."
+    console.error("[limits] getUsage query failed - reporting 0 usage:", error);
+    Sentry.captureException(error, { extra: { userId, month, stage: "getUsage" } });
+  }
   const today = new Date().toISOString().slice(0, 10);
   return {
     month,
@@ -35,12 +43,20 @@ export async function getUsage(sb: any, userId: string) {
 }
 
 export async function bumpUsage(sb: any, userId: string, field: string): Promise<number> {
-  const { data } = await sb.rpc("bump_usage", { p_user: userId, p_field: field, p_amount: 1 });
+  const { data, error } = await sb.rpc("bump_usage", { p_user: userId, p_field: field, p_amount: 1 });
+  if (error) {
+    console.error(`[limits] bump_usage(${field}) failed - this interaction will NOT be counted:`, error);
+    Sentry.captureException(error, { extra: { userId, field, stage: "bumpUsage" } });
+  }
   return typeof data === "number" ? data : 0;
 }
 
 export async function bumpChatUsage(sb: any, userId: string) {
-  const { data } = await sb.rpc("bump_chat_usage", { p_user: userId });
+  const { data, error } = await sb.rpc("bump_chat_usage", { p_user: userId });
+  if (error) {
+    console.error("[limits] bump_chat_usage failed - this question will NOT be counted:", error);
+    Sentry.captureException(error, { extra: { userId, stage: "bumpChatUsage" } });
+  }
   return data;
 }
 

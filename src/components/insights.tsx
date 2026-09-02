@@ -23,7 +23,7 @@ export function InsightsClient({ initial, weekly, plan = "pro" }: { initial: any
   async function act(id: string, action: string) {
     await fetch("/api/insights", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action }) });
     setInsights((list) => list.filter((i) => i.id !== id));
-    toast(action === "goal_created" ? "Goal created." : "Noted - this helps Gonebia learn what to surface.");
+    toast(action === "goal_created" ? "Goal created." : "Noted - this helps TimelyMemo learn what to surface.");
   }
 
   async function openWhy(insight: any) {
@@ -73,7 +73,7 @@ export function InsightsClient({ initial, weekly, plan = "pro" }: { initial: any
       )}
 
       {sorted.length === 0 && !weekly && (
-        <Empty icon="◈" title="No insights right now." hint="Gonebia notices patterns as your memory grows. Keep capturing." />
+        <Empty icon="◈" title="No insights right now." hint="TimelyMemo notices patterns as your memory grows. Keep capturing." />
       )}
 
       {sorted.map((ins) => {
@@ -117,7 +117,7 @@ export function InsightsClient({ initial, weekly, plan = "pro" }: { initial: any
             <p className="text-sm text-ink-2">
               This insight was generated from {why.source_memory_ids?.length ?? 0} of your own memories
               {why.created_at ? `, detected ${relTime(why.created_at)}` : ""}. Nothing here is a fact about you -
-              it's a pattern Gonebia noticed, and you can dismiss it.
+              it's a pattern TimelyMemo noticed, and you can dismiss it.
             </p>
             <p className="label">Underlying memories</p>
             {loadingWhy ? <Spinner /> : sources && sources.length

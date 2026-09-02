@@ -72,7 +72,7 @@ export function ChatClient() {
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
         {messages.length === 0 && (
           <div className="space-y-2">
-            <p className="text-ink-2 text-sm">Ask anything about what you've told Gonebia. Every answer links to the memories behind it.</p>
+            <p className="text-ink-2 text-sm">Ask anything about what you've told TimelyMemo. Every answer links to the memories behind it.</p>
             <div className="flex flex-wrap gap-1.5">
               {EXAMPLES.map((e) => (
                 <button key={e} onClick={() => send(messages, e)} className="chip cursor-pointer hover:!border-ember hover:!text-ember">{e}</button>

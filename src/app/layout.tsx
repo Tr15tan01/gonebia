@@ -3,6 +3,7 @@ import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { SwRegister } from "@/components/sw-register";
 import { PaddleBridge } from "@/components/paddle-bridge";
+import { NetworkStatus } from "@/components/network-status";
 
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head>
       <body className="font-sans antialiased">
         {children}
+        <NetworkStatus />
         <SwRegister />
         <PaddleBridge />
       </body>

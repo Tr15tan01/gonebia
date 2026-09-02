@@ -36,7 +36,7 @@ export default async function BooksPage() {
       <header>
         <h1 className="font-display text-2xl">Books</h1>
         <p className="text-sm text-ink-2 mt-1">
-          Built automatically from what you tell Gonebia - "I finished reading …",
+          Built automatically from what you tell TimelyMemo - "I finished reading …",
           "I'm reading …", "Giorgi recommended …". No forms needed.
         </p>
       </header>

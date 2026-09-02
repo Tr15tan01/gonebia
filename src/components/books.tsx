@@ -38,6 +38,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
   const [books, setBooks] = useState<BookRow[]>(initial);
   const [openMemory, setOpenMemory] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const toast = useToast();
 
   async function patch(id: string, p: Partial<BookRow>) {
@@ -48,6 +49,21 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
       body: JSON.stringify({ id, ...p }),
     });
     if (!res.ok) toast("Couldn't save that change.");
+  }
+
+  async function removeBook(id: string, title: string) {
+    if (!confirm(`Remove "${title}" from your shelf? Any notes about it stay in your timeline, just unlinked.`)) return;
+    setRemovingId(id);
+    const prev = books;
+    setBooks((bs) => bs.filter((b) => b.id !== id)); // optimistic
+    try {
+      const res = await fetch(`/api/books?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast("Removed from your shelf.");
+    } catch {
+      setBooks(prev);
+      toast("Couldn't remove that book - please try again.");
+    } finally { setRemovingId(null); }
   }
 
   async function replaceBook(book: BookRow) {
@@ -98,7 +114,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="📖 Reading now" count={reading.length}>
           {reading.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
-              onRelookup={relookup} retrying={retrying === b.id} />
+              onRelookup={relookup} retrying={retrying === b.id}
+              onRemove={removeBook} removing={removingId === b.id} />
           ))}
         </Section>
       )}
@@ -107,7 +124,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="🔖 Up next" count={nextUp.length}>
           {nextUp.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
-              onRelookup={relookup} retrying={retrying === b.id} />
+              onRelookup={relookup} retrying={retrying === b.id}
+              onRemove={removeBook} removing={removingId === b.id} />
           ))}
         </Section>
       )}
@@ -116,7 +134,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="📗 Finished" count={finished.length}>
           {finished.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
-              onRelookup={relookup} retrying={retrying === b.id} />
+              onRelookup={relookup} retrying={retrying === b.id}
+              onRemove={removeBook} removing={removingId === b.id} />
           ))}
         </Section>
       )}
@@ -125,7 +144,8 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="⏸ Paused / not finished" count={abandoned.length}>
           {abandoned.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
-              onRelookup={relookup} retrying={retrying === b.id} />
+              onRelookup={relookup} retrying={retrying === b.id}
+              onRemove={removeBook} removing={removingId === b.id} />
           ))}
         </Section>
       )}
@@ -204,15 +224,17 @@ function Cover({ book }: { book: BookRow }) {
   );
 }
 
-function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying }: {
+function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying, onRemove, removing }: {
   book: BookRow;
   onPatch: (id: string, p: Partial<BookRow>) => void;
   onOpenMemory: (id: string) => void;
   onRelookup: (id: string) => void;
   retrying: boolean;
+  onRemove: (id: string, title: string) => void;
+  removing: boolean;
 }) {
   return (
-    <div className="card p-4 soft-shadow">
+    <div className={`card p-4 soft-shadow ${removing ? "toast-out" : ""}`}>
       <div className="flex gap-3">
         <Cover book={book} />
         <div className="min-w-0 flex-1 space-y-2">
@@ -221,14 +243,25 @@ function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying }: {
               <p className="font-display text-lg leading-snug">{book.title}</p>
               {book.author && <p className="text-sm text-ink-2">{book.author}</p>}
             </div>
-            <select
-              value={book.status}
-              onChange={(e) => onPatch(book.id, { status: e.target.value })}
-              className="input !py-1 !px-2 !text-xs w-auto shrink-0"
-              aria-label="Status"
-            >
-              {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-            </select>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <select
+                value={book.status}
+                onChange={(e) => onPatch(book.id, { status: e.target.value })}
+                className="input !py-1 !px-2 !text-xs w-auto"
+                aria-label="Status"
+              >
+                {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              </select>
+              <button
+                onClick={() => onRemove(book.id, book.title)}
+                disabled={removing}
+                aria-label={`Remove ${book.title} from shelf`}
+                title="Remove from shelf"
+                className="btn-ghost !py-1 !px-1.5 !text-xs cursor-pointer text-ink-2 hover:!text-[var(--danger)]"
+              >
+                🗑
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-2">

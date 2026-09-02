@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast, Empty } from "@/components/ui";
 import { relTime } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
+import { MemorySheet } from "@/components/memory";
 
 interface TaskRow {
   id: string; text: string; created_at: string;
@@ -18,7 +19,15 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
   const [tasks, setTasks] = useState(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [leavingId, setLeavingId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const toast = useToast();
+
+  // MemorySheet (opened below) can edit text, mark done, or delete a task -
+  // those all call router.refresh() on the server, which re-runs this page's
+  // query and passes a NEW `initial` array in - but a client component's own
+  // `tasks` state doesn't auto-follow prop changes after the initial mount,
+  // so without this, an edit/delete from the sheet wouldn't show up here.
+  useEffect(() => { setTasks(initial); }, [initial]);
 
   async function done(id: string) {
     setBusyId(id);
@@ -95,7 +104,11 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
           <ul className="space-y-2">
             {group.items.map((t) => (
               <li key={t.id}
-                className={`card p-4 flex items-start justify-between gap-3 ${group.edge || "edge-type"} ${group.hot ? "task-hot" : ""} ${leavingId === t.id ? "toast-out" : ""}`}
+                onClick={() => setOpenId(t.id)}
+                role="button" tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenId(t.id); } }}
+                title="Click to view or edit"
+                className={`card p-4 flex items-start justify-between gap-3 cursor-pointer hover:border-ember/50 transition-colors ${group.edge || "edge-type"} ${group.hot ? "task-hot" : ""} ${leavingId === t.id ? "toast-out" : ""}`}
                 style={{ ...(group.bg ? { background: group.bg } : {}), ...(!group.edge ? { borderLeftColor: TYPE_ACCENT[t.type] ?? "var(--c-task)" } : {}) }}>
                 <div className="min-w-0">
                   <p className="leading-snug">{t.text}</p>
@@ -109,9 +122,9 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
                   </div>
                 </div>
                 <button
-                  onClick={() => done(t.id)}
+                  onClick={(e) => { e.stopPropagation(); done(t.id); }}
                   disabled={busyId === t.id}
-                  className="btn !py-1.5 !px-3 !text-xs shrink-0 text-white flex items-center gap-1.5"
+                  className="btn !py-1.5 !px-3 !text-xs shrink-0 text-white flex items-center gap-1.5 cursor-pointer"
                   style={{ background: "var(--danger)" }}
                 >
                   {busyId === t.id
@@ -123,6 +136,8 @@ export function TasksClient({ initial }: { initial: TaskRow[] }) {
           </ul>
         </section>
       ))}
+
+      <MemorySheet id={openId} onClose={() => setOpenId(null)} />
     </div>
   );
 }

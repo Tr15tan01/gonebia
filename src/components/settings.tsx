@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as Sentry from "@sentry/nextjs";
 import { useTheme } from "@/components/theme";
 import { useToast } from "@/components/ui";
 import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
@@ -24,6 +25,17 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
   const toast = useToast();
   const router = useRouter();
 
+  // useState's initial value only applies on mount - after router.refresh() the
+  // server passes a NEW prefs object into this already-mounted component, so
+  // without this the sliders could visually appear to "not save" even though
+  // the write succeeded. Keep them in sync with whatever the server has.
+  useEffect(() => {
+    if (prefs?.quiet_hours_start != null) setQs(prefs.quiet_hours_start);
+    if (prefs?.quiet_hours_end != null) setQe(prefs.quiet_hours_end);
+    if (prefs?.push_enabled != null) setPushOn(!!prefs.push_enabled);
+    if (prefs?.insight_sensitivity != null) setSens(prefs.insight_sensitivity);
+  }, [prefs]);
+
   async function readState() {
     if (typeof window === "undefined" || !("Notification" in window)) {
       setPerm("unsupported"); setAppOn(false); return;
@@ -35,11 +47,22 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
   useEffect(() => { readState(); setSoundOn(soundEnabled()); }, []);
 
   async function save(patch: object, msg: string) {
-    const res = await fetch("/api/profile", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
-    });
-    toast(res.ok ? msg : "Couldn't save that - please try again.");
-    router.refresh();
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        Sentry.captureMessage("Preference save failed", { level: "error", extra: { patch, status: res.status, body } });
+        toast(body?.error ? `Couldn't save: ${body.error}` : "Couldn't save that - please try again.");
+        return;
+      }
+      toast(msg);
+      router.refresh();
+    } catch (e) {
+      Sentry.captureException(e, { extra: { patch } });
+      toast("Couldn't save that - please check your connection and try again.");
+    }
   }
 
 

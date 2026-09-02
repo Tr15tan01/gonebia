@@ -69,14 +69,14 @@ export function InstallPrompt() {
         <img src="/icon.svg" alt="" className="size-10 rounded-xl shrink-0" />
         {ios ? (
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Install Gonebia</p>
+            <p className="text-sm font-medium">Install TimelyMemo</p>
             <p className="text-xs text-ink-2 mt-0.5">
               Tap the Share <span aria-hidden>⎋</span> button, then "Add to Home Screen".
             </p>
           </div>
         ) : (
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Install Gonebia as an app</p>
+            <p className="text-sm font-medium">Install TimelyMemo as an app</p>
             <p className="text-xs text-ink-2 mt-0.5">Full screen, offline-ready, one tap from your home screen.</p>
           </div>
         )}

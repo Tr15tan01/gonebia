@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { chatSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
@@ -35,9 +36,29 @@ export async function POST(req: Request) {
     }, { status: 402 });
   }
 
+  let result;
   try {
-    const result = await AIChatService.answer(sb, messages, timezone, plan);
+    result = await AIChatService.answer(sb, messages, timezone, plan);
+  } catch (e) {
+    console.error("[chat]", e);
+    Sentry.captureException(e, { extra: { userId: user.id, plan, question: messages.at(-1)?.content } });
+    return NextResponse.json({
+      answer: "I couldn't search your memories just now. Please try again.",
+      references: [],
+      detail: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  // Bookkeeping (usage counting, analytics) happens AFTER a real answer is in
+  // hand and is never allowed to throw away that answer if it fails - a flaky
+  // RPC or PostHog outage here shouldn't make a working answer look broken.
+  try {
     await bumpChatUsage(sb, user.id);
+  } catch (e) {
+    console.error("[chat] usage bump failed (answer still returned):", e);
+    Sentry.captureException(e, { extra: { userId: user.id, stage: "bumpChatUsage" } });
+  }
+  try {
     const ph = getPostHogClient();
     if (ph) {
       ph.capture({
@@ -51,13 +72,9 @@ export async function POST(req: Request) {
       });
       await ph.flush();
     }
-    return NextResponse.json(result);
   } catch (e) {
-    console.error("[chat]", e);
-    return NextResponse.json({
-      answer: "I couldn't search your memories just now. Please try again.",
-      references: [],
-      detail: e instanceof Error ? e.message : String(e),
-    });
+    console.error("[chat] analytics capture failed (answer still returned):", e);
   }
+
+  return NextResponse.json(result);
 }
