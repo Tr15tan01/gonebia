@@ -1,23 +1,16 @@
-import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
+
+// Uses the lightweight, Edge-safe auth config directly (not @/lib/auth) -
+// middleware runs on the Edge runtime and must never pull in bcryptjs or the
+// Supabase admin client, which the real Credentials provider needs.
+const { auth } = NextAuth(authConfig);
 
 const PROTECTED = ["/dashboard", "/tasks", "/timeline", "/search", "/chat", "/insights", "/books", "/people", "/graph", "/settings", "/discover", "/agents"];
 
-export async function middleware(req: NextRequest) {
-  let res = NextResponse.next({ request: req });
-  const sb = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: {
-        getAll: () => req.cookies.getAll(),
-        setAll: (list: { name: string; value: string; options: any }[]) => {
-          list.forEach(({ name, value }) => req.cookies.set(name, value));
-          res = NextResponse.next({ request: req });
-          list.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
-        },
-    }}
-  );
-  const { data: { user } } = await sb.auth.getUser();
+export default auth((req) => {
+  const user = req.auth?.user;
   const path = req.nextUrl.pathname;
   if (!user && PROTECTED.some((p) => path.startsWith(p))) {
     const url = req.nextUrl.clone(); url.pathname = "/login";
@@ -27,7 +20,7 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone(); url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
-  return res;
-}
+  return NextResponse.next();
+});
 
 export const config = { matcher: ["/((?!_next/static|_next/image|icon.svg|manifest.webmanifest|sw.js|favicon.ico).*)"] };

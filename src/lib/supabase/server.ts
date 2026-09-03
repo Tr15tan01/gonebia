@@ -1,22 +1,40 @@
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { auth } from "@/lib/auth";
+import { scoped } from "@/lib/supabase/scoped";
 
-export async function createClient() {
-  const store = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: {
-        getAll: () => store.getAll(),
-        setAll: (list: { name: string; value: string; options: any }[]) => {
-          try { list.forEach(({ name, value, options }) => store.set(name, value, options)); } catch {}
-        },
-    }}
-  );
+/** Returns the logged-in user in the same {id, email} shape the app has
+ *  always expected (previously from Supabase Auth, now from Auth.js) - kept
+ *  identical on purpose so the ~30 call sites that already do
+ *  `const user = await getUser(); if (!user) ...; user.id` keep working
+ *  completely unchanged. `name` is additive (new) - it comes from the
+ *  session for free (no extra DB query), since it was already being
+ *  captured at sign-in/sign-up time and just wasn't being surfaced here. */
+export async function getUser() {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+  return {
+    id: session.user.id as string,
+    email: (session.user.email as string) ?? "",
+    name: (session.user.name as string) || null,
+  };
 }
 
-export async function getUser() {
-  const sb = await createClient();
-  const { data: { user } } = await sb.auth.getUser();
-  return user;
+/** Returns a database client automatically scoped to the current user (see
+ *  src/lib/supabase/scoped.ts for exactly what that means). This used to
+ *  return Supabase's own RLS-respecting client; now that there's no
+ *  Supabase-Auth session for RLS to check, this is what enforces per-user
+ *  data isolation instead. Every existing call site that does
+ *  `const sb = await createClient()` keeps working unchanged for ordinary
+ *  reads/writes - only raw `.rpc()` calls need the user id passed explicitly
+ *  (all of this app's own RPCs already take a `p_user` parameter for exactly
+ *  this reason).
+ *
+ *  Throws if there's no session, rather than silently returning an unusable
+ *  or unscoped client - every caller is expected to have already checked
+ *  getUser() and returned 401 before reaching this. */
+export async function createClient() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("createClient() called without an authenticated session - check getUser() first.");
+  }
+  return scoped(session.user.id as string);
 }

@@ -24,5 +24,6 @@ create table if not exists books (
 create index if not exists books_user_status_idx on books (user_id, status);
 
 alter table books enable row level security;
+drop policy if exists "owner all" on books;
 create policy "owner all" on books for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);

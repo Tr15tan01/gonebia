@@ -90,7 +90,7 @@ export default async function Dashboard() {
         <div className="flex items-center gap-3">
           <LogoMark size={34} />
           <h1 className="font-display text-2xl md:text-3xl">
-            {greeting()}, <span style={{ color: "var(--ember)" }}>{user!.email?.split("@")[0]}</span>.
+            {greeting()}, <span style={{ color: "var(--ember)" }}>{user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}</span>.
           </h1>
         </div>
         <p className="text-ink-2 text-sm mt-1">Tell TimelyMemo anything. It remembers what matters.</p>

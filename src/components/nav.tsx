@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme";
 import { Logo, LogoMark } from "@/components/logo";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "next-auth/react";
 import { relTime } from "@/lib/dates";
 
 const LINKS = [
@@ -117,7 +117,7 @@ export function AppNav({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     setLoggingOut(true);
-    try { await createClient().auth.signOut(); } catch {}
+    try { await signOut({ redirect: false }); } catch {}
     window.location.href = "/";
   }
 

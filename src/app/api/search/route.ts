@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const sb = await createClient();
   try {
-    const results = await MemoryRetrievalService.hybrid(sb, {
+    const results = await MemoryRetrievalService.hybrid(sb, user.id, {
       query: sp.get("q") ?? "",
       types: sp.get("types")?.split(",").filter(Boolean) ?? null,
       person: sp.get("person"),

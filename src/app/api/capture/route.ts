@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     await admin.from("memory_embeddings").insert({ memory_id: mem.id, user_id: user.id, embedding });
 
     const { data: hits } = await sb.rpc("match_memories", {
-      p_query_embedding: JSON.stringify(embedding), p_match_count: 4, p_min_similarity: 0.86,
+      p_user: user.id, p_query_embedding: JSON.stringify(embedding), p_match_count: 4, p_min_similarity: 0.86,
     });
     const others = (hits ?? []).filter((h: any) => h.memory_id !== mem.id).slice(0, 3);
 

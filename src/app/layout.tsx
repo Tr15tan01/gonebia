@@ -4,6 +4,7 @@ import "./globals.css";
 import { SwRegister } from "@/components/sw-register";
 import { PaddleBridge } from "@/components/paddle-bridge";
 import { NetworkStatus } from "@/components/network-status";
+import { AuthSessionProvider } from "@/components/auth-session-provider";
 
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -34,10 +35,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={`${fraunces.variable} ${inter.variable}`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head>
       <body className="font-sans antialiased">
-        {children}
-        <NetworkStatus />
-        <SwRegister />
-        <PaddleBridge />
+        <AuthSessionProvider>
+          {children}
+          <NetworkStatus />
+          <SwRegister />
+          <PaddleBridge />
+        </AuthSessionProvider>
       </body>
     </html>
   );

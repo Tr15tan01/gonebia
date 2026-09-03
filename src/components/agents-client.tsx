@@ -304,6 +304,12 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
             </div>
           )}
 
+          {result.try_this && (
+            <div className="card p-4 text-sm" style={{ background: "color-mix(in srgb, var(--success) 10%, transparent)", borderLeft: "3px solid var(--success)" }}>
+              <p className="label mb-1" style={{ color: "var(--success)" }}>✅ Try this</p>{result.try_this}
+            </div>
+          )}
+
           {result.so_what && (
             <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)" }}>
               <p className="label mb-1">For you specifically</p>{result.so_what}

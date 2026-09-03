@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    result = await AIChatService.answer(sb, messages, timezone, plan);
+    result = await AIChatService.answer(sb, user.id, messages, timezone, plan);
   } catch (e) {
     console.error("[chat]", e);
     Sentry.captureException(e, { extra: { userId: user.id, plan, question: messages.at(-1)?.content } });

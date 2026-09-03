@@ -12,7 +12,7 @@ export interface AgentOutcome {
 
 async function memoryContext(sb: any, userId: string, query: string, limit = 5): Promise<{ block: string; ids: string[] }> {
   try {
-    const rows = await MemoryRetrievalService.hybrid(sb, { query, limit, semantic: true });
+    const rows = await MemoryRetrievalService.hybrid(sb, userId, { query, limit, semantic: true });
     const ids = rows.map((r) => r.id);
     const block = rows.length
       ? rows.map((r, i) => `[M${i + 1}] (${(r.created_at ?? "").slice(0, 10)}) ${r.original_text.slice(0, 160)}`).join("\n")
@@ -41,6 +41,8 @@ Return ONLY JSON:
   "key_points": [ { "point": string, "icon": string (ONE emoji that fits this point) } ] (3-6),
   "surprising_fact": string|null (one genuinely interesting or little-known fact worth
     highlighting, or null if nothing stands out),
+  "try_this": string|null (one small, concrete, practical thing the user could actually DO
+    with this info right now - a next action, not more trivia; null if nothing actionable fits),
   "so_what": string (practical implication for THIS user given their memories),
   "follow_up_questions": [string] (2-3 natural next questions the user could ask to dig deeper),
   "search_queries_used": [string] }`;

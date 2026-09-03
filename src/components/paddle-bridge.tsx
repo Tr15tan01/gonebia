@@ -1,7 +1,7 @@
 "use client";
 import Script from "next/script";
 import { useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSession } from "next-auth/react";
 
 declare global { interface Window { Paddle?: any } }
 
@@ -11,20 +11,14 @@ declare global { interface Window { Paddle?: any } }
 export function PaddleBridge() {
   const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
   const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID;
+  const { data: session } = useSession();
 
   useEffect(() => {
     if (!token || !priceId) return;
-    const handler = async () => {
+    const handler = () => {
       if (!window.Paddle) { alert("Billing is still loading - try again in a second."); return; }
-      let customer: { email?: string } = {};
-      let custom: Record<string, unknown> = {};
-      try {
-        const { data } = await createClient().auth.getUser();
-        if (data.user) {
-          customer = { email: data.user.email ?? "" };
-          custom = { user_id: data.user.id };
-        }
-      } catch {}
+      const customer = session?.user?.email ? { email: session.user.email } : {};
+      const custom = (session?.user as any)?.id ? { user_id: (session!.user as any).id } : {};
       window.Paddle.Checkout.open({
         items: [{ priceId, quantity: 1 }],
         customer,
@@ -33,7 +27,7 @@ export function PaddleBridge() {
     };
     window.addEventListener("timelymemo:checkout", handler);
     return () => window.removeEventListener("timelymemo:checkout", handler);
-  }, [token, priceId]);
+  }, [token, priceId, session]);
 
   if (!token) return null;
   return (

@@ -43,10 +43,18 @@ returns int language plpgsql security definer set search_path = public as $$ dec
         v_new int;
 begin
   if not (p_field = any(v_allowed)) then raise exception 'invalid field'; end if;
+  -- "into v_new" MUST be a clause of the EXECUTE statement itself, not text
+  -- embedded inside the dynamic SQL string - "returning x into y" is not
+  -- valid raw SQL, only valid PL/pgSQL syntax for a STATIC statement. Written
+  -- the old way, this silently failed every single call (while
+  -- bump_chat_usage, a plain non-dynamic SQL function below, worked fine) -
+  -- which is exactly why chat questions were counted but memories and agent
+  -- runs never were.
   execute format(
     'insert into usage_counters (user_id, month, %I) values ($1, to_char(now(),''YYYY-MM''), $2)
      on conflict (user_id, month) do update set %I = usage_counters.%I + $2
-     returning %I into v_new', p_field, p_field, p_field, p_field)
+     returning %I', p_field, p_field, p_field, p_field)
+  into v_new
   using p_user, p_amount;
   return v_new;
 end $$;

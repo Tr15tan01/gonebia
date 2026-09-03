@@ -8,7 +8,7 @@ function fmt(iso: string) {
 }
 
 export const AIChatService = {
-  async answer(sb: any, history: { role: "user" | "assistant"; content: string }[], timezone: string, plan: string = "pro") {
+  async answer(sb: any, userId: string, history: { role: "user" | "assistant"; content: string }[], timezone: string, plan: string = "pro") {
     const question = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
 
     let plan_: Record<string, unknown> = { query: question, semantic: true, types: null, person: null, from: null, to: null };
@@ -18,7 +18,7 @@ export const AIChatService = {
       console.error("[chat] planning failed, using raw question:", e);
     }
 
-    const rows = await MemoryRetrievalService.hybrid(sb, {
+    const rows = await MemoryRetrievalService.hybrid(sb, userId, {
       query: (plan_.query as string) || question,
       types: (plan_.types as string[] | null) ?? null,
       person: (plan_.person as string | null) ?? null,

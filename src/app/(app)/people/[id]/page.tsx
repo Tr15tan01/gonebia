@@ -36,7 +36,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
     const { data: metas } = await sb
       .from("memory_metadata")
       .select("category, companies, places, products")
-      .in("memory_id", memories.map((m) => m.id));
+      .in("memory_id", memories.map((m: { id: string }) => m.id));
     const cats: Record<string, number> = {};
     const ents: Record<string, number> = {};
     for (const md of metas ?? []) {

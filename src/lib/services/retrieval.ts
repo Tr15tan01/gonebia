@@ -1,4 +1,5 @@
 import { embedQuery } from "@/lib/ai/gemini";
+import * as Sentry from "@sentry/nextjs";
 import type { MemoryRow } from "@/lib/types";
 
 export interface SearchFilters {
@@ -34,15 +35,26 @@ function normalizeRows(data: any[]): MemoryRow[] {
 }
 
 export const MemoryRetrievalService = {
-  async hybrid(sb: any, f: SearchFilters): Promise<MemoryRow[]> {
+  async hybrid(sb: any, userId: string, f: SearchFilters): Promise<MemoryRow[]> {
     const query = (f.query ?? "").trim();
     const wantSemantic = f.semantic !== false;
     let embedding: number[] | null = null;
     if (query && wantSemantic) {
-      try { embedding = await embedQuery(query); } catch { /* keyword-only */ }
+      // Previously silently swallowed - if embedding generation ever fails
+      // (wrong model name, quota, transient API error), every question
+      // quietly degrades to keyword-only matching with zero visibility. That
+      // matters a lot: keyword search requires the literal words in the
+      // question to appear in the memory text ("phone charger" won't match a
+      // memory that only says "Samsung charger" - no shared words - while
+      // semantic search understands they're related). Now it's logged.
+      try { embedding = await embedQuery(query); } catch (e) {
+        console.error("[retrieval] embedQuery failed, falling back to keyword-only for this question:", e);
+        Sentry.captureException(e, { extra: { query, stage: "embedQuery" } });
+      }
     }
     try {
       const { data, error } = await sb.rpc("hybrid_search", {
+        p_user: userId,
         p_query: query,
         p_embedding: embedding ? JSON.stringify(embedding) : null,
         p_types: f.types && f.types.length ? f.types : null,
@@ -56,11 +68,11 @@ export const MemoryRetrievalService = {
       return (data ?? []) as MemoryRow[];
     } catch (e) {
       console.error("[retrieval] hybrid_search failed, using fallback:", e);
-      return this.basicFallback(sb, f);
+      return this.basicFallback(sb, userId, f);
     }
   },
 
-  async basicFallback(sb: any, f: SearchFilters): Promise<MemoryRow[]> {
+  async basicFallback(sb: any, userId: string, f: SearchFilters): Promise<MemoryRow[]> {
     // !inner is required here: without it, Supabase/PostgREST ignores a filter
     // on an embedded table for the PARENT rows and silently returns every
     // memory instead of just ones matching the type/status filter - the same
@@ -68,6 +80,7 @@ export const MemoryRetrievalService = {
     let q = sb
       .from("memories")
       .select("id, original_text, created_at, memory_metadata!inner(type, title, summary, importance, status, due_at, occurred_at, people)")
+      .eq("user_id", userId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(f.limit ?? 20);
@@ -85,9 +98,9 @@ export const MemoryRetrievalService = {
     return normalizeRows(data ?? []);
   },
 
-  async similar(sb: any, embedding: number[], minSim: number, limit: number) {
+  async similar(sb: any, userId: string, embedding: number[], minSim: number, limit: number) {
     const { data, error } = await sb.rpc("match_memories", {
-      p_query_embedding: JSON.stringify(embedding), p_match_count: limit, p_min_similarity: minSim,
+      p_user: userId, p_query_embedding: JSON.stringify(embedding), p_match_count: limit, p_min_similarity: minSim,
     });
     if (error) throw error;
     return (data ?? []) as { memory_id: string; similarity: number }[];

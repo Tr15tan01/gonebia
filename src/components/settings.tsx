@@ -5,7 +5,7 @@ import * as Sentry from "@sentry/nextjs";
 import { useTheme } from "@/components/theme";
 import { useToast } from "@/components/ui";
 import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "next-auth/react";
 import { UpgradeButton } from "@/components/upgrade-button";
 import { GoogleCard } from "@/components/google-card";
 import { ManageBillingButton } from "@/components/manage-billing";
@@ -152,7 +152,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
     if (ok.ok) {
       const summary = await ok.json().catch(() => null);
       await clearLocalTraces();
-      try { createClient().auth.signOut(); } catch {}
+      try { await signOut({ redirect: false }); } catch {}
       window.location.href = summary?.total
         ? `/?deleted=${summary.total}`
         : "/";
