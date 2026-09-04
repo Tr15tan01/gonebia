@@ -10,6 +10,8 @@ import { getPlan, getUsage, bumpUsage, LIMITS, activeReminderCount, limitRespons
 import type { SimilarHit } from "@/lib/types";
 import { getPostHogClient } from "@/lib/posthog-server";
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
