@@ -7,6 +7,8 @@ import { AIChatService } from "@/lib/services/chat";
 import { getPlan, getUsage, bumpChatUsage, LIMITS } from "@/lib/limits";
 import { getPostHogClient } from "@/lib/posthog-server";
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
