@@ -3,6 +3,8 @@ import { getUser, createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { MemoryRetrievalService } from "@/lib/services/retrieval";
 
+export const maxDuration = 30;
+
 export async function GET(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
