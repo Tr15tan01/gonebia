@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Spinner, useToast } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
@@ -13,15 +13,31 @@ const TOOLS = [
   { kind: "conflicts", icon: "\u2696\ufe0f", name: "Where I contradict myself", desc: "Tensions between what you said earlier and what you say now - asked gently.", windows: null },
 ];
 
+const PHASES = [
+  { text: "Reading through your memories", icon: "\ud83d\udcd6", color: "var(--ember)" },
+  { text: "Searching for patterns", icon: "\ud83d\udd0e", color: "var(--c-ask)" },
+  { text: "Connecting the dots", icon: "\u2728", color: "var(--c-idea)" },
+  { text: "Noticing what repeats", icon: "\ud83d\udd04", color: "var(--success)" },
+  { text: "Putting it into words", icon: "\ud83d\udcac", color: "var(--c-decision)" },
+];
+
 export function DiscoverClient({ plan, used, limit }: { plan: string; used: number; limit: number }) {
   const [active, setActive] = useState<string | null>(null);
   const [window, setWindow] = useState<number | null>(null);
   const [data, setData] = useState<any>(null);
   const [sources, setSources] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState(0);
   const [cached, setCached] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const toast = useToast();
+
+  // cycles through the phase labels below while an analysis is running
+  useEffect(() => {
+    if (!busy) { setPhase(0); return; }
+    const t = setInterval(() => setPhase((p) => (p + 1) % PHASES.length), 1600);
+    return () => clearInterval(t);
+  }, [busy]);
 
   async function run(kind: string, win: number | null, force = false) {
     setBusy(true); setData(null); setSources([]); setCached(false); setRunError(null);
@@ -98,9 +114,12 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
 
           {busy && (
             <div className="text-center py-8 flex flex-col items-center gap-3">
-              <div className="run-ring" />
-              <p className="text-sm font-medium">Reading your memories<span className="loader-dots"><span /><span /><span /></span></p>
-              <p className="text-xs text-ink-2">Connecting the dots - usually 10-30 seconds.</p>
+              <div className="run-ring" style={{ "--run-ring-color": PHASES[phase].color } as React.CSSProperties} />
+              <p className="text-sm font-medium transition-colors duration-500" style={{ color: PHASES[phase].color }}>
+                <span className="mr-1.5">{PHASES[phase].icon}</span>
+                {PHASES[phase].text}<span className="loader-dots"><span /><span /><span /></span>
+              </p>
+              <p className="text-xs text-ink-2">Usually 10-30 seconds.</p>
             </div>
           )}
 

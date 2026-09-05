@@ -32,7 +32,7 @@ export default function PricingPage() {
             <p className="font-display text-4xl mt-2">$0</p>
             <ul className="mt-5 space-y-2 text-sm text-ink-2">
               <li>100 text memories / month</li>
-              <li>Basic search and timeline</li>
+              <li>Smart (semantic) search and timeline</li>
               <li>20 AI questions / month (max 10/day)</li>
               <li>20 active reminders</li>
               <li>Connect the Dots - 3/month</li>
@@ -50,7 +50,7 @@ export default function PricingPage() {
             <p className="font-display text-4xl mt-2">$7.99<span className="text-base text-ink-2">/mo</span></p>
             <ul className="mt-5 space-y-2 text-sm">
               <li>1,000 memories / month</li>
-              <li>Semantic search + memory graph</li>
+              <li>Memory graph</li>
               <li>500 AI questions / month</li>
               <li>Unlimited reminders</li>
               <li>All insights: Dots, Intentions, Patterns</li>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { BriefingService } from "@/lib/services/briefing";
 import { CaptureBox } from "@/components/capture";
+import { AnimatedStatValue } from "@/components/stats-refresh-wrapper";
 import { Empty } from "@/components/ui";
 import { MemoryOpener } from "@/components/memory-opener";
 import { relTime, hourInTimezone } from "@/lib/dates";
@@ -43,12 +44,16 @@ function remindColor(iso: string): string {
 export default async function Dashboard() {
   const user = await getUser();
   const sb = await createClient();
-  const briefing = await BriefingService.getForUser(user!.id).catch(() => null);
-  const b = briefing ?? { date: "", today: [], dontForget: [], revisit: [], interesting: null };
 
-  const [{ data: profile }, { data: recent }, { data: upcomingRems }, { data: readingBooks },
-    { count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }, { count: booksWant }, { data: wantBooks }] =
+  // Briefing generation and the dashboard's own stat queries don't depend on
+  // each other at all, but were previously awaited one after another -
+  // running them together roughly halves the slower of the two paths off
+  // the total load time.
+  const [briefing, [{ data: profile }, { data: recent }, { data: upcomingRems }, { data: readingBooks },
+    { count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }, { count: booksWant }, { data: wantBooks }]] =
     await Promise.all([
+      BriefingService.getForUser(user!.id).catch(() => null),
+      Promise.all([
       sb.from("profiles").select("timezone").maybeSingle(),
       sb.from("memories").select("id, original_text, created_at, memory_metadata(type, title)")
         .is("deleted_at", null).order("created_at", { ascending: false }).limit(5),
@@ -69,7 +74,9 @@ export default async function Dashboard() {
       sb.from("books").select("id, title, author")
         .eq("user_id", user!.id).eq("status", "want_to_read")
         .order("updated_at", { ascending: false }).limit(3),
+      ]),
     ]);
+  const b = briefing ?? { date: "", today: [], dontForget: [], revisit: [], interesting: null };
 
   const remIds = (upcomingRems ?? []).map((r: any) => r.memory_id).filter(Boolean) as string[];
   const { data: remMetas } = remIds.length
@@ -87,14 +94,19 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <div className="flex items-center gap-3">
-          <LogoMark size={34} />
-          <h1 className="font-display text-2xl md:text-3xl">
-            {greeting(profile?.timezone)}, <span style={{ color: "var(--ember)" }}>{user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}</span>.
-          </h1>
+      <header className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="flex items-center gap-3">
+            <LogoMark size={34} />
+            <h1 className="font-display text-2xl md:text-3xl">
+              {greeting(profile?.timezone)}, <span style={{ color: "var(--ember)" }}>{user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}</span>.
+            </h1>
+          </div>
+          <p className="text-ink-2 text-sm mt-1">Tell TimelyMemo anything. It remembers what matters.</p>
         </div>
-        <p className="text-ink-2 text-sm mt-1">Tell TimelyMemo anything. It remembers what matters.</p>
+        <Link href="/guide" className="chip !text-xs shrink-0 cursor-pointer hover:!border-ember hover:!text-ember">
+          💡 Get the most from this app
+        </Link>
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -103,7 +115,7 @@ export default async function Dashboard() {
             className="card p-3.5 hover:opacity-90 transition-opacity soft-shadow"
             style={{ borderLeft: `3px solid ${s.color}` }}>
             <p className="font-display text-2xl font-semibold leading-none" style={{ color: s.color }}>
-              {s.value}
+              <AnimatedStatValue value={s.value} color={s.color} />
             </p>
             <p className="text-xs text-ink-2 mt-1.5">{s.label}</p>
           </Link>

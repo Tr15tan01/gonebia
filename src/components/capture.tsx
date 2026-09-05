@@ -31,6 +31,15 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [atValue, setAtValue] = useState("");
   const [updatingCounts, startUpdatingCounts] = useTransition();
+
+  // Broadcasts the refresh-pending state to anywhere else in the page that
+  // wants to react to it (the dashboard's stat cards, via
+  // StatsRefreshWrapper) - CaptureBox and the stat cards live in different
+  // parts of the component tree (one client, one server-rendered), so a
+  // small custom event is the simplest bridge between them.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("timelymemo:refreshing-stats", { detail: updatingCounts }));
+  }, [updatingCounts]);
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);

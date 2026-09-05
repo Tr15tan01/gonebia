@@ -95,9 +95,9 @@ export function UrgentPopup() {
               {new Date(item.when).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
             </p>
             <div className="flex flex-wrap gap-2 mt-4">
-              <button onClick={done} className="btn-primary !py-1.5 !text-xs">Done</button>
-              <button onClick={() => snooze(0.5)} className="btn-ghost !py-1.5 !text-xs">Snooze 30 min</button>
-              <button onClick={() => snooze(6)} className="btn-ghost !py-1.5 !text-xs">Later today</button>
+              <button onClick={done} className="!py-1.5 !px-3 !text-xs rounded-lg font-medium text-white cursor-pointer" style={{ background: "var(--success)" }}>✓ Done</button>
+              <button onClick={() => snooze(0.5)} className="!py-1.5 !px-3 !text-xs rounded-lg font-medium cursor-pointer" style={{ background: "color-mix(in srgb, var(--c-idea) 16%, transparent)", color: "var(--c-idea)" }}>Snooze 30 min</button>
+              <button onClick={() => snooze(6)} className="!py-1.5 !px-3 !text-xs rounded-lg font-medium cursor-pointer" style={{ background: "color-mix(in srgb, var(--c-ask) 16%, transparent)", color: "var(--c-ask)" }}>Later today</button>
             </div>
           </>
         )}

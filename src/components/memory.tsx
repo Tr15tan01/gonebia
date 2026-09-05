@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sheet, useToast } from "@/components/ui";
+import { Sheet, useToast, Spinner } from "@/components/ui";
 import { relTime, fmtDate } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
 
@@ -58,6 +58,7 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [busyAction, setBusyAction] = useState<"done" | "delete" | "merge" | null>(null);
   const toast = useToast();
   const router = useRouter();
 
@@ -101,20 +102,25 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
 
   async function act(action: "done" | "delete" | "merge") {
     if (!id) return;
-    if (action === "done") {
-      await fetch(`/api/memories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
-      toast("Marked as done.");
-      router.refresh();
-    } else if (action === "delete") {
-      await fetch(`/api/memories/${id}`, { method: "DELETE" });
-      toast("Memory deleted.");
-      onClose();
-      router.refresh();
-    } else if (action === "merge" && mergeTarget) {
-      await fetch(`/api/memories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "archived" }) });
-      toast("Merged - the duplicate is archived, the original is kept.");
-      onClose();
-      router.refresh();
+    setBusyAction(action);
+    try {
+      if (action === "done") {
+        await fetch(`/api/memories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
+        toast("Marked as done.");
+        router.refresh();
+      } else if (action === "delete") {
+        await fetch(`/api/memories/${id}`, { method: "DELETE" });
+        toast("Memory deleted.");
+        onClose();
+        router.refresh();
+      } else if (action === "merge" && mergeTarget) {
+        await fetch(`/api/memories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "archived" }) });
+        toast("Merged - the duplicate is archived, the original is kept.");
+        onClose();
+        router.refresh();
+      }
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -174,14 +180,21 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
                 <option value="">Merge into... (mark as duplicate of)</option>
                 {related.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
               </select>
-              <button onClick={() => act("merge")} disabled={!mergeTarget} className="btn-ghost !py-1.5 !text-xs">Merge</button>
+              <button onClick={() => act("merge")} disabled={!mergeTarget || !!busyAction} className="btn-ghost !py-1.5 !text-xs flex items-center gap-1.5">
+                {busyAction === "merge" && <Spinner size={12} />}Merge</button>
             </div>
           )}
 
           <div className="flex flex-wrap gap-2 pt-1">
             {!editing && <button onClick={() => setEditing(true)} className="btn-ghost !py-1.5 !text-xs">Edit text</button>}
-            {memory.status === "open" && <button onClick={() => act("done")} className="btn-primary !py-1.5 !text-xs">Mark done</button>}
-            <button onClick={() => act("delete")} className="btn-ghost !py-1.5 !text-xs !text-red-600 dark:!text-red-400">Delete</button>
+            {memory.status === "open" && (
+              <button onClick={() => act("done")} disabled={!!busyAction} className="btn-primary !py-1.5 !text-xs flex items-center gap-1.5">
+                {busyAction === "done" && <Spinner size={12} />}Mark done
+              </button>
+            )}
+            <button onClick={() => act("delete")} disabled={!!busyAction} className="btn-ghost !py-1.5 !text-xs !text-red-600 dark:!text-red-400 flex items-center gap-1.5">
+              {busyAction === "delete" && <Spinner size={12} />}Delete
+            </button>
             <button onClick={onClose} className="btn-ghost !py-1.5 !text-xs">Cancel</button>
           </div>
           <p className="text-xs text-ink-2">AI metadata is a suggestion - your words above are the source of truth, editable anytime.</p>

@@ -14,7 +14,7 @@ export const LIMITS = {
     discoverPerMonth: 3,
     agentRunsPerMonth: 2,
     priceWatches: 3,
-    semanticSearch: false,
+    semanticSearch: true, // now included on Free too - embeddings are genuinely cheap; see chat.ts
     dailyBriefingNotification: false,
     weeklyReflection: false,
     intentionVsReality: false,

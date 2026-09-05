@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/theme";
 import { Logo, LogoMark } from "@/components/logo";
 import { signOut } from "next-auth/react";
 import { relTime } from "@/lib/dates";
+import { Spinner } from "@/components/ui";
 
 const LINKS = [
   { href: "/dashboard", label: "Today", icon: "\u25cd", color: "var(--ember)" },
@@ -142,10 +143,20 @@ export function AppNav({ children }: { children: React.ReactNode }) {
             <span aria-hidden style={{ color: l.color }}>{l.icon}</span>{l.label}
           </Link>
         ))}
-        <div className="mt-auto flex items-center justify-between px-3 pt-3 border-t border-line">
-          {bell()}
-          <button onClick={logout} disabled={loggingOut} className="btn-ghost !px-2.5" aria-label="Log out" title="Log out">{'\u21e5'}</button>
-          <ThemeToggle />
+        <div className="mt-auto px-3 pt-3 border-t border-line space-y-2">
+          <button
+            onClick={logout}
+            disabled={loggingOut}
+            className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
+            style={{ color: "var(--danger)" }}
+          >
+            <span aria-hidden>{loggingOut ? <Spinner size={16} /> : "\u23fb"}</span>
+            {loggingOut ? "Logging out..." : "Log out"}
+          </button>
+          <div className="flex items-center justify-between px-3">
+            {bell()}
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
@@ -157,12 +168,21 @@ export function AppNav({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="flex items-center gap-2">
             {bell()}
-            <button onClick={logout} disabled={loggingOut} className="btn-ghost !px-2.5" aria-label="Log out">{'\u21e5'}</button>
+            <button
+              onClick={logout} disabled={loggingOut}
+              className="!px-2.5 rounded-lg cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
+              style={{ color: "var(--danger)" }}
+              aria-label="Log out" title="Log out"
+            >
+              {loggingOut ? <Spinner size={16} /> : "\u23fb"}
+            </button>
             <ThemeToggle />
           </div>
         </header>
 
-        <main className="max-w-3xl mx-auto px-4 py-6 pb-28 md:pb-10">{children}</main>
+        <main className="max-w-3xl mx-auto px-4 py-6 pb-28 md:pb-10">
+          <div key={path} className="page-enter">{children}</div>
+        </main>
       </div>
 
       {/* Mobile bottom bar: 5 primary + More */}

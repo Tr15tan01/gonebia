@@ -52,8 +52,14 @@ export function Empty({ icon, title, hint }: { icon: string; title: string; hint
   );
 }
 
-export function Spinner() {
-  return <span className="inline-block size-4 border-2 border-ink-2/30 border-t-ember rounded-full animate-spin" aria-label="Loading" />;
+export function Spinner({ size = 16 }: { size?: number } = {}) {
+  return (
+    <span
+      className="inline-block border-2 border-ink-2/30 border-t-ember rounded-full animate-spin shrink-0"
+      style={{ width: size, height: size }}
+      aria-label="Loading"
+    />
+  );
 }
 
 /* ---------- Big beautiful loader ---------- */
