@@ -10,6 +10,12 @@ import { getPlan, getUsage, bumpUsage, LIMITS, activeReminderCount, limitRespons
 import type { SimilarHit } from "@/lib/types";
 import { getPostHogClient } from "@/lib/posthog-server";
 
+// Capture runs several sequential AI calls in one request (extraction,
+// embedding, duplicate-detection, relationship linking) which can exceed
+// Vercel's default serverless timeout (as short as 10s on some plans) even
+// though it runs fine locally with no such limit - this is very likely why
+// captures were silently completing the memory save but never reaching
+// classification/embedding in production.
 export const maxDuration = 60;
 
 export async function POST(req: Request) {

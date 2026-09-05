@@ -286,6 +286,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
             {[
               { label: "memories this month", used: (usage.text ?? 0) + (usage.voice ?? 0), max: limits.textPerMonth },
               { label: "AI questions", used: usage.chatMonth ?? 0, max: limits.chatPerMonth },
+              { label: "Discover analyses", used: usage.discover ?? 0, max: limits.discoverPerMonth },
               { label: "agent runs", used: usage.agents ?? 0, max: limits.agentRunsPerMonth },
             ].map((row) => (
               <div key={row.label}>

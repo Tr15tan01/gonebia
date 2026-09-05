@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import * as Sentry from "@sentry/nextjs";
 import { createAdmin } from "@/lib/supabase/admin";
 import { rateLimit } from "@/lib/rate-limit";
+import { sendEmail, verifyEmailEmail } from "@/lib/email";
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(72), // bcrypt silently ignores bytes past 72
 });
+
+function hashToken(raw: string) {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
 
 export async function POST(req: NextRequest) {
   // registration has no session yet to key a rate limit on - use the caller's IP instead,
@@ -56,5 +62,29 @@ export async function POST(req: NextRequest) {
     // but make sure it's visible for follow-up
   }
 
-  return NextResponse.json({ ok: true });
+  // Always attempt to send a verification email, regardless of whether
+  // REQUIRE_EMAIL_VERIFICATION is on - so the infrastructure works the
+  // moment Resend is configured, without a separate step later. If Resend
+  // isn't configured yet (testing), sendEmail() just logs and returns
+  // false - it never blocks registration either way.
+  try {
+    const rawToken = crypto.randomBytes(32).toString("base64url");
+    const expires_at = new Date(Date.now() + 24 * 3600_000).toISOString();
+    const { error: tokenErr } = await admin.from("email_verification_tokens").insert({
+      user_id: user.id, token_hash: hashToken(rawToken), expires_at,
+    });
+    if (!tokenErr) {
+      const site = process.env.NEXT_PUBLIC_SITE_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+      const verifyUrl = `${site}/verify-email?token=${rawToken}`;
+      const { subject, html } = verifyEmailEmail(verifyUrl);
+      await sendEmail(email, subject, html);
+    }
+  } catch (e) {
+    console.error("[register] verification email step failed (account still created):", e);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    requireVerification: process.env.REQUIRE_EMAIL_VERIFICATION === "1",
+  });
 }

@@ -60,6 +60,8 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState(0);
+  const [checkEmailFor, setCheckEmailFor] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
   const [now, setNow] = useState(0);
   const router = useRouter();
 
@@ -119,6 +121,11 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
           return;
         }
         posthog.capture("signed_up", { method: "password" });
+        if (body.requireVerification) {
+          setBusy(false);
+          setCheckEmailFor(email);
+          return;
+        }
       }
 
       const result = await signIn("credentials", { email, password, redirect: false });
@@ -145,6 +152,16 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
     }
   }
 
+  async function resendVerification(targetEmail: string) {
+    setResent(false);
+    try {
+      await fetch("/api/verify-email/resend", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: targetEmail }),
+      });
+      setResent(true);
+    } catch {}
+  }
+
   return (
     <div className="min-h-dvh grid place-items-center px-4">
       <div className="w-full max-w-sm space-y-6">
@@ -156,6 +173,19 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
           </div>
         </div>
 
+        {checkEmailFor ? (
+          <div className="card p-5 space-y-3 text-sm">
+            <p>We sent a verification link to <strong>{checkEmailFor}</strong>. Click it to finish setting up your account, then come back and sign in.</p>
+            {resent ? (
+              <p className="text-ink-2 text-xs">Sent again - check your inbox (and spam folder).</p>
+            ) : (
+              <button onClick={() => resendVerification(checkEmailFor)} className="text-ember hover:underline text-xs cursor-pointer">
+                Didn't get it? Resend
+              </button>
+            )}
+            <Link href="/login" onClick={() => setCheckEmailFor(null)} className="text-ink-2 hover:text-ember text-xs block mt-2">Back to sign in</Link>
+          </div>
+        ) : (
         <div className="card p-5 space-y-3 relative overflow-hidden">
           {busy && (
             <div className="absolute inset-0 z-10 grid place-items-center bg-card/85 backdrop-blur-sm">
@@ -262,6 +292,7 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
             )}
           </form>
         </div>
+        )}
         <p className="text-center text-xs text-ink-2">Remember. Connect. Notice.</p>
       </div>
     </div>

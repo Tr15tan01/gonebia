@@ -1,5 +1,15 @@
+import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { scoped } from "@/lib/supabase/scoped";
+
+// Most pages call both getUser() AND createClient() (sometimes more than
+// once each, across a page + its child components) - each was independently
+// calling Auth.js's auth(), which parses and verifies the session cookie
+// every single time. React's cache() dedupes that to once per request
+// automatically (safe: it's scoped to a single request/render pass, never
+// shared across users or requests). This alone measurably speeds up pages
+// that touch auth more than once, for free, with no behavior change.
+const getSession = cache(() => auth());
 
 /** Returns the logged-in user in the same {id, email} shape the app has
  *  always expected (previously from Supabase Auth, now from Auth.js) - kept
@@ -9,7 +19,7 @@ import { scoped } from "@/lib/supabase/scoped";
  *  session for free (no extra DB query), since it was already being
  *  captured at sign-in/sign-up time and just wasn't being surfaced here. */
 export async function getUser() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return null;
   return {
     id: session.user.id as string,
@@ -32,7 +42,7 @@ export async function getUser() {
  *  or unscoped client - every caller is expected to have already checked
  *  getUser() and returned 401 before reaching this. */
 export async function createClient() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) {
     throw new Error("createClient() called without an authenticated session - check getUser() first.");
   }

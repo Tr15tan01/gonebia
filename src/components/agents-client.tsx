@@ -81,7 +81,7 @@ function ProductCard({ o, onTrack, tracking }: { o: any; onTrack: () => void; tr
             <div className="min-w-0">
               <a href={optionHref(o)} target="_blank" rel="noopener noreferrer"
                 className="font-medium cursor-pointer hover:text-ember hover:underline underline-offset-2"
-                title={safeUrl(o?.product_url) ? "Open product page (model-provided - verify it loaded correctly)" : "Search this exact model online"}>
+                title={safeUrl(o?.product_url) ? "Open product page" : "Search this exact model online"}>
                 {o.name} {'\u2197'}
               </a>
               {o.brand && <p className="text-xs text-ink-2">{o.brand}</p>}
@@ -92,6 +92,8 @@ function ProductCard({ o, onTrack, tracking }: { o: any; onTrack: () => void; tr
         </div>
       </div>
 
+      {o.description && <p className="text-ink-2 mt-2.5 leading-snug">{o.description}</p>}
+
       {(o.specs ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2.5">
           {o.specs.map((s: string) => <span key={s} className="chip !text-[11px]">{s}</span>)}
@@ -101,13 +103,25 @@ function ProductCard({ o, onTrack, tracking }: { o: any; onTrack: () => void; tr
       <p className="text-ink-2 mt-2"><span style={{ color: "var(--success)" }}>+</span> {o.pros}</p>
       <p className="text-ink-2"><span style={{ color: "var(--danger)" }}>-</span> {o.cons}</p>
 
+      {safeUrl(o?.product_url) ? (
+        <a href={optionHref(o)} target="_blank" rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1.5 mt-2.5 rounded-lg px-3 py-2 text-xs font-medium cursor-pointer"
+          style={{ background: "color-mix(in srgb, var(--c-buy) 12%, transparent)", color: "var(--c-buy)" }}>
+          Open this exact product {'\u2197'}
+        </a>
+      ) : (
+        <p className="text-xs text-ink-2 mt-2.5 text-center">
+          Couldn't confirm a direct product page - the store links below search for it instead.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
         {optionStores(o).map((s) => (
           <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
             className="chip !text-[11px] cursor-pointer hover:!border-ember hover:!text-ember">{s.name}</a>
         ))}
         <button onClick={onTrack} disabled={tracking} className="btn-ghost !py-1 !px-2.5 !text-[11px] ml-auto">
-          {tracking ? "Tracking..." : "📉 Track this price"}
+          {tracking ? "Tracking..." : "📉 Track this exact product's price"}
         </button>
       </div>
     </div>
@@ -462,7 +476,21 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
           <ul className="card divide-y divide-line">
             {history.map((h) => (
               <li key={h.id} className="p-4 text-sm flex items-center justify-between gap-3">
-                <span className="min-w-0 truncate">{KINDS.find((k) => k.kind === h.kind)?.icon} {h.input}</span>
+                <button
+                  onClick={() => {
+                    setRun({ id: h.id, kind: h.kind, result: h.result ?? {} });
+                    setKind(h.kind);
+                    setInput(h.input);
+                    setGrounded(!!h.result?._grounded);
+                    setSources(((h.result?._sources ?? []) as any[]).filter((s: any) => s?.uri));
+                    setRunError(null);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="min-w-0 truncate text-left flex-1 cursor-pointer hover:text-ember"
+                  title="View this run again"
+                >
+                  {KINDS.find((k) => k.kind === h.kind)?.icon} {h.input}
+                </button>
                 <span className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-ink-2 whitespace-nowrap">{relTime(h.created_at)}</span>
                   <button onClick={() => removeRun(h.id)} aria-label="Remove from history" title="Remove from history"

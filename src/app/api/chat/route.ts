@@ -7,6 +7,9 @@ import { AIChatService } from "@/lib/services/chat";
 import { getPlan, getUsage, bumpChatUsage, LIMITS } from "@/lib/limits";
 import { getPostHogClient } from "@/lib/posthog-server";
 
+// "Ask my memory" runs a search-plan extraction, hybrid retrieval (keyword +
+// embedding), and an answer-generation call, sequentially - can exceed
+// Vercel's default serverless timeout even though it runs fine locally.
 export const maxDuration = 60;
 
 export async function POST(req: Request) {

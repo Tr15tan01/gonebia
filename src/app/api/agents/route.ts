@@ -17,7 +17,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const sb = await createClient();
   const { data: runs, error } = await sb
-    .from("agent_runs").select("id, kind, input, status, created_at")
+    .from("agent_runs").select("id, kind, input, status, result, created_at")
     .order("created_at", { ascending: false }).limit(10);
   if (error && isMissingTable(error)) {
     console.warn("[agents] agent_runs table missing - run supabase/migrations/0005_upgrade.sql");

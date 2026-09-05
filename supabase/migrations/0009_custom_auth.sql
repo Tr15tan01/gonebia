@@ -45,28 +45,29 @@ on conflict (id) do nothing;
 -- Re-point every foreign key that referenced auth.users(id) to reference
 -- public.users(id) instead - generic so it doesn't matter what Postgres
 -- auto-named each constraint, or which column it's on (most are "user_id",
--- profiles' is "id").
+-- profiles' is "id"). Uses pg_constraint directly (Postgres's own catalog)
+-- rather than the information_schema views - those turned out to have a
+-- real reliability gap in production that let some foreign keys go
+-- undetected (confirmed: memory_metadata, usage_counters silently missed
+-- across multiple runs of an earlier version of this query that used
+-- information_schema instead). pg_constraint is authoritative.
 do $$
 declare
   r record;
 begin
   for r in
     select
-      tc.table_name,
-      tc.constraint_name,
-      kcu.column_name
-    from information_schema.table_constraints tc
-    join information_schema.constraint_column_usage ccu
-      on tc.constraint_name = ccu.constraint_name and tc.constraint_schema = ccu.constraint_schema
-    join information_schema.key_column_usage kcu
-      on tc.constraint_name = kcu.constraint_name and tc.constraint_schema = kcu.constraint_schema
-    where tc.constraint_type = 'FOREIGN KEY'
-      and tc.table_schema = 'public'
-      and ccu.table_schema = 'auth' and ccu.table_name = 'users'
+      conrelid::regclass::text as table_name,
+      conname as constraint_name,
+      (select attname from pg_attribute where attrelid = conrelid and attnum = conkey[1]) as column_name
+    from pg_constraint
+    where contype = 'f'
+      and connamespace = 'public'::regnamespace
+      and confrelid = 'auth.users'::regclass
   loop
-    execute format('alter table public.%I drop constraint %I', r.table_name, r.constraint_name);
+    execute format('alter table %s drop constraint %I', r.table_name, r.constraint_name);
     execute format(
-      'alter table public.%I add constraint %I foreign key (%I) references public.users(id) on delete cascade',
+      'alter table %s add constraint %I foreign key (%I) references public.users(id) on delete cascade',
       r.table_name, r.constraint_name, r.column_name
     );
     raise notice 'repointed %.% -> public.users(id)', r.table_name, r.column_name;

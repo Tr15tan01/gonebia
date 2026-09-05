@@ -71,9 +71,21 @@ options for: "${query}"
 User context from memories (budgets, prior purchases, preferences):
  ${block}
 
-For EACH option, search for and use the REAL product from actual retailer/review pages you find -
-never invent a product, price, image, or link. If you can't confirm a real image or product page
-for an option, set that field to null rather than guessing.
+For EACH option, search for and use ONE SPECIFIC REAL PRODUCT found on an actual retailer,
+manufacturer, or review page - never invent a product, price, image, or link, and never
+describe a general category ("a good pair of headphones") instead of a named model.
+
+Be precise, not approximate:
+- product_url must be the DIRECT page for this exact product (e.g. the Amazon/Best Buy/
+  manufacturer product page you found it on) - never a homepage, category page, or generic
+  search results page. If you cannot find a direct product page from your search, set this
+  to null rather than guessing or fabricating one.
+- approx_price should be the actual price shown on the page you found, not a rough estimate
+  of what it "usually costs."
+- description should read like a real product listing - what it actually is and who it's
+  for - not marketing fluff.
+If you can't confirm a real image, price, or product page for an option, set that specific
+field to null rather than guessing - a partial real answer is better than a complete fake one.
 
 Return ONLY JSON:
 { "recommendation": string,
@@ -81,12 +93,13 @@ Return ONLY JSON:
     {
       "name": string (specific model name, e.g. "Sony WH-1000XM5"),
       "brand": string|null,
-      "approx_price": string (e.g. "$349"),
+      "description": string (2-3 sentences: what this product actually is, real specs/positioning),
+      "approx_price": string (e.g. "$349" - the actual listed price you found),
       "currency": string (ISO code, best guess e.g. "USD"),
       "image_url": string|null (a real, directly-loadable product photo URL found while
         searching - https only; null if none found),
-      "product_url": string|null (a real https link to buy or view this exact product;
-        null if none found),
+      "product_url": string|null (the exact https product page you found this on - not a
+        homepage or search page; null if none found),
       "rating": string|null (e.g. "4.6/5 (3,200 reviews)" if you found one),
       "specs": [string] (2-4 short key specs),
       "pros": string,

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui";
 import { MEMORY_TYPES } from "@/lib/types";
@@ -30,6 +30,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   const [phase, setPhase] = useState(0);
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [atValue, setAtValue] = useState("");
+  const [updatingCounts, startUpdatingCounts] = useTransition();
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -136,7 +137,11 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
       setResult(data);
       setText("");
       setAtValue("");
-      router.refresh();
+      // wrapping in a transition (rather than a plain call) gives us
+      // `updatingCounts` below - a real pending flag for exactly how long
+      // the dashboard's stat cards take to refetch, instead of the numbers
+      // just silently changing a moment later with zero feedback.
+      startUpdatingCounts(() => { router.refresh(); });
     } catch (e: any) { toast(e.message); }
     finally { setSaving(false); }
   }
@@ -185,12 +190,12 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
         </div>
       )}
 
-      {result && <Interpretation result={result} onClose={() => setResult(null)} />}
+      {result && <Interpretation result={result} onClose={() => setResult(null)} updatingCounts={updatingCounts} />}
     </div>
   );
 }
 
-function Interpretation({ result, onClose }: { result: CaptureResult; onClose: () => void }) {
+function Interpretation({ result, onClose, updatingCounts }: { result: CaptureResult; onClose: () => void; updatingCounts: boolean }) {
   const s = result.structured;
   const [edit, setEdit] = useState(false);
   const [title, setTitle] = useState(s?.title ?? "");
@@ -232,10 +237,18 @@ function Interpretation({ result, onClose }: { result: CaptureResult; onClose: (
 
   return (
     <div className="card p-4 border-ember/40 rise space-y-3">
-      <p className="text-sm">
-        <span className="text-ember font-medium">Got it.</span>{" "}
-        {result.interpretation}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm">
+          <span className="text-ember font-medium">Got it.</span>{" "}
+          {result.interpretation}
+        </p>
+        {updatingCounts && (
+          <span className="chip !text-[11px] shrink-0 flex items-center gap-1.5" title="Refreshing your counts">
+            <span className="inline-block size-2.5 border-[1.5px] border-ink-2/40 border-t-ember rounded-full animate-spin" />
+            Updating...
+          </span>
+        )}
+      </div>
 
       {result.similar.length >= 1 && (
         <div className="rounded-xl bg-ember-soft p-3 text-sm">

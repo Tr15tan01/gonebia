@@ -39,3 +39,21 @@ export function passwordResetEmail(resetUrl: string): { subject: string; html: s
     `,
   };
 }
+
+export function verifyEmailEmail(verifyUrl: string): { subject: string; html: string } {
+  return {
+    subject: "Verify your TimelyMemo email",
+    html: `
+      <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; color: #292524;">
+        <h2 style="margin-bottom: 8px;">Confirm your email</h2>
+        <p>Welcome to TimelyMemo - please confirm this is your email address to finish setting up your account.</p>
+        <p style="margin: 24px 0;">
+          <a href="${verifyUrl}" style="background:#b45309;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">
+            Verify email
+          </a>
+        </p>
+        <p style="color:#78716c;font-size:13px;">This link expires in 24 hours. If you didn't create a TimelyMemo account, you can safely ignore this email.</p>
+      </div>
+    `,
+  };
+}

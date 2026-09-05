@@ -4,7 +4,7 @@ import { BriefingService } from "@/lib/services/briefing";
 import { CaptureBox } from "@/components/capture";
 import { Empty } from "@/components/ui";
 import { MemoryOpener } from "@/components/memory-opener";
-import { relTime } from "@/lib/dates";
+import { relTime, hourInTimezone } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
 import { LogoMark } from "@/components/logo";
 
@@ -27,8 +27,8 @@ const TYPE_COLOR: Record<string, string> = {
   knowledge: "var(--c-know)", reminder: "var(--c-ask)", thought: "var(--ember)",
 };
 
-function greeting() {
-  const h = new Date().getHours();
+function greeting(timezone?: string | null) {
+  const h = hourInTimezone(timezone);
   return h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
@@ -46,9 +46,10 @@ export default async function Dashboard() {
   const briefing = await BriefingService.getForUser(user!.id).catch(() => null);
   const b = briefing ?? { date: "", today: [], dontForget: [], revisit: [], interesting: null };
 
-  const [{ data: recent }, { data: upcomingRems }, { data: readingBooks },
+  const [{ data: profile }, { data: recent }, { data: upcomingRems }, { data: readingBooks },
     { count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }, { count: booksWant }, { data: wantBooks }] =
     await Promise.all([
+      sb.from("profiles").select("timezone").maybeSingle(),
       sb.from("memories").select("id, original_text, created_at, memory_metadata(type, title)")
         .is("deleted_at", null).order("created_at", { ascending: false }).limit(5),
       sb.from("reminders").select("id, remind_at, memory_id")
@@ -90,7 +91,7 @@ export default async function Dashboard() {
         <div className="flex items-center gap-3">
           <LogoMark size={34} />
           <h1 className="font-display text-2xl md:text-3xl">
-            {greeting()}, <span style={{ color: "var(--ember)" }}>{user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}</span>.
+            {greeting(profile?.timezone)}, <span style={{ color: "var(--ember)" }}>{user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}</span>.
           </h1>
         </div>
         <p className="text-ink-2 text-sm mt-1">Tell TimelyMemo anything. It remembers what matters.</p>

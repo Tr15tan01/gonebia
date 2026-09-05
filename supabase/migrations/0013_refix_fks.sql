@@ -1,9 +1,10 @@
--- Re-runs the SAME repoint logic as 0009, safely, in case any table's
--- foreign key drifted back to auth.users(id) after 0009 already ran - e.g.
--- if 0005_upgrade.sql (or another earlier migration) was re-applied
--- afterward, which would recreate that table with its original
--- "references auth.users(id)" definition, undoing 0009's fix for that one
--- table specifically.
+-- Re-runs the FK-repoint logic, using pg_constraint directly (Postgres's
+-- own catalog) rather than the information_schema views used in the
+-- original version of this migration - those views turned out to have a
+-- real reliability gap: they under-reported which foreign keys still
+-- referenced auth.users, letting some (memory_metadata, usage_counters,
+-- confirmed in production) go undetected and unfixed across multiple runs.
+-- pg_constraint is authoritative and doesn't have this issue.
 --
 -- Safe to run as many times as you want: it only touches constraints that
 -- CURRENTLY reference auth.users - anything already pointing at
@@ -14,33 +15,27 @@ declare
 begin
   for r in
     select
-      tc.table_name,
-      tc.constraint_name,
-      kcu.column_name
-    from information_schema.table_constraints tc
-    join information_schema.constraint_column_usage ccu
-      on tc.constraint_name = ccu.constraint_name and tc.constraint_schema = ccu.constraint_schema
-    join information_schema.key_column_usage kcu
-      on tc.constraint_name = kcu.constraint_name and tc.constraint_schema = kcu.constraint_schema
-    where tc.constraint_type = 'FOREIGN KEY'
-      and tc.table_schema = 'public'
-      and ccu.table_schema = 'auth' and ccu.table_name = 'users'
+      conrelid::regclass::text as table_name,
+      conname as constraint_name,
+      (select attname from pg_attribute where attrelid = conrelid and attnum = conkey[1]) as column_name
+    from pg_constraint
+    where contype = 'f'
+      and connamespace = 'public'::regnamespace
+      and confrelid = 'auth.users'::regclass
   loop
-    execute format('alter table public.%I drop constraint %I', r.table_name, r.constraint_name);
+    execute format('alter table %s drop constraint %I', r.table_name, r.constraint_name);
     execute format(
-      'alter table public.%I add constraint %I foreign key (%I) references public.users(id) on delete cascade',
+      'alter table %s add constraint %I foreign key (%I) references public.users(id) on delete cascade',
       r.table_name, r.constraint_name, r.column_name
     );
-    raise notice 'repointed %.% -> public.users(id)', r.table_name, r.column_name;
+    raise notice 'fixed %.%', r.table_name, r.column_name;
   end loop;
 end $$;
 
--- Run this SELECT afterward (separately) to confirm nothing still points at
+-- Run this afterward (separately) to confirm nothing still points at
 -- auth.users - it should return ZERO rows:
 --
--- select tc.table_name, tc.constraint_name
--- from information_schema.table_constraints tc
--- join information_schema.constraint_column_usage ccu
---   on tc.constraint_name = ccu.constraint_name and tc.constraint_schema = ccu.constraint_schema
--- where tc.constraint_type = 'FOREIGN KEY' and tc.table_schema = 'public'
---   and ccu.table_schema = 'auth' and ccu.table_name = 'users';
+-- select conrelid::regclass as table_name, conname
+-- from pg_constraint
+-- where contype = 'f' and connamespace = 'public'::regnamespace
+--   and confrelid = 'auth.users'::regclass;

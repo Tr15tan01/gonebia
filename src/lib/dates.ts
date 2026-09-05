@@ -38,6 +38,23 @@ export function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** The current hour (0-23) in a given IANA timezone - used for anything that
+ *  should feel like "right now" to the user (e.g. a "good morning" greeting),
+ *  since the server's own clock (UTC on Vercel) has nothing to do with what
+ *  time it actually is for them. Falls back to the server's own hour if the
+ *  timezone string is missing/invalid, rather than throwing. */
+export function hourInTimezone(timezone: string | null | undefined): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone || undefined, hour: "numeric", hourCycle: "h23",
+    }).formatToParts(new Date());
+    const hourPart = parts.find((p) => p.type === "hour")?.value;
+    return hourPart ? parseInt(hourPart, 10) : new Date().getHours();
+  } catch {
+    return new Date().getHours();
+  }
+}
+
 export function localISO(d: Date): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }

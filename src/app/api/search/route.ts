@@ -3,6 +3,8 @@ import { getUser, createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { MemoryRetrievalService } from "@/lib/services/retrieval";
 
+// Involves an embedding call plus the hybrid_search RPC - can exceed
+// Vercel's default serverless timeout even though it runs fine locally.
 export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {

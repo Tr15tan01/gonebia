@@ -33,13 +33,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const admin = createAdmin();
         const { data: user } = await admin
           .from("users")
-          .select("id, email, password_hash, full_name")
+          .select("id, email, password_hash, full_name, email_verified_at")
           .eq("email", email)
           .maybeSingle();
         if (!user || !user.password_hash) return null; // no password set (e.g. Google-only account)
 
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) return null;
+
+        // Gated behind an env flag on purpose: OFF by default so testing
+        // isn't blocked before Resend is configured. Flip
+        // REQUIRE_EMAIL_VERIFICATION=1 once real verification emails are
+        // actually being delivered. Google sign-in is exempt - Google
+        // already verified that email address itself.
+        if (process.env.REQUIRE_EMAIL_VERIFICATION === "1" && !user.email_verified_at) {
+          return null;
+        }
 
         return { id: user.id, email: user.email, name: user.full_name || undefined };
       },
@@ -68,7 +77,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const { data: created, error } = await admin
         .from("users")
-        .insert({ email, full_name: user.name ?? null, password_hash: null })
+        .insert({ email, full_name: user.name ?? null, password_hash: null, email_verified_at: new Date().toISOString() })
         .select("id")
         .single();
       if (error || !created) {
