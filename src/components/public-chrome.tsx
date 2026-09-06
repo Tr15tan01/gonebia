@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo, LogoMark } from "@/components/logo";
 import { MobileMenu } from "@/components/mobile-menu";
 
-export function PublicHeader({ cta }: { cta?: string }) {
+export function PublicHeader({ loggedIn }: { loggedIn?: boolean }) {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur">
       <div className="max-w-5xl mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
@@ -12,9 +12,13 @@ export function PublicHeader({ cta }: { cta?: string }) {
           <Link href="/why" className="text-ink-2 hover:text-ember">Why it matters</Link>
           <Link href="/blog" className="text-ink-2 hover:text-ember">Blog</Link>
           <Link href="/pricing" className="text-ink-2 hover:text-ember">Pricing</Link>
-          <Link href={cta ?? "/login"} className="btn-primary !py-2">{cta ?? "Sign in"}</Link>
+          {/* Sign in is always shown - logging in on this browser before
+              doesn't mean you want to be stuck on this account forever.
+              (loggedIn is still passed in from each page in case you want
+              an "Open app" button back later - just not rendering it for now.) */}
+          <Link href="/login" className="btn-primary !py-2">Sign in</Link>
         </nav>
-        <MobileMenu cta={cta} />
+        <MobileMenu loggedIn={loggedIn} />
       </div>
     </header>
   );

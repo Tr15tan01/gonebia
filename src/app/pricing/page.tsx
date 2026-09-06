@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { getUser } from "@/lib/supabase/server";
 import { UpgradeButton } from "@/components/upgrade-button";
 
 export const metadata: Metadata = {
@@ -16,10 +17,11 @@ const FAQ = [
   { q: "What happens to my data if I downgrade?", a: "Nothing is deleted. You keep all memories, books, people and insights - Free-plan monthly caps just apply to new captures and new AI work." },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const user = await getUser();
   return (
     <div className="min-h-dvh flex flex-col">
-      <PublicHeader />
+      <PublicHeader loggedIn={!!user} />
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 md:px-10 py-14">
         <h1 className="font-display text-4xl">Simple pricing</h1>
         <p className="text-ink-2 mt-3 text-lg leading-relaxed">

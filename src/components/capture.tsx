@@ -122,6 +122,12 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   async function save() {
     if (!text.trim()) return;
     setSaving(true);
+    // Signal the dashboard's stat spinners immediately, the moment the
+    // button is pressed - not after the AI work finishes. The actual
+    // refresh (further down, wrapped in startUpdatingCounts) will re-fire
+    // this once real data is ready; dispatching it here just makes the
+    // feedback feel instant rather than waiting out the whole save first.
+    window.dispatchEvent(new CustomEvent("timelymemo:refreshing-stats", { detail: true }));
     try {
       const res = await fetch("/api/capture", {
         method: "POST",
@@ -151,7 +157,13 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
       // the dashboard's stat cards take to refetch, instead of the numbers
       // just silently changing a moment later with zero feedback.
       startUpdatingCounts(() => { router.refresh(); });
-    } catch (e: any) { toast(e.message); }
+    } catch (e: any) {
+      toast(e.message);
+      // nothing will trigger the refresh-driven "done" signal on a failed
+      // save, since router.refresh() never runs - turn the spinners back
+      // off directly so they don't stay stuck.
+      window.dispatchEvent(new CustomEvent("timelymemo:refreshing-stats", { detail: false }));
+    }
     finally { setSaving(false); }
   }
 

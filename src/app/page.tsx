@@ -39,7 +39,7 @@ export default async function Landing() {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <PublicHeader cta={user ? "Open TimelyMemo" : undefined} />
+      <PublicHeader loggedIn={!!user} />
 
       <main className="flex-1">
         {/* HERO */}

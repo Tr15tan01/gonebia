@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 /** Hamburger menu for public pages on small screens (desktop keeps inline nav). */
-export function MobileMenu({ cta }: { cta?: string }) {
+export function MobileMenu({ loggedIn }: { loggedIn?: boolean }) {
   const [open, setOpen] = useState(false);
   const links = [
     { href: "/#examples", label: "Examples" },
@@ -34,8 +34,8 @@ export function MobileMenu({ cta }: { cta?: string }) {
                   {l.label}
                 </Link>
               ))}
-              <Link href={cta ?? "/login"} onClick={() => setOpen(false)} className="btn-primary mt-2">
-                {cta ?? "Sign in"}
+              <Link href="/login" onClick={() => setOpen(false)} className="btn-primary mt-2 text-center">
+                Sign in
               </Link>
             </nav>
           </div>

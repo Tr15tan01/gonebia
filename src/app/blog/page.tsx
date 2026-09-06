@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { getUser } from "@/lib/supabase/server";
 import { sortedPosts } from "@/lib/blog";
 
 export const metadata: Metadata = {
@@ -8,11 +9,12 @@ export const metadata: Metadata = {
   description: "Notes on memory, attention, and building tools that remember for you.",
 };
 
-export default function BlogPage() {
+export default async function BlogPage() {
+  const user = await getUser();
   const posts = sortedPosts();
   return (
     <div className="min-h-dvh flex flex-col">
-      <PublicHeader />
+      <PublicHeader loggedIn={!!user} />
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 md:px-10 py-14">
         <header>
           <h1 className="font-display text-4xl">Blog</h1>

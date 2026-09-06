@@ -30,6 +30,18 @@ export async function POST(req: Request) {
   const sb = await createClient();
   const admin = createAdmin();
 
+  // The browser sends its real IANA timezone with every capture (used below
+  // for date parsing) but this was never actually being saved anywhere -
+  // profiles.timezone stays at its database default ('UTC') forever unless
+  // someone manually changes it in Settings, which most people never do.
+  // Piggybacking on data already being sent here means it self-corrects on
+  // the very next capture with no separate sync step needed. Fire-and-forget:
+  // never worth delaying or failing a capture over.
+  if (body.timezone) {
+    sb.from("profiles").update({ timezone: body.timezone }).eq("id", user.id)
+      .then(({ error }: any) => { if (error) console.error("[capture] timezone sync failed:", error); });
+  }
+
   // server-side plan limits (never client-enforced)
   const plan = await getPlan(sb, user.id);
   const lim = LIMITS[plan];

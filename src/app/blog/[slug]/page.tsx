@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { getUser } from "@/lib/supabase/server";
 import { getPost, sortedPosts } from "@/lib/blog";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -11,6 +12,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const user = await getUser();
   const { slug } = await params;
   const post = getPost(slug);
   if (!post) notFound();
@@ -18,7 +20,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <PublicHeader />
+      <PublicHeader loggedIn={!!user} />
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 md:px-10 py-14">
         <Link href="/blog" className="text-sm text-ember">← All posts</Link>
 

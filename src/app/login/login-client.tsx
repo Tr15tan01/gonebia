@@ -21,26 +21,40 @@ import posthog from "posthog-js";
 // person gets clear, immediate feedback instead of silently failing forever.
 // The actual enforcement lives server-side in src/lib/auth.ts's authorize().
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60_000;
+const WINDOW_MS = 15 * 60_000; // failures older than this don't count toward the total
+const LOCKOUT_MS = 15 * 60_000; // how long a lockout lasts once triggered
 const ATTEMPTS_KEY = "timelymemo-login-attempts";
 
-function loadAttempts(email: string): { count: number; until: number } {
+function readRecord(email: string): { count: number; windowStart: number; until: number } | null {
   try {
     const raw = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) ?? "{}");
     const rec = raw[email.trim().toLowerCase()];
-    if (!rec || rec.until < Date.now()) return { count: 0, until: 0 };
-    return rec;
-  } catch { return { count: 0, until: 0 }; }
+    if (!rec) return null;
+    const stillLocked = rec.until > Date.now();
+    const stillCounting = !stillLocked && Date.now() - rec.windowStart < WINDOW_MS;
+    return stillLocked || stillCounting ? rec : null;
+  } catch { return null; }
 }
-function recordFailure(email: string) {
+function loadAttempts(email: string): { count: number; until: number } {
+  return readRecord(email) ?? { count: 0, until: 0 };
+}
+function recordFailure(email: string): { count: number; until: number } {
   try {
     const key = email.trim().toLowerCase();
     const raw = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) ?? "{}");
-    const prev = raw[key]?.until > Date.now() ? raw[key] : { count: 0, until: 0 };
+    // Previously this only preserved the running count while ALREADY locked
+    // out, which meant every ordinary failed attempt (1st through 4th, when
+    // `until` is still 0) reset the counter back to 0 on the very next call -
+    // count could never actually reach 5, so the lockout could never trigger.
+    // Now it correctly accumulates failures within a rolling window instead.
+    const existing = readRecord(email);
+    const prev = existing ?? { count: 0, windowStart: Date.now(), until: 0 };
     const count = prev.count + 1;
-    raw[key] = { count, until: count >= MAX_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0 };
+    const rec = { count, windowStart: (prev as any).windowStart ?? Date.now(), until: count >= MAX_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0 };
+    raw[key] = rec;
     sessionStorage.setItem(ATTEMPTS_KEY, JSON.stringify(raw));
-  } catch {}
+    return rec;
+  } catch { return { count: 0, until: 0 }; }
 }
 function clearAttempts(email: string) {
   try {
@@ -86,7 +100,7 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
     setError(null);
 
     if (loadAttempts(email).until > Date.now()) {
-      setError(`Too many attempts. Please try again in ${minsLeft} minute${minsLeft === 1 ? "" : "s"}.`);
+      setError(`You've had ${MAX_ATTEMPTS} unsuccessful attempts. Please try again in ${minsLeft} minute${minsLeft === 1 ? "" : "s"}.`);
       return;
     }
 
@@ -130,13 +144,15 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
 
       const result = await signIn("credentials", { email, password, redirect: false });
       if (result?.error) {
-        recordFailure(email);
-        const attempts = loadAttempts(email);
+        const attempts = recordFailure(email);
         setLockedUntil(attempts.until);
+        const remaining = MAX_ATTEMPTS - attempts.count;
         setError(
           attempts.until > Date.now()
-            ? `Too many attempts. Please try again in ${Math.ceil((attempts.until - Date.now()) / 60_000)} minutes.`
-            : signup ? "Account created, but sign-in failed - please try signing in below." : "Incorrect email or password."
+            ? `You've had ${MAX_ATTEMPTS} unsuccessful attempts. Please try again in ${Math.ceil((attempts.until - Date.now()) / 60_000)} minutes.`
+            : signup ? "Account created, but sign-in failed - please try signing in below."
+            : remaining <= 2 ? `Incorrect email or password. ${remaining} attempt${remaining === 1 ? "" : "s"} left before a temporary lockout.`
+            : "Incorrect email or password."
         );
         setBusy(false);
         return;
