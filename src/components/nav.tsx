@@ -57,7 +57,7 @@ function PlanBadge({ plan }: { plan?: string }) {
   const isPro = plan === "pro";
   return (
     <span
-      className="text-[10px] font-semibold uppercase tracking-wide leading-none -mt-1"
+      className="text-[10px] font-semibold uppercase tracking-wide leading-none whitespace-nowrap"
       style={{ color: isPro ? "var(--pro)" : "var(--premium)" }}
     >
       {isPro ? "⚡ Pro" : "★ Premium"}
@@ -156,7 +156,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
           : undefined
         }
       >
-        <Link href="/dashboard" className="px-3 py-4 flex flex-col items-start gap-0.5" aria-label="TimelyMemo home">
+        <Link href="/dashboard" className="px-3 pt-4 pb-5 flex flex-col items-start gap-1" aria-label="TimelyMemo home">
           <Logo />
           <PlanBadge plan={plan} />
         </Link>
