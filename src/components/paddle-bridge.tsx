@@ -65,7 +65,7 @@ export function PaddleBridge() {
       window.Paddle.Checkout.open({
         items: [{ priceId, quantity: 1 }],
         customer,
-        custom_data: custom,
+        customData: custom,
       });
     };
     window.addEventListener("timelymemo:checkout", handler);
