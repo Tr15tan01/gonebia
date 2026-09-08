@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 import { Sheet, useToast, Spinner } from "@/components/ui";
 import { relTime, fmtDate } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
+import { DateTimePicker } from "@/components/date-time-picker";
 
 export interface Memory {
   id: string; original_text: string; created_at: string;
   type: string; title: string; summary: string;
-  importance: number; status: string; due_at: string | null; people: string[];
+  importance: number; status: string; due_at: string | null; reminder_at?: string | null; people: string[];
 }
+
+const DATEABLE_TYPES = ["task", "promise", "commitment", "event", "reminder"];
 
 const CHIP_CLASS: Record<string, string> = {
   task: "chip-c-task", book: "chip-c-book", purchase: "chip-c-buy", expense: "chip-c-buy",
@@ -59,8 +62,34 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
   const [draft, setDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [busyAction, setBusyAction] = useState<"done" | "delete" | "merge" | null>(null);
+  const [busyDate, setBusyDate] = useState<"due" | "reminder" | null>(null);
   const toast = useToast();
   const router = useRouter();
+
+  /** Used by both the "due date" (task deadline) and "reminder" (when we
+   *  should nudge you) pickers below - same PATCH endpoint the rest of the
+   *  sheet already uses, just a different field. */
+  async function saveDate(field: "due_at" | "reminder_at", iso: string) {
+    if (!id || !memory) return;
+    const which = field === "due_at" ? "due" : "reminder";
+    setBusyDate(which);
+    try {
+      const res = await fetch(`/api/memories/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: memory.type, [field]: iso || null }),
+      });
+      if (res.ok) {
+        setMemory({ ...memory, [field]: iso || null });
+        toast(iso ? `${which === "due" ? "Due date" : "Reminder"} updated.` : `${which === "due" ? "Due date" : "Reminder"} cleared.`);
+        router.refresh();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast(body?.error ?? "Couldn't update the date - please try again.");
+      }
+    } finally {
+      setBusyDate(null);
+    }
+  }
 
   useEffect(() => {
     if (!id) { setMemory(null); setRelated([]); setEditing(false); return; }
@@ -91,9 +120,9 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
     });
     setSavingEdit(false);
     if (res.ok) {
-      setMemory({ ...memory, original_text: text });
       setEditing(false);
       toast("Memory updated.");
+      onClose();
       router.refresh();
     } else {
       toast("Couldn't save - please try again.");
@@ -160,6 +189,27 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
             <span className="chip">{fmtDate(memory.created_at)}</span>
             {memory.status !== "open" && <span className="chip">{memory.status}</span>}
           </div>
+
+          {DATEABLE_TYPES.includes(memory.type) && (
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-ink-2">
+                Due
+                <DateTimePicker
+                  value={memory.due_at ?? ""}
+                  onChange={(v) => saveDate("due_at", v)}
+                />
+                {busyDate === "due" && <Spinner size={12} />}
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-ink-2">
+                Remind me
+                <DateTimePicker
+                  value={memory.reminder_at ?? ""}
+                  onChange={(v) => saveDate("reminder_at", v)}
+                />
+                {busyDate === "reminder" && <Spinner size={12} />}
+              </label>
+            </div>
+          )}
 
           <div>
             <p className="label mb-1.5">Connected memories</p>

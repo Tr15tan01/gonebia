@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { getUser, createClient } from "@/lib/supabase/server";
+import { getPlan } from "@/lib/limits";
 import { prefsSchema } from "@/lib/validation";
 
 export async function GET() {
@@ -20,9 +21,19 @@ export async function PATCH(req: NextRequest) {
   const p = prefsSchema.parse(await req.json());
   const sb = await createClient();
   if (p.timezone) await sb.from("profiles").update({ timezone: p.timezone }).eq("id", user.id);
-  const { theme, quiet_hours_start, quiet_hours_end, push_enabled, insight_sensitivity } = p;
+  const { theme, accent_color, quiet_hours_start, quiet_hours_end, push_enabled, insight_sensitivity } = p;
+  if (accent_color && accent_color !== "amber") {
+    // Defense in depth: the Settings UI already disables non-amber swatches
+    // for Free, but the API is the actual boundary - never trust the client
+    // for a paid-feature gate.
+    const plan = await getPlan(sb, user.id);
+    if (plan === "free") {
+      return NextResponse.json({ error: "Custom accent colors are a Premium/Pro feature.", code: "limit", upgrade: true }, { status: 402 });
+    }
+  }
   const prefPatch: Record<string, unknown> = { user_id: user.id, updated_at: new Date().toISOString() };
   if (theme !== undefined) prefPatch.theme = theme;
+  if (accent_color !== undefined) prefPatch.accent_color = accent_color;
   if (quiet_hours_start !== undefined) prefPatch.quiet_hours_start = quiet_hours_start;
   if (quiet_hours_end !== undefined) prefPatch.quiet_hours_end = quiet_hours_end;
   if (push_enabled !== undefined) prefPatch.push_enabled = push_enabled;

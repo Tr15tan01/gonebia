@@ -79,7 +79,7 @@ export const InsightService = {
 
     // ---- 1. WHAT AM I FORGETTING? (free: 1/week, pro: unlimited) --------
     if (!(await kindSuppressed(admin, userId, "forgotten"))
-        && (plan === "pro" || (await countInsightsSince(admin, userId, "forgotten", weekAgo)) < lim.forgottenPerWeek)) {
+        && (plan !== "free" || (await countInsightsSince(admin, userId, "forgotten", weekAgo)) < lim.forgottenPerWeek)) {
       const { data: open } = await admin
         .from("memory_metadata")
         .select("memory_id, title, type, importance, due_at, created_at, memories!inner(original_text, created_at)")
@@ -115,7 +115,7 @@ export const InsightService = {
 
     // ---- 2. CONNECT THE DOTS (free: 3/month, pro: unlimited) ------------
     if (!(await kindSuppressed(admin, userId, "connection"))
-        && (plan === "pro" || (await countInsightsSince(admin, userId, "connection", monthStart)) < lim.connectDotsPerMonth)) {
+        && (plan !== "free" || (await countInsightsSince(admin, userId, "connection", monthStart)) < lim.connectDotsPerMonth)) {
       const { data: rows } = await admin
         .from("memory_embeddings")
         .select("memory_id, embedding, memories!inner(created_at, memory_metadata(title))")
@@ -154,7 +154,7 @@ export const InsightService = {
     }
 
     // ---- 3. INTENTION VS REALITY (pro only) ------------------------------
-    if (plan === "pro" && !(await kindSuppressed(admin, userId, "intention"))) {
+    if (plan !== "free" && !(await kindSuppressed(admin, userId, "intention"))) {
       const { data: rows } = await admin
         .from("memory_embeddings")
         .select("memory_id, embedding, memories!inner(created_at, memory_metadata!inner(type, status, title))")
@@ -188,7 +188,7 @@ export const InsightService = {
     }
 
     // ---- 4. RECURRING PATTERNS (pro only) --------------------------------
-    if (plan === "pro" && !(await kindSuppressed(admin, userId, "pattern"))) {
+    if (plan !== "free" && !(await kindSuppressed(admin, userId, "pattern"))) {
       const { data: buys } = await admin
         .from("purchases").select("memory_id, product, purchased_at")
         .eq("user_id", userId).not("product", "is", null).limit(200);

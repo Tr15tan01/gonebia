@@ -64,10 +64,31 @@ export async function POST(req: NextRequest) {
   }
 
   const priceId = data?.items?.[0]?.price?.id ?? null;
-  const plan = priceId && priceId === process.env.NEXT_PUBLIC_PADDLE_PRICE_ID ? "pro" : "free";
+  // Two tiers, two price ids. NEXT_PUBLIC_PADDLE_PRICE_ID_PREMIUM/_PRO are the
+  // canonical mapping; NEXT_PUBLIC_PADDLE_PRICE_ID is kept as a fallback alias
+  // for the premium price so existing deployments configured before the Pro
+  // tier existed keep working without a config change.
+  const premiumPriceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PREMIUM || process.env.NEXT_PUBLIC_PADDLE_PRICE_ID;
+  const proPriceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO;
+  let plan: "free" | "premium" | "pro" = "free";
+  if (priceId && proPriceId && priceId === proPriceId) plan = "pro";
+  else if (priceId && premiumPriceId && priceId === premiumPriceId) plan = "premium";
+  else if (priceId) {
+    // Unrecognized price id on an active subscription - this is a config
+    // problem (a new/changed Paddle price that isn't in our env vars yet),
+    // NOT proof the user should be downgraded. Defaulting to "free" here is
+    // exactly the bug that made real, paid subscriptions never switch a user
+    // over to premium/pro in the app: the row would land in the DB (so it's
+    // visible from Supabase) but every getPlan() check would still read
+    // "free". Keep whatever plan the user already had instead of overwriting
+    // it with a guess, and log loudly so it gets noticed.
+    const { data: existing } = await admin.from("subscriptions").select("plan").eq("user_id", userId).maybeSingle();
+    plan = (existing?.plan === "pro" || existing?.plan === "premium") ? existing.plan : "premium";
+    console.error(`[paddle] unrecognized price id ${priceId} for user ${userId} - check NEXT_PUBLIC_PADDLE_PRICE_ID_PREMIUM/_PRO env vars. Falling back to plan=${plan}.`);
+  }
   const periodEnd = data?.current_billing_period?.ends_at ?? null;
 
-  await admin.from("subscriptions").upsert({
+  const { error: upsertError } = await admin.from("subscriptions").upsert({
     user_id: userId,
     plan,
     status: data?.status ?? "none",
@@ -77,7 +98,15 @@ export async function POST(req: NextRequest) {
     current_period_end: periodEnd,
     updated_at: new Date().toISOString(),
   }, { onConflict: "user_id" });
+  if (upsertError) {
+    // This is the other half of "I see the payment in the database but not
+    // in the app": if this upsert fails, Paddle still shows the payment as
+    // successful and nothing here throws, but the app's plan check never
+    // sees it. Surface it loudly instead of returning ok:true silently.
+    console.error(`[paddle] subscriptions upsert FAILED for user ${userId}:`, upsertError);
+    return NextResponse.json({ ok: false, error: upsertError.message }, { status: 500 });
+  }
 
-  console.log(`[paddle] ${name} -> user ${userId} plan=${plan} status=${data?.status}`);
+  console.log(`[paddle] ${name} -> user ${userId} plan=${plan} status=${data?.status} price=${priceId}`);
   return NextResponse.json({ ok: true });
 }

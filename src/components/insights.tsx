@@ -52,7 +52,7 @@ export function InsightsClient({ initial, weekly, plan = "pro" }: { initial: any
           <div className="card p-4 mt-3 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
             <p className="font-medium">You're on the Free plan</p>
             <p className="text-ink-2 mt-1">Intention vs Reality, Recurring Patterns and the Weekly Reflection are Pro features. Free includes Connect the Dots (3/month) and the forgotten check (1/week).</p>
-            <UpgradeButton className="mt-3 !py-1.5 !text-xs" />
+            <UpgradeButton className="mt-3 !py-1.5 !text-xs" showBenefitsLink />
           </div>
         )}
       </header>

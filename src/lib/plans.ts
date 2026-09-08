@@ -1,8 +1,9 @@
-export type Plan = "free" | "pro";
+export type Plan = "free" | "premium" | "pro";
 
 export const LIMITS = {
   free: {
     label: "Free",
+    price: 0,
     textPerMonth: 100,
     voicePerMonth: 20,
     chatPerDay: 10,        // section-4 spec
@@ -15,30 +16,81 @@ export const LIMITS = {
     agentRunsPerMonth: 2,
     priceWatches: 3,
     semanticSearch: true, // now included on Free too - embeddings are genuinely cheap; see chat.ts
+    memoryGraph: false,
     dailyBriefingNotification: false,
     weeklyReflection: false,
     intentionVsReality: false,
     recurringPatterns: false,
     futureMemory: false,
+    googleCalendar: false,
+    gmailContext: false,
+    buyingAgent: false,
+    longRunningCases: false,
+    watches: "none" as "none" | "limited" | "unlimited",
+    colorChoices: 1,
   },
-  pro: {
-    label: "Pro",
+  premium: {
+    label: "Premium",
+    price: 7.99,
     textPerMonth: 1000,
     voicePerMonth: 200,
-    chatPerDay: 100,
+    chatPerDay: 999999,
     chatPerMonth: 500,
     activeReminders: 999999,
     connectDotsPerMonth: 999999,
     youSaidThisBeforePerMonth: 999999,
-    forgottenPerWeek: 999,
-    discoverPerMonth: 200,
+    forgottenPerWeek: 999999,
+    discoverPerMonth: 30,
     agentRunsPerMonth: 50,
-    priceWatches: 10,
+    priceWatches: 25,
     semanticSearch: true,
+    memoryGraph: true,
     dailyBriefingNotification: true,
     weeklyReflection: true,
     intentionVsReality: true,
     recurringPatterns: true,
     futureMemory: true,
+    googleCalendar: true,
+    gmailContext: true,
+    buyingAgent: false,
+    longRunningCases: false,
+    watches: "limited" as "none" | "limited" | "unlimited",
+    // Premium unlocks the full custom color palette (see THEME_COLORS in theme.tsx)
+    colorChoices: 999999,
+  },
+  pro: {
+    label: "Pro",
+    price: 19.99,
+    textPerMonth: 5000,
+    voicePerMonth: 1000,
+    chatPerDay: 999999,
+    chatPerMonth: 1000,
+    activeReminders: 999999,
+    connectDotsPerMonth: 999999,
+    youSaidThisBeforePerMonth: 999999,
+    forgottenPerWeek: 999999,
+    discoverPerMonth: 999999,
+    agentRunsPerMonth: 200,
+    priceWatches: 999999,
+    semanticSearch: true,
+    memoryGraph: true,
+    dailyBriefingNotification: true,
+    weeklyReflection: true,
+    intentionVsReality: true,
+    recurringPatterns: true,
+    futureMemory: true,
+    googleCalendar: true,
+    gmailContext: true,
+    buyingAgent: true,
+    longRunningCases: true,
+    watches: "unlimited" as "none" | "limited" | "unlimited",
+    colorChoices: 999999,
   },
 } as const;
+
+/** Ordered low -> high, useful for "is at least X" comparisons in the UI. */
+export const PLAN_ORDER: Plan[] = ["free", "premium", "pro"];
+
+export function planLabel(plan: Plan): string {
+  return LIMITS[plan].label;
+}

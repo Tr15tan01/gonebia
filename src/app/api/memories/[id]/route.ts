@@ -14,14 +14,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const sb = await createClient();
   const { data } = await sb
     .from("memories")
-    .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, people, category)")
+    .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, reminder_at, people, category)")
     .eq("id", id)
     .single();
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
   const rawMeta: unknown = data.memory_metadata;
   const meta = (Array.isArray(rawMeta) ? rawMeta[0] : rawMeta) as {
     type?: string; title?: string; summary?: string; importance?: number;
-    status?: string; due_at?: string | null; people?: string[]; category?: string;
+    status?: string; due_at?: string | null; reminder_at?: string | null; people?: string[]; category?: string;
   } | null | undefined;
   return NextResponse.json({
     memory: {
@@ -29,6 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       type: meta?.type ?? "thought", title: meta?.title ?? "",
       summary: meta?.summary ?? "", importance: meta?.importance ?? 3,
       status: meta?.status ?? "open", due_at: meta?.due_at ?? null,
+      reminder_at: meta?.reminder_at ?? null,
       people: meta?.people ?? [],
     },
   });
@@ -97,7 +98,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (patch.reminder_at) {
     const plan = await getPlan(sb, user.id);
     if ((await activeReminderCount(admin, user.id)) >= LIMITS[plan].activeReminders) {
-      return NextResponse.json({ error: `Reminder limit reached (${LIMITS[plan].activeReminders} on the ${plan === "free" ? "Free" : "Pro"} plan).`, code: "limit", upgrade: plan === "free" }, { status: 402 });
+      return NextResponse.json({ error: `Reminder limit reached (${LIMITS[plan].activeReminders} on the ${LIMITS[plan].label} plan).`, code: "limit", upgrade: plan === "free" }, { status: 402 });
     }
     await ReminderService.cancelForMemory(id);
     await ReminderService.schedule(user.id, id, patch.reminder_at);

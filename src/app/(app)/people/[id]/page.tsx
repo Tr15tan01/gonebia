@@ -19,16 +19,19 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
     .from("memory_people")
     .select("memories(id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, people, category))")
     .eq("person_id", id)
-    .order("memories.created_at", { ascending: false })
+    .order("created_at", { foreignTable: "memories", ascending: false })
     .limit(50);
 
-  const memories = (rows ?? []).map((r: any) => r.memories).filter(Boolean).map((m: any) => ({
-    id: m.id, original_text: m.original_text, created_at: m.created_at,
-    type: m.memory_metadata?.type ?? "thought", title: m.memory_metadata?.title ?? "",
-    summary: m.memory_metadata?.summary ?? "", importance: m.memory_metadata?.importance ?? 3,
-    status: m.memory_metadata?.status ?? "open", due_at: m.memory_metadata?.due_at ?? null,
-    people: m.memory_metadata?.people ?? [],
-  }));
+  const memories = (rows ?? []).map((r: any) => r.memories).filter(Boolean).map((m: any) => {
+    const meta = Array.isArray(m.memory_metadata) ? m.memory_metadata[0] : m.memory_metadata;
+    return {
+      id: m.id, original_text: m.original_text, created_at: m.created_at,
+      type: meta?.type ?? "thought", title: meta?.title ?? "",
+      summary: meta?.summary ?? "", importance: meta?.importance ?? 3,
+      status: meta?.status ?? "open", due_at: meta?.due_at ?? null,
+      people: meta?.people ?? [],
+    };
+  }).sort((a: any, b: any) => +new Date(b.created_at) - +new Date(a.created_at));
 
   // Facts are derived ONLY from memories the user actually recorded - nothing inferred beyond their words.
   const facts: string[] = [];

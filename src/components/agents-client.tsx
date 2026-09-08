@@ -238,7 +238,7 @@ export function AgentsClient({ plan, used, limit }: { plan: string; used: number
         <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
           <p className="font-medium">Monthly agent runs used up</p>
           <p className="text-ink-2 mt-1">Pro includes 50 runs/month and price tracking.</p>
-          <UpgradeButton className="mt-3 !py-1.5 !text-xs" />
+          <UpgradeButton className="mt-3 !py-1.5 !text-xs" showBenefitsLink />
         </div>
       )}
 

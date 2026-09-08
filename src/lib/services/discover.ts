@@ -36,7 +36,7 @@ export const DiscoverService = {
       const days = windowDays ?? 90;
       const items = await memoriesInWindow(admin, userId,
         new Date(Date.now() - days * DAY).toISOString(), new Date().toISOString(),
-        plan === "pro" ? 150 : 80);
+        plan !== "free" ? 150 : 80);
       if (items.length < 3) {
         return { error: items.length === 0
           ? `No memories in the last ${days} days yet - tell TimelyMemo a few things and this analysis will light up.`
@@ -151,7 +151,7 @@ Max 6 alerts. Always include one calm_note (something going fine).`);
     if (kind === "conflicts") {
       const all = await memoriesInWindow(admin, userId,
         new Date(Date.now() - 365 * DAY).toISOString(), new Date().toISOString(),
-        plan === "pro" ? 120 : 70);
+        plan !== "free" ? 120 : 70);
       if (all.length < 8) return { error: `You have ${all.length} memories - finding tensions needs at least 8 to be meaningful. Keep capturing.` };
       const result = await geminiJSON(`Compare what this person said across time and find real TENSIONS between their own statements - goals vs actions, commitments vs stated priorities, a decision later talked around, preferences that flipped.
 
@@ -167,7 +167,7 @@ Shape: { "framing": string (one sentence, warm, sets the non-judgmental tone), "
     if (kind === "myself") {
       const all = await memoriesInWindow(admin, userId,
         new Date(Date.now() - 365 * DAY).toISOString(), new Date().toISOString(),
-        plan === "pro" ? 150 : 80);
+        plan !== "free" ? 150 : 80);
       if (all.length < 10) return { error: `You have ${all.length} memories so far - this portrait gets genuinely interesting around 10. Keep capturing.` };
       const result = await geminiJSON(`Build an honest portrait of this person from their own captured memories.
 

@@ -52,7 +52,20 @@ const KIND_ICON: Record<string, string> = {
   future_note: "\ud83d\udd70\ufe0f",
 };
 
-export function AppNav({ children }: { children: React.ReactNode }) {
+function PlanBadge({ plan }: { plan?: string }) {
+  if (!plan || plan === "free") return null;
+  const isPro = plan === "pro";
+  return (
+    <span
+      className="text-[10px] font-semibold uppercase tracking-wide leading-none -mt-1"
+      style={{ color: isPro ? "var(--pro)" : "var(--premium)" }}
+    >
+      {isPro ? "⚡ Pro" : "★ Premium"}
+    </span>
+  );
+}
+
+export function AppNav({ children, plan }: { children: React.ReactNode; plan?: string }) {
   const path = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -135,8 +148,18 @@ export function AppNav({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh flex">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-line p-4 gap-1 sticky top-0 h-dvh">
-        <Link href="/dashboard" className="px-3 py-4 inline-flex" aria-label="TimelyMemo home"><Logo /></Link>
+      <aside
+        className="hidden md:flex flex-col w-56 shrink-0 border-r border-line p-4 gap-1 sticky top-0 h-dvh"
+        style={
+          plan === "premium" ? { borderTop: "3px solid var(--premium)" }
+          : plan === "pro" ? { borderTop: "3px solid var(--pro)" }
+          : undefined
+        }
+      >
+        <Link href="/dashboard" className="px-3 py-4 flex flex-col items-start gap-0.5" aria-label="TimelyMemo home">
+          <Logo />
+          <PlanBadge plan={plan} />
+        </Link>
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href}
             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${path.startsWith(l.href) ? "bg-ember-soft text-ember font-medium" : "text-ink-2 hover:text-ink hover:bg-paper-2"}`}>
@@ -165,6 +188,7 @@ export function AppNav({ children }: { children: React.ReactNode }) {
         <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b border-line bg-paper/90 backdrop-blur">
           <Link href="/dashboard" className="inline-flex items-center gap-2" aria-label="TimelyMemo home">
             <LogoMark size={24} /><span className="font-display text-lg">TimelyMemo</span>
+            <PlanBadge plan={plan} />
           </Link>
           <div className="flex items-center gap-2">
             {bell()}

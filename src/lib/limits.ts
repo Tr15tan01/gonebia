@@ -2,7 +2,10 @@ import * as Sentry from "@sentry/nextjs";
 import { createAdmin } from "@/lib/supabase/admin";
 import { LIMITS, type Plan } from "@/lib/plans";
 
-/** Plan resolution: active/trialing = pro; canceled/past_due keep pro until period end. */
+/** Plan resolution: active/trialing = whatever paid plan was recorded (premium or
+ *  pro); canceled/past_due keep that plan until period end (grace period), then
+ *  fall back to free. `subscriptions.plan` is written exclusively by the Paddle
+ *  webhook (see /api/paddle/webhook) - this function never writes, only reads. */
 export async function getPlan(sb: any, userId: string): Promise<Plan> {
   try {
     const { data } = await sb
@@ -14,7 +17,8 @@ export async function getPlan(sb: any, userId: string): Promise<Plan> {
     const active = ["active", "trialing"].includes(data.status);
     const grace = ["canceled", "past_due"].includes(data.status)
       && data.current_period_end && new Date(data.current_period_end) > new Date();
-    return data.plan === "pro" && (active || grace) ? "pro" : "free";
+    if (!(active || grace)) return "free";
+    return data.plan === "pro" ? "pro" : data.plan === "premium" ? "premium" : "free";
   } catch { return "free"; }
 }
 

@@ -29,11 +29,15 @@ export const viewport: Viewport = {
 };
 
 const themeInit = `(function(){try{var t=localStorage.getItem('gonebia-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}})()`;
+const accentInit = `(function(){try{var a=localStorage.getItem('gonebia-accent');var map={amber:'#b45309',emerald:'#059669',teal:'#0d9488',sky:'#0284c7',indigo:'#4f46e5',violet:'#7c3aed',rose:'#e11d48',slate:'#475569'};var hex=map[a];if(hex){document.documentElement.style.setProperty('--ember',hex);document.documentElement.style.setProperty('--ember-soft','color-mix(in srgb, '+hex+' 12%, transparent)');}}catch(e){}})()`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${fraunces.variable} ${inter.variable}`}>
-      <head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        <script dangerouslySetInnerHTML={{ __html: accentInit }} />
+      </head>
       <body className="font-sans antialiased">
         <AuthSessionProvider>
           {children}

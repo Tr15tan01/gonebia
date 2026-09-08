@@ -48,17 +48,17 @@ export async function POST(req: Request) {
   const usage = await getUsage(sb, user.id);
   const isVoice = body.source === "voice";
   if (isVoice && usage.voice >= lim.voicePerMonth) {
-    return limitResponse("voice", `Free plan allows ${lim.voicePerMonth} voice memories per month (used ${usage.voice}). Upgrade to Pro for ${LIMITS.pro.voicePerMonth}.`);
+    return limitResponse("voice", `${lim.label} plan allows ${lim.voicePerMonth} voice memories per month (used ${usage.voice}). Upgrade to Premium for ${LIMITS.premium.voicePerMonth}, or Pro for ${LIMITS.pro.voicePerMonth}.`);
   }
   if (!isVoice && usage.text >= lim.textPerMonth) {
-    return limitResponse("text", `Free plan allows ${lim.textPerMonth} memories per month (used ${usage.text}). Upgrade to Pro for ${LIMITS.pro.textPerMonth}.`);
+    return limitResponse("text", `${lim.label} plan allows ${lim.textPerMonth} memories per month (used ${usage.text}). Upgrade to Premium for ${LIMITS.premium.textPerMonth}, or Pro for ${LIMITS.pro.textPerMonth}.`);
   }
 
   // reminder cap (active pending reminders)
   const remindersAtCap = (await activeReminderCount(admin, user.id)) >= lim.activeReminders;
   const warnings: string[] = [];
   if (remindersAtCap) {
-    warnings.push(`Reminder limit reached (${lim.activeReminders} on the ${plan === "free" ? "Free" : "Pro"} plan) - this memory is saved, but no reminder was scheduled.`);
+    warnings.push(`Reminder limit reached (${lim.activeReminders} on the ${lim.label} plan) - this memory is saved, but no reminder was scheduled.`);
   }
 
   // memories always start with a capital letter
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     const others = (hits ?? []).filter((h: any) => h.memory_id !== mem.id).slice(0, 3);
 
     let allowed = true;
-    if (others.length && plan !== "pro") {
+    if (others.length && plan === "free") {
       const ystb = await getUsage(sb, user.id);
       allowed = ystb.ystb < lim.youSaidThisBeforePerMonth;
       if (allowed) await bumpUsage(sb, user.id, "ystb_month");

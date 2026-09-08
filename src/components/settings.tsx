@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
-import { useTheme } from "@/components/theme";
+import { useTheme, AccentPicker } from "@/components/theme";
 import { useToast } from "@/components/ui";
 import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
 import { signOut } from "next-auth/react";
@@ -183,6 +184,20 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
               className={`btn-ghost !py-1.5 !text-xs ${theme === t ? "!border-ember !text-ember" : ""}`}>{t}</button>
           ))}
         </div>
+        <div className="pt-2 border-t border-line">
+          <div className="flex items-center justify-between">
+            <p className="text-sm">Accent color</p>
+            {plan === "free" && (
+              <span className="chip !text-ink-2">Premium+ <span aria-hidden>🔒</span></span>
+            )}
+          </div>
+          <p className="text-xs text-ink-2 mt-0.5 mb-2">
+            {plan === "free"
+              ? "Free includes the default amber. Premium and Pro unlock the full palette."
+              : "Pick the accent color used throughout the app."}
+          </p>
+          <AccentPicker initial={prefs?.accent_color} canCustomize={plan !== "free"} onSaved={toast} />
+        </div>
       </section>
 
       <section className="card p-5 space-y-3">
@@ -274,11 +289,25 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
         <p className="text-xs text-ink-2">During quiet hours reminders are postponed, never dropped.</p>
       </section>
 
-      <section className="card p-5 space-y-3" style={plan === "pro" ? { borderColor: "color-mix(in srgb, var(--ember) 40%, transparent)" } : undefined}>
+      <section
+        className="card p-5 space-y-3"
+        style={
+          plan === "pro" ? { borderColor: "color-mix(in srgb, var(--pro) 40%, transparent)" }
+          : plan === "premium" ? { borderColor: "color-mix(in srgb, var(--premium) 40%, transparent)" }
+          : undefined
+        }
+      >
         <div className="flex items-center justify-between">
           <p className="label">Plan</p>
-          <span className={`chip ${plan === "pro" ? "!text-ember !border-ember/50 font-semibold" : ""}`}>
-            {plan === "pro" ? "⭐ Pro" : "Free"}
+          <span
+            className="chip font-semibold"
+            style={
+              plan === "pro" ? { color: "var(--pro)", borderColor: "color-mix(in srgb, var(--pro) 50%, transparent)" }
+              : plan === "premium" ? { color: "var(--premium)", borderColor: "color-mix(in srgb, var(--premium) 50%, transparent)" }
+              : undefined
+            }
+          >
+            {plan === "pro" ? "⚡ Pro" : plan === "premium" ? "★ Premium" : "Free"}
           </span>
         </div>
         {usage && limits && (
@@ -304,9 +333,10 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
             ))}
           </div>
         )}
-        {plan === "free" ? <UpgradeButton className="w-full" /> : (
-          <ManageBillingButton />
-        )}
+        {plan === "free" ? <UpgradeButton className="w-full" /> : <ManageBillingButton />}
+        <Link href="/pricing" className="block text-center text-xs text-ink-2 hover:text-ink underline underline-offset-2">
+          {plan === "free" ? "See what you get on Premium or Pro" : "Compare plans"}
+        </Link>
       </section>
 
       <section className="card p-5 space-y-3">

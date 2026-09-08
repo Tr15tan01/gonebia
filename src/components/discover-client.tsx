@@ -71,7 +71,7 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
         <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
           <p className="font-medium">Monthly Discover analyses used up</p>
           <p className="text-ink-2 mt-1">Pro gives you {200} per month plus unlimited insights.</p>
-          <UpgradeButton className="mt-3 !py-1.5 !text-xs" />
+          <UpgradeButton className="mt-3 !py-1.5 !text-xs" showBenefitsLink />
         </div>
       )}
 

@@ -83,6 +83,7 @@ export const goalSchema = z.object({
 
 export const prefsSchema = z.object({
   theme: z.enum(["light", "dark", "system"]).optional(),
+  accent_color: z.enum(["amber", "emerald", "teal", "sky", "indigo", "violet", "rose", "slate"]).optional(),
   quiet_hours_start: z.number().int().min(0).max(23).optional(),
   quiet_hours_end: z.number().int().min(0).max(23).optional(),
   push_enabled: z.boolean().optional(),
