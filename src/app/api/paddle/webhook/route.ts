@@ -19,6 +19,18 @@ function verify(raw: string, header: string | null, secret: string): boolean {
   } catch { return false; }
 }
 
+/** Maps a Paddle price id to our plan tiers, or null if unrecognized.
+ *  Pure lookup only - callers decide what "unrecognized" means for them
+ *  (the subscription path falls back to the user's existing plan rather
+ *  than guessing; the one-time transaction path just logs and ignores). */
+function resolvePlan(priceId: string | null): "premium" | "pro" | null {
+  const premiumPriceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PREMIUM || process.env.NEXT_PUBLIC_PADDLE_PRICE_ID;
+  const proPriceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO;
+  if (priceId && proPriceId && priceId === proPriceId) return "pro";
+  if (priceId && premiumPriceId && priceId === premiumPriceId) return "premium";
+  return null;
+}
+
 async function findUserId(admin: any, data: any): Promise<string | null> {
   if (data?.custom_data?.user_id) return data.custom_data.user_id;
   // fallback: resolve by customer email via Paddle API (needs PADDLE_API_KEY)
@@ -41,22 +53,70 @@ async function findUserId(admin: any, data: any): Promise<string | null> {
 
 export async function POST(req: NextRequest) {
   const secret = process.env.PADDLE_WEBHOOK_SECRET;
-  if (!secret) return NextResponse.json({ error: "webhook not configured" }, { status: 500 });
+  if (!secret) {
+    console.error("[paddle] PADDLE_WEBHOOK_SECRET is not set - every webhook delivery will be rejected.");
+    return NextResponse.json({ error: "webhook not configured" }, { status: 500 });
+  }
 
   const raw = await req.text();
-  if (!verify(raw, req.headers.get("paddle-signature"), secret)) {
+  const sigHeader = req.headers.get("paddle-signature");
+  if (!verify(raw, sigHeader, secret)) {
+    // If you're testing in Paddle Sandbox: sandbox and production each have
+    // their OWN webhook destination and secret in the Paddle dashboard - a
+    // secret copied from the wrong one will fail verification for every
+    // single sandbox event, which looks exactly like "nothing happens".
+    console.error(`[paddle] signature verification FAILED. header present=${!!sigHeader}. Check that PADDLE_WEBHOOK_SECRET matches the destination (sandbox vs live) Paddle is actually sending from.`);
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
   const event = JSON.parse(raw);
   const name: string = event?.event_name ?? "";
   const data = event?.data ?? {};
-
-  if (!name.startsWith("subscription.")) {
-    return NextResponse.json({ ok: true, ignored: name }); // transactions, adjustments, etc.
-  }
+  // Log EVERY verified delivery, even ones we're about to ignore - if you
+  // pay in sandbox and see nothing in these logs at all, Paddle isn't
+  // reaching this endpoint (wrong webhook URL, app not publicly reachable,
+  // or the notification destination is disabled) - that's a Paddle
+  // dashboard config problem, not something in this code.
+  console.log(`[paddle] received ${name} (id=${data?.id ?? "?"})`);
 
   const admin = createAdmin();
+
+  if (name.startsWith("transaction.") && (name === "transaction.completed" || name === "transaction.paid")) {
+    // Covers a one-time (non-recurring) price: Paddle never sends a single
+    // subscription.* event for those, only transaction.* - if your Premium/
+    // Pro price was ever created as "one-time" instead of "recurring" in
+    // the Paddle dashboard, this is the only event you'll ever get for it.
+    const userId = await findUserId(admin, data);
+    if (!userId) {
+      console.error("[paddle] transaction event but could not resolve user for", data?.id);
+      return NextResponse.json({ ok: true, warning: "user not resolved" });
+    }
+    const priceId = data?.items?.[0]?.price?.id ?? null;
+    const plan = resolvePlan(priceId);
+    if (!plan) {
+      console.error(`[paddle] transaction ${data?.id} has no recognized price id (${priceId}) - ignoring, nothing written.`);
+      return NextResponse.json({ ok: true, warning: "unrecognized price" });
+    }
+    const { error } = await admin.from("subscriptions").upsert({
+      user_id: userId,
+      plan,
+      status: "active",
+      paddle_customer_id: data?.customer_id ?? null,
+      price_id: priceId,
+      current_period_end: null, // one-time purchase, not a recurring period
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    if (error) {
+      console.error(`[paddle] subscriptions upsert FAILED (transaction path) for user ${userId}:`, error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    console.log(`[paddle] ${name} -> user ${userId} plan=${plan} (one-time)`);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!name.startsWith("subscription.")) {
+    return NextResponse.json({ ok: true, ignored: name }); // adjustments, customer.*, etc.
+  }
   const userId = await findUserId(admin, data);
   if (!userId) {
     console.error("[paddle] could not resolve user for", data?.id);
@@ -64,16 +124,8 @@ export async function POST(req: NextRequest) {
   }
 
   const priceId = data?.items?.[0]?.price?.id ?? null;
-  // Two tiers, two price ids. NEXT_PUBLIC_PADDLE_PRICE_ID_PREMIUM/_PRO are the
-  // canonical mapping; NEXT_PUBLIC_PADDLE_PRICE_ID is kept as a fallback alias
-  // for the premium price so existing deployments configured before the Pro
-  // tier existed keep working without a config change.
-  const premiumPriceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PREMIUM || process.env.NEXT_PUBLIC_PADDLE_PRICE_ID;
-  const proPriceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO;
-  let plan: "free" | "premium" | "pro" = "free";
-  if (priceId && proPriceId && priceId === proPriceId) plan = "pro";
-  else if (priceId && premiumPriceId && priceId === premiumPriceId) plan = "premium";
-  else if (priceId) {
+  let plan: "free" | "premium" | "pro" = resolvePlan(priceId) ?? "free";
+  if (priceId && !resolvePlan(priceId)) {
     // Unrecognized price id on an active subscription - this is a config
     // problem (a new/changed Paddle price that isn't in our env vars yet),
     // NOT proof the user should be downgraded. Defaulting to "free" here is
