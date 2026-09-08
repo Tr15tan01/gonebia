@@ -7,16 +7,39 @@ export const dynamic = "force-dynamic";
 /** Paddle Billing webhook. Signature: paddle-signature = "ts=...;h1=..."
  *  where h1 = HMAC-SHA256("${ts}:${rawBody}", WEBHOOK_SECRET). Verified with
  *  timing-safe compare. Subscription state is the ONLY writer of `subscriptions`. */
-function verify(raw: string, header: string | null, secret: string): boolean {
-  if (!header) return false;
+function verify(raw: string, header: string | null, secret: string): { ok: boolean; reason?: string } {
+  if (!header) return { ok: false, reason: "no paddle-signature header on the request" };
   const parts = Object.fromEntries(
-    header.split(";").map((kv) => kv.split("=") as [string, string])
+    header.split(";").map((kv) => {
+      const [k, v] = kv.split("=");
+      return [k?.trim(), v?.trim()];
+    })
   );
-  if (!parts.ts || !parts.h1) return false;
+  if (!parts.ts || !parts.h1) return { ok: false, reason: `header didn't parse into ts/h1: "${header}"` };
   const expected = crypto.createHmac("sha256", secret).update(`${parts.ts}:${raw}`).digest("hex");
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.h1));
-  } catch { return false; }
+    const match = expected.length === parts.h1.length
+      && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.h1));
+    if (!match) {
+      // Redacted on purpose - enough to compare without printing the full
+      // signature or secret to logs. If expectedPrefix/receivedPrefix don't
+      // even start the same, the secret itself is wrong (wrong destination,
+      // stale/regenerated key, or a copy-paste issue like a wrapping quote
+      // or trailing whitespace baked into the env var). If they DO match
+      // but the full values differ, look at bodyLength - a reverse proxy
+      // or hosting platform that re-serializes the JSON body (re-indents,
+      // reorders keys, changes line endings) before your route handler
+      // sees it will silently break this even with the exact right secret.
+      return {
+        ok: false,
+        reason: `mismatch. expectedPrefix=${expected.slice(0, 8)} receivedPrefix=${parts.h1.slice(0, 8)} ` +
+          `secretLen=${secret.length} bodyLength=${raw.length} ts=${parts.ts}`,
+      };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: `timingSafeEqual threw: ${(e as Error).message}` };
+  }
 }
 
 /** Maps a Paddle price id to our plan tiers, or null if unrecognized.
@@ -52,25 +75,37 @@ async function findUserId(admin: any, data: any): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.PADDLE_WEBHOOK_SECRET;
-  if (!secret) {
+  const rawSecret = process.env.PADDLE_WEBHOOK_SECRET;
+  if (!rawSecret) {
     console.error("[paddle] PADDLE_WEBHOOK_SECRET is not set - every webhook delivery will be rejected.");
     return NextResponse.json({ error: "webhook not configured" }, { status: 500 });
   }
+  // Defensive: some hosting dashboards store the value exactly as typed,
+  // including accidental wrapping quotes or trailing whitespace/newlines
+  // from a copy-paste - either would silently change the HMAC key and make
+  // every signature fail even though the secret "looks right" when viewed.
+  const secret = rawSecret.trim().replace(/^['"]|['"]$/g, "");
 
   const raw = await req.text();
   const sigHeader = req.headers.get("paddle-signature");
-  if (!verify(raw, sigHeader, secret)) {
+  const verified = verify(raw, sigHeader, secret);
+  if (!verified.ok) {
     // If you're testing in Paddle Sandbox: sandbox and production each have
     // their OWN webhook destination and secret in the Paddle dashboard - a
     // secret copied from the wrong one will fail verification for every
     // single sandbox event, which looks exactly like "nothing happens".
-    console.error(`[paddle] signature verification FAILED. header present=${!!sigHeader}. Check that PADDLE_WEBHOOK_SECRET matches the destination (sandbox vs live) Paddle is actually sending from.`);
+    console.error(`[paddle] signature verification FAILED: ${verified.reason}`);
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
   const event = JSON.parse(raw);
-  const name: string = event?.event_name ?? "";
+  // Paddle's field is `event_type` (e.g. "subscription.created"). Keeping
+  // event_name as a fallback costs nothing and guards against any future
+  // payload variant, but event_type is the documented field - reading the
+  // wrong one here meant `name` was always "", so every single event fell
+  // through to the "ignored" branch no matter how correct everything else
+  // was (destination URL, secret, price ids - all of it).
+  const name: string = event?.event_type ?? event?.event_name ?? "";
   const data = event?.data ?? {};
   // Log EVERY verified delivery, even ones we're about to ignore - if you
   // pay in sandbox and see nothing in these logs at all, Paddle isn't
