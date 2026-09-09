@@ -79,9 +79,14 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
         body: JSON.stringify({ type: memory.type, [field]: iso || null }),
       });
       if (res.ok) {
-        setMemory({ ...memory, [field]: iso || null });
-        toast(iso ? `${which === "due" ? "Due date" : "Reminder"} updated.` : `${which === "due" ? "Due date" : "Reminder"} cleared.`);
-        router.refresh();
+        const body = await res.json().catch(() => ({}));
+        if (body?.safetyWarning) {
+          toast(body.safetyWarning);
+        } else {
+          setMemory({ ...memory, [field]: iso || null });
+          toast(iso ? `${which === "due" ? "Due date" : "Reminder"} updated.` : `${which === "due" ? "Due date" : "Reminder"} cleared.`);
+          router.refresh();
+        }
       } else {
         const body = await res.json().catch(() => ({}));
         toast(body?.error ?? "Couldn't update the date - please try again.");

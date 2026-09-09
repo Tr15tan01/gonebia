@@ -95,20 +95,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await sb.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("memory_id", id);
     await sb.from("insights").update({ status: "done" }).eq("data->>memory_id", id).eq("kind", "forgotten");
   }
+  let safetyWarning: string | undefined;
   if (patch.reminder_at) {
     const plan = await getPlan(sb, user.id);
     if ((await activeReminderCount(admin, user.id)) >= LIMITS[plan].activeReminders) {
       return NextResponse.json({ error: `Reminder limit reached (${LIMITS[plan].activeReminders} on the ${LIMITS[plan].label} plan).`, code: "limit", upgrade: plan === "free" }, { status: 402 });
     }
     await ReminderService.cancelForMemory(id);
-    await ReminderService.schedule(user.id, id, patch.reminder_at);
+    const scheduled = await ReminderService.schedule(user.id, id, patch.reminder_at);
+    if (!scheduled.ok) safetyWarning = scheduled.safetyWarning;
   } else if (patch.reminder_at === null) {
     await ReminderService.cancelForMemory(id);
   }
   // the dashboard reads a cached daily briefing - drop it so Today/
   // Don't forget reflect this change immediately on refresh
   await sb.from("daily_briefings").delete().eq("user_id", user.id);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, safetyWarning });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

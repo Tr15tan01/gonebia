@@ -1,4 +1,5 @@
 import { BookService } from "./books";
+import { screenForCrisisContent, crisisMessage } from "./safety";
 import type { Structured } from "@/lib/types";
 
 /** High-precision task patterns: assignments from other people and explicit
@@ -21,7 +22,7 @@ export const ApplyService = {
     originalText: string,
     pickedAt: string | null,
     memoryCreatedAt: string
-  ): Promise<{ ok: boolean; error?: unknown }> {
+  ): Promise<{ ok: boolean; error?: unknown; safetyWarning?: string }> {
     // interpretation and book are NOT memory_metadata columns - strip them
     const { interpretation: _interp, book, ...meta } = structured;
 
@@ -59,6 +60,7 @@ export const ApplyService = {
       return { ok: false, error };
     }
 
+    let safetyWarning: string | undefined;
     try {
       if (book && meta.type === "book" && bookId) {
         try {
@@ -103,7 +105,12 @@ export const ApplyService = {
         if (person) await admin.from("memory_people").upsert({ memory_id: memoryId, person_id: person.id, user_id: userId });
       }
       if (meta.reminder_at) {
-        await admin.from("reminders").insert({ user_id: userId, memory_id: memoryId, remind_at: meta.reminder_at });
+        const screen = screenForCrisisContent(originalText);
+        if (screen.flagged) {
+          safetyWarning = crisisMessage(screen.kind!);
+        } else {
+          await admin.from("reminders").insert({ user_id: userId, memory_id: memoryId, remind_at: meta.reminder_at });
+        }
       }
       if (meta.review_at) {
         await admin.from("reminders").insert({ user_id: userId, memory_id: memoryId, remind_at: meta.review_at });
@@ -117,6 +124,6 @@ export const ApplyService = {
     } catch (e) {
       console.error("[apply] side-effect failure for memory", memoryId, e);
     }
-    return { ok: true };
+    return { ok: true, safetyWarning };
   },
 };

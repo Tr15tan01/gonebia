@@ -25,13 +25,13 @@ const LINKS = [
 /** Mobile bottom bar: 5 primary destinations; everything else in the More sheet. */
 const MOBILE_PRIMARY = [
   { href: "/dashboard", label: "Today", icon: "\u25cd", color: "var(--ember)" },
+  { href: "/tasks", label: "Tasks", icon: "\u2611", color: "var(--c-task)" },
   { href: "/chat", label: "Ask", icon: "\u25ce", color: "var(--c-ask)" },
   { href: "/discover", label: "Discover", icon: "\u2726", color: "var(--c-decision)" },
   { href: "/agents", label: "Agents", icon: "\u26a1", color: "var(--c-idea)" },
-  { href: "/insights", label: "Insights", icon: "\u25c8", color: "var(--c-goal)" },
 ];
 const MOBILE_MORE = [
-  { href: "/tasks", label: "Tasks", icon: "\u2611", color: "var(--c-task)" },
+  { href: "/insights", label: "Insights", icon: "\u25c8", color: "var(--c-goal)" },
   { href: "/timeline", label: "Timeline", icon: "\u2261", color: "var(--success)" },
   { href: "/books", label: "Books", icon: "\u25a4", color: "var(--c-book)" },
   { href: "/people", label: "People", icon: "\u260f", color: "var(--c-person)" },
@@ -110,7 +110,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
   /** Optimistic: the row leaves INSTANTLY, the request finishes in the
    *  background under a small "Saving..." indicator. */
   async function act(id: string, action: string) {
-    const leaves = action === "done" || action === "dismiss" || action === "not_relevant" || action === "snooze";
+    const leaves = action === "done" || action === "dismiss" || action === "not_relevant" || action === "snooze" || action === "read";
     if (leaves) {
       setViewing((v) => (v ? v.filter((x) => x.id !== id) : v));
       setNotifs((n) => n.filter((x) => x.id !== id));
@@ -138,8 +138,8 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
   const shown = viewing ?? notifs;
   const inMore = MOBILE_MORE.some((l) => path.startsWith(l.href));
 
-  const bell = () => (
-    <button onClick={openPanel} className="btn-ghost !px-2.5 relative" aria-label="Notifications">
+  const bell = (size: "sm" | "lg" = "sm") => (
+    <button onClick={openPanel} className={`btn-ghost !px-2.5 relative ${size === "lg" ? "text-xl" : ""}`} aria-label="Notifications">
       {'\u{1F514}'}
       {unreadCount > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-ember text-white text-[10px] grid place-items-center">{unreadCount > 9 ? "9+" : unreadCount}</span>}
     </button>
@@ -156,9 +156,11 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
           : undefined
         }
       >
-        <Link href="/dashboard" className="px-3 pt-4 pb-5 flex flex-col items-start gap-1" aria-label="TimelyMemo home">
+        <Link href="/dashboard" className="px-3 pt-4 pb-5 flex flex-col items-start" aria-label="TimelyMemo home">
           <Logo />
-          <PlanBadge plan={plan} />
+          <span className="mt-2">
+            <PlanBadge plan={plan} />
+          </span>
         </Link>
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href}
@@ -191,7 +193,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
             <PlanBadge plan={plan} />
           </Link>
           <div className="flex items-center gap-2">
-            {bell()}
+            {bell("lg")}
             <button
               onClick={logout} disabled={loggingOut}
               className="!px-2.5 rounded-lg cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
@@ -200,7 +202,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
             >
               {loggingOut ? <Spinner size={16} /> : "\u23fb"}
             </button>
-            <ThemeToggle />
+            <ThemeToggle size="lg" />
           </div>
         </header>
 

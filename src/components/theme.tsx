@@ -14,10 +14,14 @@ export function useTheme() {
   return { theme, apply };
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ size = "sm" }: { size?: "sm" | "lg" }) {
   const { theme, apply } = useTheme();
   return (
-    <button onClick={() => apply(theme === "dark" ? "light" : "dark")} className="btn-ghost !px-2.5" aria-label="Toggle theme">
+    <button
+      onClick={() => apply(theme === "dark" ? "light" : "dark")}
+      className={`btn-ghost !px-2.5 ${size === "lg" ? "text-xl" : ""}`}
+      aria-label="Toggle theme"
+    >
       {theme === "dark" ? "☀" : "☾"}
     </button>
   );

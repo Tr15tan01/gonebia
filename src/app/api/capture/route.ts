@@ -91,6 +91,7 @@ export async function POST(req: Request) {
       admin, user.id, mem.id, structured, body.text, body.at ?? null, mem.created_at
     );
     if (!applied.ok) console.error("[capture] structured data could not be stored - memory saved unstructured");
+    if (applied.safetyWarning) warnings.push(applied.safetyWarning);
   } else {
     const { error: metaError } = await admin.from("memory_metadata").insert({
       memory_id: mem.id, user_id: user.id,

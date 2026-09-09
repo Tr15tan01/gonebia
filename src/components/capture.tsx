@@ -14,6 +14,7 @@ interface CaptureResult {
     title: string; type: string; occurred_at: string | null; due_at: string | null; reminder_at: string | null; review_at: string | null;
   };
   similar: { id: string; title: string; created_at: string; similarity: number }[];
+  warnings?: string[];
 }
 
 const PHASES = [
@@ -74,32 +75,47 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
     rec.continuous = true;
     rec.interimResults = true;
     const base = text.trim() ? text.trim() + " " : "";
-    // Mobile browsers re-send already-final results and silently restart the
-    // recognition session. The old closure-accumulation duplicated words.
-    // Dedupe finals by GLOBAL result index; the offset grows per restart.
-    const finals = new Map<number, string>();
-    let offset = 0;
-    let sessionCount = 0;
+    // Mobile browsers (especially Android Chrome) silently restart/resegment
+    // the recognition session and can re-send part of the previous segment's
+    // already-final text as "new" content afterward. The previous approach
+    // deduped by POSITION (a global result index that grows on each restart)
+    // - that only works if a new segment's index 0 never overlaps content
+    // from before, which mobile browsers don't guarantee, so overlapping
+    // resends slipped through as literal duplicated words.
+    // This tracks by CONTENT instead: `committed` is text we've locked in for
+    // good; `lastSessionFinal` is the current segment's final text so far.
+    // As long as the segment's final text keeps growing (normal speech), we
+    // just show committed + this segment's final + interim - nothing is
+    // double-counted because the segment's own final text is always shown
+    // exactly once. The moment a segment's final text ISN'T still growing
+    // from what we last saw (a restart/resegment happened), we fold whatever
+    // was pending into `committed` exactly once and start tracking the new
+    // segment fresh - so a resent overlap is absorbed into the same
+    // `committed` text instead of being appended a second time.
+    let committed = base;
+    let lastSessionFinal = "";
     rec.onresult = (e: any) => {
+      let sessionFinal = "";
       let interim = "";
       for (let i = 0; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) {
-          const t = r[0].transcript.trim();
-          if (t && !finals.has(offset + i)) finals.set(offset + i, t);
-        } else {
-          interim += r[0].transcript;
-        }
+        if (r.isFinal) sessionFinal += (sessionFinal ? " " : "") + r[0].transcript.trim();
+        else interim += r[0].transcript;
       }
-      sessionCount = e.results.length;
-      const said = [...finals.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v).join(" ");
-      setText((base + said + " " + interim).replace(/\s+/g, " ").trimStart());
+      if (!sessionFinal.startsWith(lastSessionFinal)) {
+        committed = (committed + " " + lastSessionFinal).replace(/\s+/g, " ").trim();
+        if (committed) committed += " ";
+        lastSessionFinal = "";
+      }
+      lastSessionFinal = sessionFinal;
+      setText((committed + sessionFinal + " " + interim).replace(/\s+/g, " ").trimStart());
     };
     rec.onend = () => {
       if (listeningRef.current) {
+        committed = (committed + " " + lastSessionFinal).replace(/\s+/g, " ").trim();
+        if (committed) committed += " ";
+        lastSessionFinal = "";
         // Android Chrome ends sessions aggressively - restart while listening.
-        offset += sessionCount;
-        sessionCount = 0;
         try { rec.start(); } catch { listeningRef.current = false; setListening(false); }
       } else {
         setListening(false);
@@ -270,6 +286,16 @@ function Interpretation({ result, onClose, updatingCounts }: { result: CaptureRe
           </span>
         )}
       </div>
+
+      {result.warnings && result.warnings.length > 0 && (
+        <div className="space-y-1.5">
+          {result.warnings.map((w, i) => (
+            <p key={i} className="text-sm text-ink-2 rounded-xl bg-paper-2 border border-line p-3 leading-relaxed">
+              {w}
+            </p>
+          ))}
+        </div>
+      )}
 
       {result.similar.length >= 1 && (
         <div className="rounded-xl bg-ember-soft p-3 text-sm">

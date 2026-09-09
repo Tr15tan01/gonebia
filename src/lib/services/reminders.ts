@@ -1,10 +1,23 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { PushService } from "./push";
+import { screenForCrisisContent, crisisMessage } from "./safety";
 
 export const ReminderService = {
-  async schedule(userId: string, memoryId: string, remindAt: string) {
+  /** Returns { ok: true } on a normal schedule, or { ok: false, safetyWarning }
+   *  if the note's text was screened out (see safety.ts) - the reminder is
+   *  simply never inserted in that case, nothing else about the memory is
+   *  touched. Same screen as the initial-capture path (services/apply.ts),
+   *  applied here too since this is the OTHER way a reminder gets scheduled -
+   *  editing an existing note's date via the memory sheet's date picker. */
+  async schedule(userId: string, memoryId: string, remindAt: string): Promise<{ ok: boolean; safetyWarning?: string }> {
     const admin = createAdmin();
+    const { data: mem } = await admin.from("memories").select("original_text").eq("id", memoryId).maybeSingle();
+    const screen = screenForCrisisContent(mem?.original_text ?? "");
+    if (screen.flagged) {
+      return { ok: false, safetyWarning: crisisMessage(screen.kind!) };
+    }
     await admin.from("reminders").insert({ user_id: userId, memory_id: memoryId, remind_at: remindAt });
+    return { ok: true };
   },
 
   async cancelForMemory(memoryId: string) {
