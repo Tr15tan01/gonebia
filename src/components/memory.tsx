@@ -9,7 +9,8 @@ import { DateTimePicker } from "@/components/date-time-picker";
 export interface Memory {
   id: string; original_text: string; created_at: string;
   type: string; title: string; summary: string;
-  importance: number; status: string; due_at: string | null; reminder_at?: string | null; people: string[];
+  importance: number; status: string; due_at: string | null; reminder_at?: string | null;
+  occurred_at?: string | null; people: string[];
 }
 
 const DATEABLE_TYPES = ["task", "promise", "commitment", "event", "reminder"];
@@ -62,16 +63,22 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
   const [draft, setDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [busyAction, setBusyAction] = useState<"done" | "delete" | "merge" | null>(null);
-  const [busyDate, setBusyDate] = useState<"due" | "reminder" | null>(null);
+  const [busyDate, setBusyDate] = useState<"due" | "reminder" | "occurred" | null>(null);
   const toast = useToast();
   const router = useRouter();
 
-  /** Used by both the "due date" (task deadline) and "reminder" (when we
-   *  should nudge you) pickers below - same PATCH endpoint the rest of the
-   *  sheet already uses, just a different field. */
-  async function saveDate(field: "due_at" | "reminder_at", iso: string) {
+  const DATE_LABEL: Record<string, string> = { due_at: "Due date", reminder_at: "Reminder", occurred_at: "Date" };
+  const DATE_KEY: Record<string, "due" | "reminder" | "occurred"> = { due_at: "due", reminder_at: "reminder", occurred_at: "occurred" };
+
+  /** Used by the "due date" (task deadline), "reminder" (when we should nudge
+   *  you), and "occurred_at" (when this actually happened - separate from
+   *  when you wrote the note, e.g. picking a past date for something you're
+   *  logging after the fact) pickers below - same PATCH endpoint the rest of
+   *  the sheet already uses, just a different field each time. */
+  async function saveDate(field: "due_at" | "reminder_at" | "occurred_at", iso: string) {
     if (!id || !memory) return;
-    const which = field === "due_at" ? "due" : "reminder";
+    const which = DATE_KEY[field];
+    const label = DATE_LABEL[field];
     setBusyDate(which);
     try {
       const res = await fetch(`/api/memories/${id}`, {
@@ -84,7 +91,7 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
           toast(body.safetyWarning);
         } else {
           setMemory({ ...memory, [field]: iso || null });
-          toast(iso ? `${which === "due" ? "Due date" : "Reminder"} updated.` : `${which === "due" ? "Due date" : "Reminder"} cleared.`);
+          toast(iso ? `${label} updated.` : `${label} cleared.`);
           router.refresh();
         }
       } else {
@@ -195,7 +202,7 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
             {memory.status !== "open" && <span className="chip">{memory.status}</span>}
           </div>
 
-          {DATEABLE_TYPES.includes(memory.type) && (
+          {DATEABLE_TYPES.includes(memory.type) ? (
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-1.5 text-xs text-ink-2">
                 Due
@@ -212,6 +219,17 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
                   onChange={(v) => saveDate("reminder_at", v)}
                 />
                 {busyDate === "reminder" && <Spinner size={12} />}
+              </label>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-ink-2">
+                When this happened
+                <DateTimePicker
+                  value={memory.occurred_at ?? ""}
+                  onChange={(v) => saveDate("occurred_at", v)}
+                />
+                {busyDate === "occurred" && <Spinner size={12} />}
               </label>
             </div>
           )}

@@ -70,13 +70,13 @@ export const AIChatService = {
 
     const references: ChatReference[] = rows.map((r: any, i: number) => ({
       n: i + 1, id: r.id, title: r.title || r.original_text.slice(0, 60),
-      date: r.created_at, snippet: r.original_text.slice(0, 120),
+      date: r.occurred_at ?? r.created_at, snippet: r.original_text.slice(0, 120),
     }));
 
     let answer: string;
     try {
       const memoryContext = rows.map((r: any, i: number) =>
-        `[${i + 1}] (${fmt(r.created_at)} - ${r.type}) "${r.original_text}"`
+        `[${i + 1}] (${fmt(r.occurred_at ?? r.created_at)}${r.occurred_at ? "" : ", written"} - ${r.type}) "${r.original_text}"`
       ).join("\n");
       const context = [bookContext, memoryContext].filter(Boolean).join("\n\n");
       answer = await geminiText(groundedAnswerPrompt(question, context), 0.3);
@@ -84,7 +84,7 @@ export const AIChatService = {
     } catch (e) {
       console.error("[chat] LLM answer failed, using retrieval fallback:", e);
       answer = "My language model couldn't be reached just now, but I did find these memories:\n\n" +
-        rows.map((r: any, i: number) => `[${i + 1}] ${r.title || r.original_text.slice(0, 60)} - ${fmt(r.created_at)}`).join("\n") +
+        rows.map((r: any, i: number) => `[${i + 1}] ${r.title || r.original_text.slice(0, 60)} - ${fmt(r.occurred_at ?? r.created_at)}`).join("\n") +
         "\n\nTry again in a moment for a full answer.";
     }
 

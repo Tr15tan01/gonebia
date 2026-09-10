@@ -14,14 +14,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const sb = await createClient();
   const { data } = await sb
     .from("memories")
-    .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, reminder_at, people, category)")
+    .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, reminder_at, occurred_at, people, category)")
     .eq("id", id)
     .single();
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
   const rawMeta: unknown = data.memory_metadata;
   const meta = (Array.isArray(rawMeta) ? rawMeta[0] : rawMeta) as {
     type?: string; title?: string; summary?: string; importance?: number;
-    status?: string; due_at?: string | null; reminder_at?: string | null; people?: string[]; category?: string;
+    status?: string; due_at?: string | null; reminder_at?: string | null; occurred_at?: string | null; people?: string[]; category?: string;
   } | null | undefined;
   return NextResponse.json({
     memory: {
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       type: meta?.type ?? "thought", title: meta?.title ?? "",
       summary: meta?.summary ?? "", importance: meta?.importance ?? 3,
       status: meta?.status ?? "open", due_at: meta?.due_at ?? null,
-      reminder_at: meta?.reminder_at ?? null,
+      reminder_at: meta?.reminder_at ?? null, occurred_at: meta?.occurred_at ?? null,
       people: meta?.people ?? [],
     },
   });
@@ -37,11 +37,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 /** Best-effort shelf status from the user's own wording (no invention). */
 function deriveBookStatus(text: string): BookStatus {
-  if (/finish|complete/i.test(text)) return "finished";
-  if (/currently reading|reading now|started reading|am reading|i'm reading/i.test(text)) return "reading";
+  if (/finish|complete|just read|done (with|reading)/i.test(text)) return "finished";
+  if (/currently reading|reading now|started reading|am reading|i'm reading|\bread\b/i.test(text)) return "reading";
   if (/want to read|should read|plan to read|recommend/i.test(text)) return "want_to_read";
   if (/gave up|abandon|couldn'?t finish|dnf/i.test(text)) return "abandoned";
-  if (/\bread\b/i.test(text)) return "finished";
   return "want_to_read";
 }
 
@@ -69,6 +68,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (patch.original_text) {
     const { error: textErr } = await sb.from("memories").update({ original_text: patch.original_text }).eq("id", id);
     if (textErr) return NextResponse.json({ error: textErr.message }, { status: 400 });
+  }
+
+  if (patch.occurred_at !== undefined) {
+    // memory_metadata.occurred_at (patched above) is what chat/retrieval
+    // actually reads, but a few memory types ALSO get a denormalized copy of
+    // this date in their own side table (events.event_at,
+    // purchases.purchased_at, decisions.decided_at) for their dedicated list
+    // views - keep those in sync too instead of only fixing the one place.
+    await Promise.all([
+      admin.from("events").update({ event_at: patch.occurred_at }).eq("memory_id", id),
+      admin.from("purchases").update({ purchased_at: patch.occurred_at }).eq("memory_id", id),
+      admin.from("decisions").update({ decided_at: patch.occurred_at }).eq("memory_id", id),
+    ]);
   }
 
   if (patch.type === "task" || patch.type === "promise" || patch.type === "commitment") {

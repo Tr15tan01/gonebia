@@ -72,6 +72,15 @@ Return ONLY a JSON object with these exact fields:
   today" => people: ["Giorgi"] (Giorgi is the real person involved; Homer is
   still just the quote's source, so excluded).
 - places, objects, products, companies: arrays of strings (empty if none)
+  PRODUCT CATEGORY RULE (important): when a specific branded product/model is
+  mentioned, include BOTH the specific name AND its general category as
+  separate entries in "products" - not just the specific one. This matters
+  because a later question like "when did I buy a computer" needs the word
+  "computer" to actually appear somewhere in what you extracted; it won't
+  otherwise, since the note itself may never say that generic word.
+  Example: "Bought a Lenovo Legion 5" => products: ["Lenovo Legion 5", "laptop", "computer"]
+  Example: "Got an iPhone 15 Pro"    => products: ["iPhone 15 Pro", "phone", "smartphone"]
+  Example: "Picked up a KitchenAid stand mixer" => products: ["KitchenAid stand mixer", "mixer", "kitchen appliance"]
 - amounts: [{value: number, currency: string (ISO code, e.g. GEL/USD), label}] (empty if none)
 - category: 1-2 words, e.g. "shopping", "health", "work", "home", "learning", "reading"
 - importance: 1 (trivial) to 5 (life-important)

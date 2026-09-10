@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { BriefingService } from "@/lib/services/briefing";
 import { CaptureBox } from "@/components/capture";
@@ -41,56 +42,51 @@ function remindColor(iso: string): string {
   return "var(--c-task)";
 }
 
+function endOfTodayMs() {
+  const d = new Date(); d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+function Section({ title, href, color, children }: { title: string; href?: string; color?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between mb-2.5">
+        <h2 className="label" style={color ? { color } : undefined}>{title}</h2>
+        {href && <Link href={href} className="text-xs text-ember">See all</Link>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Skeleton shown per-section while ITS OWN data is still loading - other
+ *  sections (and the header/capture box, which need no data at all) don't
+ *  wait for this one. This is the "load some resource on top and later on
+ *  bottom" streaming the dashboard was missing: previously the whole page
+ *  was one big server component that awaited EVERY query (briefing, stats,
+ *  recent memories, reminders, books) before sending any HTML at all, so the
+ *  page's total load time was gated by whichever single query was slowest -
+ *  now each section streams in independently as soon as its own data (and
+ *  only its own data) is ready. */
+function SectionSkeleton({ title, rows = 2 }: { title: string; rows?: number }) {
+  return (
+    <section>
+      <div className="mb-2.5"><h2 className="label text-ink-2">{title}</h2></div>
+      <div className="space-y-2">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="card p-4 h-14 animate-pulse bg-paper-2" />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default async function Dashboard() {
   const user = await getUser();
   const sb = await createClient();
-
-  // Briefing generation and the dashboard's own stat queries don't depend on
-  // each other at all, but were previously awaited one after another -
-  // running them together roughly halves the slower of the two paths off
-  // the total load time.
-  const [briefing, [{ data: profile }, { data: recent }, { data: upcomingRems }, { data: readingBooks },
-    { count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }, { count: booksWant }, { data: wantBooks }]] =
-    await Promise.all([
-      BriefingService.getForUser(user!.id).catch(() => null),
-      Promise.all([
-      sb.from("profiles").select("timezone").maybeSingle(),
-      sb.from("memories").select("id, original_text, created_at, memory_metadata(type, title)")
-        .is("deleted_at", null).order("created_at", { ascending: false }).limit(5),
-      sb.from("reminders").select("id, remind_at, memory_id")
-        .eq("status", "pending").gte("remind_at", new Date().toISOString())
-        .order("remind_at").limit(4),
-      sb.from("books").select("id, title, author")
-        .eq("status", "reading").order("updated_at", { ascending: false }).limit(3),
-      sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
-        .eq("user_id", user!.id).eq("status", "open").in("type", ["task", "promise", "commitment"]),
-      sb.from("memories").select("id", { count: "exact", head: true })
-        .eq("user_id", user!.id).is("deleted_at", null),
-      sb.from("books").select("id", { count: "exact", head: true })
-        .eq("user_id", user!.id).eq("status", "finished"),
-      sb.from("people").select("id", { count: "exact", head: true }).eq("user_id", user!.id),
-      sb.from("books").select("id", { count: "exact", head: true })
-        .eq("user_id", user!.id).eq("status", "want_to_read"),
-      sb.from("books").select("id, title, author")
-        .eq("user_id", user!.id).eq("status", "want_to_read")
-        .order("updated_at", { ascending: false }).limit(3),
-      ]),
-    ]);
-  const b = briefing ?? { date: "", today: [], dontForget: [], revisit: [], interesting: null };
-
-  const remIds = (upcomingRems ?? []).map((r: any) => r.memory_id).filter(Boolean) as string[];
-  const { data: remMetas } = remIds.length
-    ? await sb.from("memory_metadata").select("memory_id, title").in("memory_id", remIds)
-    : { data: [] as { memory_id: string; title: string }[] | null };
-  const titleFor = (id: string | null) =>
-    remMetas?.find((m: any) => m.memory_id === id)?.title ?? "Reminder";
-
-  const stats = [
-    { label: "open tasks", value: openTasks ?? 0, color: "var(--c-task)", href: "/tasks" },
-    { label: "memories", value: totalMems ?? 0, color: "var(--ember)", href: "/timeline" },
-    { label: "books finished", value: booksDone ?? 0, color: "var(--success)", href: "/books" },
-    { label: "people", value: peopleN ?? 0, color: "var(--c-decision)", href: "/people" },
-  ];
+  // Only the greeting needs data before first paint, and it's one cheap
+  // indexed lookup - everything heavier streams in below via Suspense.
+  const { data: profile } = await sb.from("profiles").select("timezone").maybeSingle();
 
   return (
     <div className="space-y-8">
@@ -109,22 +105,85 @@ export default async function Dashboard() {
         </Link>
       </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {stats.map((s) => (
-          <Link key={s.label} href={s.href}
-            className="card p-3.5 hover:opacity-90 transition-opacity soft-shadow"
-            style={{ borderLeft: `3px solid ${s.color}` }}>
-            <p className="font-display text-2xl font-semibold leading-none" style={{ color: s.color }}>
-              <AnimatedStatValue value={s.value} color={s.color} />
-            </p>
-            <p className="text-xs text-ink-2 mt-1.5">{s.label}</p>
-          </Link>
-        ))}
-      </div>
+      <Suspense fallback={
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card p-3.5 h-16 animate-pulse bg-paper-2" />)}
+        </div>
+      }>
+        <StatsRow sb={sb} userId={user!.id} />
+      </Suspense>
 
       <CaptureBox />
 
-      {/* TODAY - clickable */}
+      <Suspense fallback={<SectionSkeleton title="Today" />}>
+        <BriefingSections userId={user!.id} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Books" rows={1} />}>
+        <BooksSection sb={sb} userId={user!.id} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Upcoming reminders" />}>
+        <RemindersSection sb={sb} userId={user!.id} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Recent memories" rows={3} />}>
+        <RecentSection sb={sb} userId={user!.id} />
+      </Suspense>
+
+      <Link href="/chat" className="card p-5 flex items-center justify-between group"
+        style={{
+          background: "var(--ember-soft)",
+          borderColor: "color-mix(in srgb, var(--ember) 35%, transparent)",
+        }}>
+        <div>
+          <p className="font-display text-lg" style={{ color: "var(--ember)" }}>Ask my memory</p>
+          <p className="text-sm text-ink-2">"What did I buy last month?" - "What books did I finish?"</p>
+        </div>
+        <span className="text-ember group-hover:translate-x-1 transition-transform">→</span>
+      </Link>
+    </div>
+  );
+}
+
+async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
+  const [{ count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }] = await Promise.all([
+    sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
+      .eq("user_id", userId).eq("status", "open").in("type", ["task", "promise", "commitment"]),
+    sb.from("memories").select("id", { count: "exact", head: true })
+      .eq("user_id", userId).is("deleted_at", null),
+    sb.from("books").select("id", { count: "exact", head: true })
+      .eq("user_id", userId).eq("status", "finished"),
+    sb.from("people").select("id", { count: "exact", head: true }).eq("user_id", userId),
+  ]);
+  const stats = [
+    { label: "open tasks", value: openTasks ?? 0, color: "var(--c-task)", href: "/tasks" },
+    { label: "memories", value: totalMems ?? 0, color: "var(--ember)", href: "/timeline" },
+    { label: "books finished", value: booksDone ?? 0, color: "var(--success)", href: "/books" },
+    { label: "people", value: peopleN ?? 0, color: "var(--c-decision)", href: "/people" },
+  ];
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      {stats.map((s) => (
+        <Link key={s.label} href={s.href}
+          className="card p-3.5 hover:opacity-90 transition-opacity soft-shadow"
+          style={{ borderLeft: `3px solid ${s.color}` }}>
+          <p className="font-display text-2xl font-semibold leading-none" style={{ color: s.color }}>
+            <AnimatedStatValue value={s.value} color={s.color} />
+          </p>
+          <p className="text-xs text-ink-2 mt-1.5">{s.label}</p>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+async function BriefingSections({ userId }: { userId: string }) {
+  const briefing = await BriefingService.getForUser(userId).catch(() => null);
+  const b = briefing ?? { date: "", today: [], dontForget: [], revisit: [], interesting: null };
+
+  return (
+    <>
       <Section title="Today" color="var(--ember)">
         {b.today.length ? (
           <div className="space-y-2">
@@ -144,30 +203,6 @@ export default async function Dashboard() {
           </div>
         ) : <Empty icon="~" title="Nothing urgent today." hint="A quiet day is a good day." />}
       </Section>
-
-      {((readingBooks && readingBooks.length > 0) || (booksWant ?? 0) > 0) && (
-        <Section title="Books" href="/books" color="var(--success)">
-          <div className="card p-4 space-y-2.5 text-sm soft-shadow">
-            <p className="text-xs text-ink-2">
-              <span className="font-semibold" style={{ color: "var(--success)" }}>{booksDone ?? 0} finished</span>
-              {" - "}{readingBooks?.length ?? 0} reading now
-              {" - "}{booksWant ?? 0} not finished yet
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(readingBooks ?? []).map((bk: any) => (
-                <span key={bk.id} className="chip chip-c-buy !text-sm">
-                  {bk.title}{bk.author ? <span className="text-ink-2"> - {bk.author}</span> : null}
-                </span>
-              ))}
-              {(wantBooks ?? []).map((bk: any) => (
-                <span key={bk.id} className="chip !text-sm">
-                  up next: {bk.title}
-                </span>
-              ))}
-            </div>
-          </div>
-        </Section>
-      )}
 
       {b.dontForget.length > 0 && (
         <Section title="Don't forget" href="/insights" color="var(--danger)">
@@ -211,80 +246,111 @@ export default async function Dashboard() {
           </ul>
         </Section>
       )}
-
-      {/* UPCOMING REMINDERS - colored, prominent, clickable */}
-      {upcomingRems && upcomingRems.length > 0 && (
-        <Section title="Upcoming reminders" color="var(--c-task)">
-          <div className="space-y-2">
-            {upcomingRems.map((r: any) => {
-              const color = remindColor(r.remind_at);
-              const urgent = new Date(r.remind_at).getTime() <= endOfTodayMs();
-              const inner = (
-                <div className="card p-4 text-sm flex justify-between gap-3 hover:border-ember/60 soft-shadow"
-                  style={{ borderLeft: `3px solid ${color}` }}>
-                  <span className={urgent ? "font-semibold" : ""}>{titleFor(r.memory_id)}</span>
-                  <TimeChip iso={r.remind_at} />
-                </div>
-              );
-              return r.memory_id
-                ? <MemoryOpener key={r.id} id={r.memory_id}>{inner}</MemoryOpener>
-                : <div key={r.id}>{inner}</div>;
-            })}
-          </div>
-        </Section>
-      )}
-
-      {/* RECENT MEMORIES - clickable */}
-      <Section title="Recent memories" href="/timeline">
-        {recent && recent.length > 0 ? (
-          <div className="space-y-2">
-            {recent.map((m: any) => {
-              const raw: unknown = m.memory_metadata;
-              const meta = (Array.isArray(raw) ? raw[0] : raw) ?? {};
-              return (
-                <MemoryOpener key={m.id} id={m.id}>
-                  <div className="card p-4 text-sm hover:border-ember/60 soft-shadow">
-                    <p>{m.original_text}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-ink-2">
-                      <span className={`chip ${(TYPE_CHIP as any)[meta.type] ?? ""}`}>{meta.type ?? "thought"}</span>
-                      <span>{relTime(m.created_at)}</span>
-                    </div>
-                  </div>
-                </MemoryOpener>
-              );
-            })}
-          </div>
-        ) : <Empty icon="*" title="Your memory is empty." hint="Start by telling TimelyMemo something above." />}
-      </Section>
-
-      <Link href="/chat" className="card p-5 flex items-center justify-between group"
-        style={{
-          background: "var(--ember-soft)",
-          borderColor: "color-mix(in srgb, var(--ember) 35%, transparent)",
-        }}>
-        <div>
-          <p className="font-display text-lg" style={{ color: "var(--ember)" }}>Ask my memory</p>
-          <p className="text-sm text-ink-2">"What did I buy last month?" - "What books did I finish?"</p>
-        </div>
-        <span className="text-ember group-hover:translate-x-1 transition-transform">→</span>
-      </Link>
-    </div>
+    </>
   );
 }
 
-function endOfTodayMs() {
-  const d = new Date(); d.setHours(23, 59, 59, 999);
-  return d.getTime();
+async function BooksSection({ sb, userId }: { sb: any; userId: string }) {
+  const [{ data: readingBooks }, { count: booksDone }, { count: booksWant }, { data: wantBooks }] = await Promise.all([
+    sb.from("books").select("id, title, author")
+      .eq("user_id", userId).eq("status", "reading").order("updated_at", { ascending: false }).limit(3),
+    sb.from("books").select("id", { count: "exact", head: true })
+      .eq("user_id", userId).eq("status", "finished"),
+    sb.from("books").select("id", { count: "exact", head: true })
+      .eq("user_id", userId).eq("status", "want_to_read"),
+    sb.from("books").select("id, title, author")
+      .eq("user_id", userId).eq("status", "want_to_read")
+      .order("updated_at", { ascending: false }).limit(3),
+  ]);
+
+  if (!((readingBooks && readingBooks.length > 0) || (booksWant ?? 0) > 0)) return null;
+
+  return (
+    <Section title="Books" href="/books" color="var(--success)">
+      <div className="card p-4 space-y-2.5 text-sm soft-shadow">
+        <p className="text-xs text-ink-2">
+          <span className="font-semibold" style={{ color: "var(--success)" }}>{booksDone ?? 0} finished</span>
+          {" - "}{readingBooks?.length ?? 0} reading now
+          {" - "}{booksWant ?? 0} not finished yet
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {(readingBooks ?? []).map((bk: any) => (
+            <span key={bk.id} className="chip chip-c-buy !text-sm">
+              {bk.title}{bk.author ? <span className="text-ink-2"> - {bk.author}</span> : null}
+            </span>
+          ))}
+          {(wantBooks ?? []).map((bk: any) => (
+            <span key={bk.id} className="chip !text-sm">
+              up next: {bk.title}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
 }
 
-function Section({ title, href, color, children }: { title: string; href?: string; color?: string; children: React.ReactNode }) {
+async function RemindersSection({ sb, userId }: { sb: any; userId: string }) {
+  const { data: upcomingRems } = await sb.from("reminders").select("id, remind_at, memory_id")
+    .eq("user_id", userId).eq("status", "pending").gte("remind_at", new Date().toISOString())
+    .order("remind_at").limit(4);
+
+  if (!upcomingRems || upcomingRems.length === 0) return null;
+
+  const remIds = upcomingRems.map((r: any) => r.memory_id).filter(Boolean) as string[];
+  const { data: remMetas } = remIds.length
+    ? await sb.from("memory_metadata").select("memory_id, title").in("memory_id", remIds)
+    : { data: [] as { memory_id: string; title: string }[] | null };
+  const titleFor = (id: string | null) =>
+    remMetas?.find((m: any) => m.memory_id === id)?.title ?? "Reminder";
+
   return (
-    <section>
-      <div className="flex items-baseline justify-between mb-2.5">
-        <h2 className="label" style={color ? { color } : undefined}>{title}</h2>
-        {href && <Link href={href} className="text-xs text-ember">See all</Link>}
+    <Section title="Upcoming reminders" color="var(--c-task)">
+      <div className="space-y-2">
+        {upcomingRems.map((r: any) => {
+          const color = remindColor(r.remind_at);
+          const urgent = new Date(r.remind_at).getTime() <= endOfTodayMs();
+          const inner = (
+            <div className="card p-4 text-sm flex justify-between gap-3 hover:border-ember/60 soft-shadow"
+              style={{ borderLeft: `3px solid ${color}` }}>
+              <span className={urgent ? "font-semibold" : ""}>{titleFor(r.memory_id)}</span>
+              <TimeChip iso={r.remind_at} />
+            </div>
+          );
+          return r.memory_id
+            ? <MemoryOpener key={r.id} id={r.memory_id}>{inner}</MemoryOpener>
+            : <div key={r.id}>{inner}</div>;
+        })}
       </div>
-      {children}
-    </section>
+    </Section>
+  );
+}
+
+async function RecentSection({ sb, userId }: { sb: any; userId: string }) {
+  const { data: recent } = await sb.from("memories").select("id, original_text, created_at, memory_metadata(type, title)")
+    .eq("user_id", userId).is("deleted_at", null).order("created_at", { ascending: false }).limit(5);
+
+  return (
+    <Section title="Recent memories" href="/timeline">
+      {recent && recent.length > 0 ? (
+        <div className="space-y-2">
+          {recent.map((m: any) => {
+            const raw: unknown = m.memory_metadata;
+            const meta = (Array.isArray(raw) ? raw[0] : raw) ?? {};
+            return (
+              <MemoryOpener key={m.id} id={m.id}>
+                <div className="card p-4 text-sm hover:border-ember/60 soft-shadow">
+                  <p>{m.original_text}</p>
+                  <div className="flex items-center gap-2 mt-2 text-xs text-ink-2">
+                    <span className={`chip ${(TYPE_CHIP as any)[meta.type] ?? ""}`}>{meta.type ?? "thought"}</span>
+                    <span>{relTime(m.created_at)}</span>
+                  </div>
+                </div>
+              </MemoryOpener>
+            );
+          })}
+        </div>
+      ) : <Empty icon="*" title="Your memory is empty." hint="Start by telling TimelyMemo something above." />}
+    </Section>
   );
 }
