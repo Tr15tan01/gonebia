@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { getUser, createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { chatSchema } from "@/lib/validation";
 import { rateLimit } from "@/lib/rate-limit";
 import { AIChatService } from "@/lib/services/chat";
-import { getPlan, getUsage, bumpChatUsage, LIMITS } from "@/lib/limits";
+import { getPlan, getUsage, bumpChatUsage, LIMITS, isAiPaused, aiPausedResponse } from "@/lib/limits";
 import { getPostHogClient } from "@/lib/posthog-server";
 
 // "Ask my memory" runs a search-plan extraction, hybrid retrieval (keyword +
@@ -15,6 +16,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (await isAiPaused(createAdmin(), user.id)) return aiPausedResponse();
   if (!rateLimit(`chat:${user.id}`, 20, 3600_000)) {
     return NextResponse.json(
       { error: "You've asked a lot of questions this hour - let's pause a moment." },

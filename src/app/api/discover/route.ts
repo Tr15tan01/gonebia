@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
-import { getPlan, getUsage, bumpUsage, LIMITS } from "@/lib/limits";
+import { getPlan, getUsage, bumpUsage, LIMITS, isAiPaused, aiPausedResponse } from "@/lib/limits";
 import { DiscoverService } from "@/lib/services/discover";
 
 export const maxDuration = 60;
@@ -14,8 +14,9 @@ function isMissingTable(err: any): boolean {
 export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const sb = await createClient();
   const admin = createAdmin();
+  if (await isAiPaused(admin, user.id)) return aiPausedResponse();
+  const sb = await createClient();
   const body = await req.json().catch(() => ({}));
   const kind = String(body.kind ?? "");
   const windowDays = body.window ? Number(body.window) : null;
@@ -29,13 +30,29 @@ export async function POST(req: NextRequest) {
     const lim = LIMITS[plan];
     const windowKey = kind === "themes" ? String(windowDays ?? 90) : kind === "past_me" ? String(windowDays ?? 12) : "all";
 
+    // Cheap proxy for "has anything relevant changed since we last generated
+    // this": total memory count + latest capture time. It's coarser than a
+    // per-window fingerprint (any new memory anywhere invalidates every
+    // cached analysis, even ones about an unrelated time window), but that
+    // conservatism is the right trade here - it never serves stale content
+    // when something DID change, while still skipping regeneration entirely
+    // for a user who hasn't captured anything new since last time, which is
+    // the actual cost driver this is meant to avoid.
+    const { count: memCount } = await admin.from("memories").select("id", { count: "exact", head: true }).eq("user_id", user.id);
+    const { data: latest } = await admin.from("memories").select("created_at").eq("user_id", user.id)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const freshFingerprint = `${memCount ?? 0}:${latest?.created_at ?? ""}`;
+
     if (!force) {
       const { data: cached, error: cacheErr } = await admin
         .from("discover_results")
-        .select("result, source_ids, created_at")
+        .select("result, source_ids, created_at, source_fingerprint")
         .eq("user_id", user.id).eq("kind", kind).eq("time_window", windowKey)
         .maybeSingle();
-      if (!cacheErr && cached && Date.now() - new Date(cached.created_at).getTime() < 20 * 3600_000) {
+      const unchanged = cached?.source_fingerprint && cached.source_fingerprint === freshFingerprint;
+      const freshEnough = cached && Date.now() - new Date(cached.created_at).getTime() < 20 * 3600_000;
+      const withinOuterBound = cached && Date.now() - new Date(cached.created_at).getTime() < 30 * 86400_000;
+      if (!cacheErr && cached && (unchanged ? withinOuterBound : freshEnough)) {
         let sources: any[] = [];
         if (cached.source_ids?.length) {
           const { data: rows } = await admin.from("memories").select("id, original_text, created_at").in("id", cached.source_ids);
@@ -71,6 +88,7 @@ export async function POST(req: NextRequest) {
     const { error: upsertErr } = await admin.from("discover_results").upsert({
       user_id: user.id, kind, time_window: windowKey,
       result: (out as any).result ?? {}, source_ids: sources.map((s) => s.id),
+      source_fingerprint: freshFingerprint,
     }, { onConflict: "user_id,kind,time_window" });
     if (upsertErr) {
       if (isMissingTable(upsertErr)) console.warn("[discover] cache table missing - run migration 0005 (result still returned)");

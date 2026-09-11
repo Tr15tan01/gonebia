@@ -41,7 +41,7 @@ async function handle(req: NextRequest) {
       const analysis = await geminiJSON(weeklyPrompt(
         `Captured this week: ${captured ?? 0}. Tasks completed: ${done ?? 0}. ` +
         `Open tasks: ${openTasks ?? 0}. Top categories: ${topCats.join(", ") || "none"}.`
-      ));
+      ), "insights", { userId: u.id, feature: "weekly_reflection" });
 
       await admin.from("weekly_analyses").upsert(
         { user_id: u.id, week_start: weekStart, content: analysis },

@@ -16,7 +16,15 @@ const SECTIONS: { title: string; paragraphs: string[] }[] = [
   {
     title: "Who can see your data",
     paragraphs: [
-      "Only you. Every row of your data is protected by PostgreSQL Row Level Security bound to your authenticated user ID - even a bug in the application cannot read another user's memories, because the database itself refuses. Administrative access is limited to background jobs (reminders, insights) that operate on your data solely to provide the service to you.",
+      "Only you, by default. Every database query the application makes for your data is automatically scoped to your account by the application's data-access layer, and reviewed application code is what enforces that boundary end to end - not a database setting alone.",
+      "A small number of designated administrators can access limited account information - email, plan/subscription status, usage counts, and aggregate AI-cost figures - for support, billing, and abuse-prevention purposes. Administrators cannot read the text of your memories through the admin tools, and every administrative action is logged.",
+      "Background jobs (reminders, weekly digests, price-tracking) operate on your data solely to provide those features to you and do not expose it elsewhere.",
+    ],
+  },
+  {
+    title: "Payments",
+    paragraphs: [
+      "Subscription payments are processed by Paddle, our merchant of record. We do not receive or store your full card number - Paddle handles payment collection and provides us only your subscription status, plan, and billing dates.",
     ],
   },
   {
@@ -55,7 +63,7 @@ export default async function PrivacyPage() {
       <PublicHeader loggedIn={!!user} />
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 md:px-10 py-14">
         <h1 className="font-display text-4xl">Privacy Policy</h1>
-        <p className="text-xs text-ink-2 mt-2">Last updated: February 2026</p>
+        <p className="text-xs text-ink-2 mt-2">Last updated: September 2026</p>
         <div className="mt-10 space-y-10">
           {SECTIONS.map((s) => (
             <section key={s.title}>

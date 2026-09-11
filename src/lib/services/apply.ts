@@ -1,5 +1,5 @@
 import { BookService } from "./books";
-import { screenForCrisisContent, crisisMessage } from "./safety";
+import { screenForCrisisContent, crisisMessage, assessActionabilitySafety } from "./safety";
 import type { Structured } from "@/lib/types";
 
 /** High-precision task patterns: assignments from other people and explicit
@@ -42,12 +42,38 @@ export const ApplyService = {
       meta.occurred_at = pickedAt;
     }
 
+    // SAFETY GATE (required, not optional): anything that would become an
+    // actionable task/reminder/scheduled item gets a mandatory two-layer
+    // check first - a cheap regex screen PLUS an LLM intent classifier (see
+    // assessActionabilitySafety in services/safety.ts). Only checked when
+    // the memory actually LOOKS actionable, so an ordinary "thought" note
+    // never pays for the extra LLM call. This is deliberately the LAST
+    // thing that can change `meta` before it's written - nothing after this
+    // point re-derives type/due_at/reminder_at from anything the model said,
+    // so there's no path for a later step to silently re-enable what this
+    // just turned off.
+    const looksActionable = ["task", "promise", "commitment", "reminder"].includes(meta.type)
+      || !!meta.due_at || !!meta.reminder_at;
+    let safetyOverrideWarning: string | undefined;
+    if (looksActionable) {
+      const assessment = await assessActionabilitySafety(originalText, { userId, feature: "capture_safety_check" });
+      if (!assessment.safe) {
+        meta.type = "thought";
+        meta.status = "archived";
+        meta.due_at = null;
+        meta.reminder_at = null;
+        meta.review_at = null;
+        (meta as Record<string, unknown>).safety_flag = assessment.kind;
+        safetyOverrideWarning = crisisMessage(assessment.kind!);
+      }
+    }
+
     // Resolve the book link BEFORE inserting metadata, so every memory about a
     // book - a status update OR just a thought/quote about it - carries book_id
     // and shows up when you open that book.
     let bookId: string | null = null;
     if (book) {
-      bookId = await BookService.upsertFromCapture(admin, userId, memoryId, book);
+      bookId = await BookService.upsertFromCapture(admin, userId, memoryId, book, originalText);
     }
 
     const { error } = await admin.from("memory_metadata").insert({

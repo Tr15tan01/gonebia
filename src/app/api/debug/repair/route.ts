@@ -33,7 +33,7 @@ export async function GET() {
 
   for (const m of missing.slice(0, 30)) {
     const structured = await MemoryExtractionService.extract(
-      m.original_text, new Date(m.created_at), tz
+      m.original_text, new Date(m.created_at), tz, user.id
     );
     if (!structured) { failed++; continue; }
     const applied = await ApplyService.structured(

@@ -7,7 +7,7 @@ export const EmbeddingService = {
     return [m.original_text, s?.title, s?.summary, s?.people.join(" "), s?.products.join(" "), s?.companies.join(" ")]
       .filter(Boolean).join("\n");
   },
-  async embed(text: string): Promise<number[]> {
-    return embedDocument(text);
+  async embed(text: string, userId: string): Promise<number[]> {
+    return embedDocument(text, { userId, feature: "capture_embedding" });
   },
 };

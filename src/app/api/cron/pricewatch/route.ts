@@ -21,7 +21,8 @@ async function handle(req: NextRequest) {
     try {
       const { data } = await geminiGroundedJSON(
         `What is the current typical online retail price for: "${w.query}"? ` +
-        `Return ONLY JSON: { "estimated_price": number|null, "currency": string, "source_url": string|null, "note": string }`
+        `Return ONLY JSON: { "estimated_price": number|null, "currency": string, "source_url": string|null, "note": string }`,
+        "enrichment", { userId: w.user_id, feature: "price_watch" }
       );
       const price = typeof data.estimated_price === "number" ? data.estimated_price : null;
       checked++;

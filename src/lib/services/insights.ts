@@ -133,7 +133,7 @@ export const InsightService = {
         if (spanDays < 3) continue;
         let label = "A recurring thread";
         try {
-          label = (await geminiText(clusterNamePrompt(c.map((m) => m.title || "Untitled"))))
+          label = (await geminiText(clusterNamePrompt(c.map((m) => m.title || "Untitled")), "summarization", { userId, feature: "insights_cluster_name" }))
             .replace(/["'.]/g, "").slice(0, 80);
         } catch {}
         const insightId = await insertInsight(admin, userId, {

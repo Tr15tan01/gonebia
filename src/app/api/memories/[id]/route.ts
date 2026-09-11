@@ -100,7 +100,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         status: deriveBookStatus(mem.original_text),
         rating: null,
         recommended_by: null,
-      });
+      }, mem.original_text);
     }
   }
   if (patch.status === "done") {

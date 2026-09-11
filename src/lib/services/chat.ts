@@ -15,7 +15,9 @@ export const AIChatService = {
 
     let plan_: Record<string, unknown> = { query: question, semantic: true, types: null, person: null, from: null, to: null };
     try {
-      plan_ = { ...plan_, ...(await geminiJSON<Record<string, unknown>>(searchPlanPrompt(question, new Date(), timezone))) };
+      plan_ = { ...plan_, ...(await geminiJSON<Record<string, unknown>>(
+        searchPlanPrompt(question, new Date(), timezone), "search_plan", { userId, feature: "chat_search_plan" }
+      )) };
     } catch (e) {
       console.error("[chat] planning failed, using raw question:", e);
     }
@@ -79,7 +81,7 @@ export const AIChatService = {
         `[${i + 1}] (${fmt(r.occurred_at ?? r.created_at)}${r.occurred_at ? "" : ", written"} - ${r.type}) "${r.original_text}"`
       ).join("\n");
       const context = [bookContext, memoryContext].filter(Boolean).join("\n\n");
-      answer = await geminiText(groundedAnswerPrompt(question, context), 0.3);
+      answer = await geminiText(groundedAnswerPrompt(question, context), "chat_answer", { userId, feature: "chat_answer" }, 0.3);
       answer = answer.replace(/\[(\d+)\]/g, (m, n) => (+n >= 1 && +n <= rows.length ? m : ""));
     } catch (e) {
       console.error("[chat] LLM answer failed, using retrieval fallback:", e);

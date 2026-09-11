@@ -33,10 +33,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const admin = createAdmin();
         const { data: user } = await admin
           .from("users")
-          .select("id, email, password_hash, full_name, email_verified_at")
+          .select("id, email, password_hash, full_name, email_verified_at, disabled_at")
           .eq("email", email)
           .maybeSingle();
         if (!user || !user.password_hash) return null; // no password set (e.g. Google-only account)
+        if (user.disabled_at) return null; // admin-disabled account - see lib/admin.ts
 
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) return null;
@@ -69,8 +70,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!email) return false;
 
       const admin = createAdmin();
-      const { data: existing } = await admin.from("users").select("id").eq("email", email).maybeSingle();
+      const { data: existing } = await admin.from("users").select("id, disabled_at").eq("email", email).maybeSingle();
       if (existing) {
+        if (existing.disabled_at) return false; // admin-disabled account - see lib/admin.ts
         user.id = existing.id;
         return true;
       }

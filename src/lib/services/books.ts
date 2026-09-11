@@ -73,10 +73,24 @@ export const BookService = {
    *  entry and never touches status/rating for a title the user hasn't
    *  actually added yet. Returns the book id to link on memory_metadata.book_id,
    *  or null if there's nothing to link. */
-  async upsertFromCapture(admin: any, userId: string, memoryId: string, book: BookInfo): Promise<string | null> {
+  async upsertFromCapture(admin: any, userId: string, memoryId: string, book: BookInfo, originalText: string = ""): Promise<string | null> {
     const title = book.title?.trim();
     if (!title) return null;
     const title_normalized = this.normalizeTitle(title);
+
+    // Deterministic backstop, not just prompt wording: "finished" is a
+    // one-way door (shows up on a "books I've read" list), so don't trust
+    // the model's word for it alone - require an explicit completion cue in
+    // the user's OWN text before accepting "finished". Anything else that
+    // claimed to be finished gets softened to "reading" instead, which is
+    // never wrong to under-claim (a book that's actually finished but shown
+    // as "reading" is a minor inconvenience; the reverse falsely tells the
+    // user they finished something they didn't).
+    let status = book.status;
+    if (status === "finished") {
+      const hasCompletionCue = /finish|\bdone\b|complete|just read|have read|i'?ve read|read it all|read the whole|read to the end/i.test(originalText);
+      if (!hasCompletionCue) status = "reading";
+    }
 
     const existing = await this.findExisting(admin, userId, title);
 
@@ -90,14 +104,14 @@ export const BookService = {
     if (book.author) patch.author = book.author.trim();
     if (book.rating) patch.rating = book.rating;
     if (book.recommended_by) patch.recommended_by = book.recommended_by.trim();
-    if (book.status) {
-      patch.status = book.status;
-      if (book.status === "reading" ) patch.started_at = new Date().toISOString();
-      if (book.status === "finished") patch.finished_at = new Date().toISOString();
+    if (status) {
+      patch.status = status;
+      if (status === "reading") patch.started_at = new Date().toISOString();
+      if (status === "finished") patch.finished_at = new Date().toISOString();
     }
 
     if (existing) {
-      if (book.status && STATUS_ORDER[book.status] < STATUS_ORDER[existing.status]) {
+      if (status && STATUS_ORDER[status] < STATUS_ORDER[existing.status]) {
         patch.status = existing.status;
         delete patch.started_at;
         delete patch.finished_at;

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MemorySheet } from "@/components/memory";
-import { Spinner, useToast } from "@/components/ui";
+import { useToast } from "@/components/ui";
 import posthog from "posthog-js";
 
 interface Ref { n: number; id: string; title: string; date: string; snippet: string }
@@ -17,17 +17,32 @@ const EXAMPLES = [
   "What unfinished things do I have?",
 ];
 
+const PHASES = [
+  { text: "Understanding your question", icon: "\ud83e\udd14", color: "var(--c-ask)" },
+  { text: "Searching your memories", icon: "\ud83d\udd0e", color: "var(--ember)" },
+  { text: "Connecting the dots", icon: "\u2728", color: "var(--c-idea)" },
+  { text: "Composing an answer", icon: "\ud83d\udcac", color: "var(--c-decision)" },
+];
+
 export function ChatClient() {
   const params = useSearchParams();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState(0);
   const [openMemory, setOpenMemory] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const sentAuto = useRef(false);
   const toast = useToast();
 
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
+
+  // cycles through the phase labels below while a question is being answered
+  useEffect(() => {
+    if (!busy) { setPhase(0); return; }
+    const t = setInterval(() => setPhase((p) => (p + 1) % PHASES.length), 1400);
+    return () => clearInterval(t);
+  }, [busy]);
   useEffect(() => {
     const q = params.get("q");
     if (q && !sentAuto.current) { sentAuto.current = true; send([{ role: "user", content: q }]); }
@@ -110,7 +125,15 @@ export function ChatClient() {
             </div>
           </div>
         ))}
-        {busy && <div className="card px-4 py-3 w-fit"><Spinner /></div>}
+        {busy && (
+          <div className="card p-5 w-fit flex items-center gap-3.5">
+            <div className="run-ring" style={{ "--run-ring-color": PHASES[phase].color } as React.CSSProperties} />
+            <p className="text-sm font-medium transition-colors duration-500" style={{ color: PHASES[phase].color }}>
+              <span className="mr-1.5">{PHASES[phase].icon}</span>
+              {PHASES[phase].text}<span className="loader-dots"><span /><span /><span /></span>
+            </p>
+          </div>
+        )}
         <div ref={bottom} />
       </div>
 

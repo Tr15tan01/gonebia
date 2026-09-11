@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
-import { getPlan, getUsage, bumpUsage, LIMITS } from "@/lib/limits";
+import { getPlan, getUsage, bumpUsage, LIMITS, isAiPaused, aiPausedResponse } from "@/lib/limits";
 import { AgentService } from "@/lib/services/agents";
 import { getPostHogClient } from "@/lib/posthog-server";
 
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const sb = await createClient();
   const admin = createAdmin();
+  if (await isAiPaused(admin, user.id)) return aiPausedResponse();
   const body = await req.json().catch(() => ({}));
   const kind = String(body.kind ?? "");
   const input = String(body.input ?? "").trim().slice(0, 500);
@@ -72,6 +73,16 @@ export async function POST(req: NextRequest) {
         ? "The AI service hiccuped - a retry usually works."
         : msg.slice(0, 200),
     }, { status: 500 });
+  }
+
+  if (outcome.safetyBlocked) {
+    // Not a real agent run - no usage charged, and logged with its own
+    // status rather than mixed in with normal completed runs.
+    const { data: saved } = await admin.from("agent_runs").insert({
+      user_id: user.id, kind, input, status: "safety_blocked",
+      result: { ...outcome.result, _grounded: false },
+    }).select().single().then((r) => r, () => ({ data: null }));
+    return NextResponse.json({ run: saved ?? { kind, input, result: outcome.result, status: "safety_blocked" }, grounded: false, sources: [] });
   }
 
   await bumpUsage(sb, user.id, "agent_month");

@@ -47,7 +47,7 @@ export const MemoryRetrievalService = {
       // question to appear in the memory text ("phone charger" won't match a
       // memory that only says "Samsung charger" - no shared words - while
       // semantic search understands they're related). Now it's logged.
-      try { embedding = await embedQuery(query); } catch (e) {
+      try { embedding = await embedQuery(query, { userId, feature: "chat_retrieval" }); } catch (e) {
         console.error("[retrieval] embedQuery failed, falling back to keyword-only for this question:", e);
         Sentry.captureException(e, { extra: { query, stage: "embedQuery" } });
       }

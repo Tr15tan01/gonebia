@@ -80,3 +80,19 @@ export async function activeReminderCount(admin: any, userId: string): Promise<n
 }
 
 export { LIMITS } from "@/lib/plans";
+
+/** Every route that triggers an AI call (capture, chat, discover, agents)
+ *  checks this first. Uses the service-role client since `users` isn't a
+ *  scoped()-wrapped table (its PK is `id`, not `user_id`) - the explicit
+ *  .eq("id", userId) filter here is the reviewed, correct filter for it. */
+export async function isAiPaused(admin: any, userId: string): Promise<boolean> {
+  const { data } = await admin.from("users").select("ai_paused_at").eq("id", userId).maybeSingle();
+  return !!data?.ai_paused_at;
+}
+
+export function aiPausedResponse() {
+  return Response.json(
+    { error: "AI features are currently paused for this account. Contact support if you believe this is a mistake.", code: "ai_paused" },
+    { status: 403 }
+  );
+}

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const { data: book } = await sb.from("books").select("id, title, author").eq("id", id).single();
   if (!book) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const info = await BookEnrichmentService.lookup(book.title, book.author);
+  const info = await BookEnrichmentService.lookup(book.title, book.author, user.id);
   if (!info) {
     const { data } = await sb.from("books").update({ enrich_status: "not_found" }).eq("id", id).select().single();
     return NextResponse.json({ ok: false, book: data });

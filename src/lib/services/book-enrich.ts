@@ -23,7 +23,7 @@ function httpsOnly(u: unknown): string | null {
 }
 
 export const BookEnrichmentService = {
-  async lookup(title: string, author: string | null): Promise<EnrichedBook | null> {
+  async lookup(title: string, author: string | null, userId: string): Promise<EnrichedBook | null> {
     const q = encodeURIComponent([title, author].filter(Boolean).join(" "));
 
     // 1. Open Library - free, no key, great subjects + covers
@@ -75,7 +75,8 @@ export const BookEnrichmentService = {
       const { data } = await geminiGroundedJSON(
         `Identify the book "${title}"${author ? ` by ${author}` : ""}. ` +
         `Return ONLY JSON: { "topic": string (1-3 words), "year": number|null, ` +
-        `"description": string (max 200 chars), "url": string|null (https cover or book-page URL ONLY if certain) }`
+        `"description": string (max 200 chars), "url": string|null (https cover or book-page URL ONLY if certain) }`,
+        "enrichment", { userId, feature: "book_enrichment" }
       );
       if (data && typeof (data as any).topic === "string") {
         return {
@@ -95,7 +96,7 @@ export const BookEnrichmentService = {
   /** Store lookup results. Never throws into the capture path. */
   async enrich(admin: any, userId: string, bookId: string, title: string, author: string | null): Promise<boolean> {
     try {
-      const info = await this.lookup(title, author);
+      const info = await this.lookup(title, author, userId);
       if (!info) {
         await admin.from("books").update({ enrich_status: "not_found" }).eq("id", bookId);
         return false;

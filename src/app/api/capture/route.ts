@@ -6,7 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { MemoryExtractionService } from "@/lib/services/extraction";
 import { EmbeddingService } from "@/lib/services/embedding";
 import { ApplyService } from "@/lib/services/apply";
-import { getPlan, getUsage, bumpUsage, LIMITS, activeReminderCount, limitResponse } from "@/lib/limits";
+import { getPlan, getUsage, bumpUsage, LIMITS, activeReminderCount, limitResponse, isAiPaused, aiPausedResponse } from "@/lib/limits";
 import type { SimilarHit } from "@/lib/types";
 import { getPostHogClient } from "@/lib/posthog-server";
 
@@ -21,6 +21,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (await isAiPaused(createAdmin(), user.id)) return aiPausedResponse();
 
   const body = captureSchema.parse(await req.json());
   if (!rateLimit(`capture:${user.id}`, 40, 3600_000)) {
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
   await bumpUsage(sb, user.id, isVoice ? "voice_month" : "text_month");
 
   const structured = await MemoryExtractionService.extract(
-    body.text, new Date(), body.timezone, body.at ?? null
+    body.text, new Date(), body.timezone, user.id, body.at ?? null
   );
 
   if (structured) {
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
   let similar: SimilarHit[] = [];
   try {
     const embedding = await EmbeddingService.embed(
-      EmbeddingService.textFor({ original_text: body.text, structured })
+      EmbeddingService.textFor({ original_text: body.text, structured }), user.id
     );
     await admin.from("memory_embeddings").insert({ memory_id: mem.id, user_id: user.id, embedding });
 

@@ -10,11 +10,14 @@ export const MemoryExtractionService = {
     text: string,
     now: Date,
     timezone: string,
+    userId: string,
     pickedAt?: string | null
   ): Promise<Structured | null> {
     try {
       const raw = await geminiJSON<unknown>(
-        extractionPrompt(text, now, timezone, pickedAt ?? null)
+        extractionPrompt(text, now, timezone, pickedAt ?? null),
+        "extraction",
+        { userId, feature: "capture_extraction" }
       );
       return structuredSchema.parse(raw);
     } catch (e) {

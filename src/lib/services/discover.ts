@@ -49,7 +49,7 @@ MEMORIES:
 
  ${RULES}
 Shape: { "themes": [ { "name": string, "percent": number, "trend": "rising"|"stable"|"fading", "note": string, "memory_ids": [up to 3 ids] } ], "summary": string, "quiet_periods": string }
-4-8 themes ordered by percent descending.`);
+4-8 themes ordered by percent descending.`, "discover", { userId, feature: `discover_${kind}` });
       return { result, items };
     }
 
@@ -92,7 +92,7 @@ Shape: { "themes": [ { "name": string, "percent": number, "trend": "rising"|"sta
 
  ${RULES}
 Shape: { "items": [ { "category": "task"|"promise"|"event"|"project"|"decision"|"pattern"|"intention", "title": string, "detail": string, "urgency": "high"|"medium"|"low", "memory_ids": [ids] } ], "headline": string }
-Max 8 items ordered by urgency. Concrete, never preachy.`);
+Max 8 items ordered by urgency. Concrete, never preachy.`, "discover", { userId, feature: `discover_${kind}` });
       return { result };
     }
 
@@ -114,7 +114,7 @@ RECENT (last 2 weeks, ${recent.length} memories):
 
  ${RULES}
 Shape: { "letter": string (3-5 sentences, warm, past-you speaking to present-you), "past_themes": [string], "what_changed": [ { "change": string, "note": string } ], "what_persisted": [string], "open_loops_then": [string] }
-Max 4 items per list. Honest but kind. No diagnoses.`);
+Max 4 items per list. Honest but kind. No diagnoses.`, "discover", { userId, feature: `discover_${kind}` });
       return { result, items: [...past.slice(0, 6), ...recent.slice(0, 4)] };
     }
 
@@ -143,7 +143,7 @@ Max 4 items per list. Honest but kind. No diagnoses.`);
 
  ${RULES}
 Shape: { "alerts": [ { "category": "forgotten"|"overdue"|"emerging"|"upcoming", "message": string, "urgency": "high"|"medium"|"low", "memory_ids": [ids] } ], "calm_note": string }
-Max 6 alerts. Always include one calm_note (something going fine).`);
+Max 6 alerts. Always include one calm_note (something going fine).`, "discover", { userId, feature: `discover_${kind}` });
       return { result };
     }
 
@@ -160,7 +160,7 @@ MEMORIES (up to a year):
 
 Rules: Only report tensions where BOTH sides are clearly evidenced by the cited memories. Skip trivia. NEVER moralize - changing your mind is normal: label it "preference_change" or "decision_revisit", not a failure. This must read as a thoughtful friend, not an auditor.
 
-Shape: { "framing": string (one sentence, warm, sets the non-judgmental tone), "conflicts": [ { "tension": string (2-4 word name, e.g. "Time vs ambition"), "kind": "goal_vs_action"|"priority_shift"|"commitment_vs_reality"|"preference_change"|"decision_revisit", "earlier": { "claim": string (paraphrase), "date": string, "memory_id": string }, "later": { "claim": string, "date": string, "memory_id": string }, "question": string (one gentle question for the person) } ] (max 4, most meaningful first) }`);
+Shape: { "framing": string (one sentence, warm, sets the non-judgmental tone), "conflicts": [ { "tension": string (2-4 word name, e.g. "Time vs ambition"), "kind": "goal_vs_action"|"priority_shift"|"commitment_vs_reality"|"preference_change"|"decision_revisit", "earlier": { "claim": string (paraphrase), "date": string, "memory_id": string }, "later": { "claim": string, "date": string, "memory_id": string }, "question": string (one gentle question for the person) } ] (max 4, most meaningful first) }`, "discover", { userId, feature: `discover_${kind}` });
       return { result, items: all };
     }
 
@@ -176,7 +176,7 @@ MEMORIES (up to a year):
 
  ${RULES}
 Shape: { "interests": [ { "topic": string, "evidence": string, "memory_ids": [ids] } ], "concerns": [ { "topic": string, "evidence": string, "memory_ids": [ids] } ], "goals": [ { "goal": string, "status_hint": string, "memory_ids": [ids] } ], "changes": [ { "from": string, "to": string } ], "one_liner": string }
-3-5 interests, 2-4 concerns, 2-4 goals, max 3 changes. Grounded ONLY in the memories.`);
+3-5 interests, 2-4 concerns, 2-4 goals, max 3 changes. Grounded ONLY in the memories.`, "discover", { userId, feature: `discover_${kind}` });
       return { result, items: all.slice(0, 10) };
     }
 
