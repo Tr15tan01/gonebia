@@ -22,19 +22,40 @@ export const AIChatService = {
       console.error("[chat] planning failed, using raw question:", e);
     }
 
-    const rows = await MemoryRetrievalService.hybrid(sb, userId, {
+    const appliedTypes = (plan_.types as string[] | null) ?? null;
+    let rows = await MemoryRetrievalService.hybrid(sb, userId, {
       query: (plan_.query as string) || question,
-      types: (plan_.types as string[] | null) ?? null,
+      types: appliedTypes,
       person: (plan_.person as string | null) ?? null,
       from: (plan_.from as string | null) ?? null,
       to: (plan_.to as string | null) ?? null,
-      limit: 8,
+      limit: 10,
       // Semantic search is genuinely cheap (embeddings are a fraction of a
       // cent per question, and every memory is already embedded at capture
       // time regardless of plan) - no cost reason to withhold better
       // retrieval quality from free users.
       semantic: true,
     });
+
+    // The search-plan step is GUESSING how a note was classified when it was
+    // written - "types" is a hard filter in hybrid(), so a wrong guess
+    // doesn't just rank things lower, it silently excludes the exact memory
+    // that would have answered the question (this was reported as "found it
+    // with one phrasing but not another" - the difference was purely which
+    // type the planner happened to guess). If a type filter came back
+    // (almost) empty, retry once without it rather than trusting the guess.
+    if (appliedTypes?.length && rows.length < 2) {
+      const unfiltered = await MemoryRetrievalService.hybrid(sb, userId, {
+        query: (plan_.query as string) || question,
+        types: null,
+        person: (plan_.person as string | null) ?? null,
+        from: (plan_.from as string | null) ?? null,
+        to: (plan_.to as string | null) ?? null,
+        limit: 10,
+        semantic: true,
+      });
+      if (unfiltered.length > rows.length) rows = unfiltered;
+    }
 
     // "What books am I reading/have I read" is an aggregate, structured
     // question ("list everything with status=X") that fuzzy memory search
