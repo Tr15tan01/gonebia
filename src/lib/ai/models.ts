@@ -51,16 +51,19 @@ export function tierForJob(job: AiJob): AiTier {
 }
 
 /** Rough $/1M token pricing, used only to estimate cost for the usage log -
- *  not billing-accurate, and Google changes these periodically. Update
- *  alongside whatever models you actually set in the tiered env vars.
+ *  NOT verified against Google's current pricing page for every model here
+ *  (only gemini-3.6-flash/embedding-001 figures are ones I'm confident in;
+ *  the 3.1/3.7/3.8 figures are estimates pending confirmation) - check
+ *  https://ai.google.dev/gemini-api/docs/pricing and correct these if they're
+ *  off, since this directly feeds the admin dashboard's cost figures.
  *  Unrecognized models fall back to the "general" row so a cost estimate is
  *  still recorded rather than silently omitted. */
 const PRICING_PER_MILLION: Record<string, { input: number; output: number }> = {
+  "gemini-3.1-flash-lite": { input: 0.20, output: 1.50 },
   "gemini-3.5-flash-lite": { input: 0.30, output: 2.50 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },
-  "gemini-3.7-flash": { input: 0.75, output: 3.75 },
-  "gemini-3.1-pro": { input: 2.00, output: 12.00 },
-  "gemini-3.1-pro-preview": { input: 2.00, output: 12.00 },
+  "gemini-3.7-flash": { input: 0.75, output: 4.50 },
+  "gemini-3.8-flash": { input: 1.00, output: 6.00 },
   "gemini-embedding-001": { input: 0.15, output: 0 },
   _general_fallback: { input: 0.75, output: 3.75 },
 };
