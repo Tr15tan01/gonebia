@@ -72,15 +72,19 @@ Return ONLY a JSON object with these exact fields:
   today" => people: ["Giorgi"] (Giorgi is the real person involved; Homer is
   still just the quote's source, so excluded).
 - places, objects, products, companies: arrays of strings (empty if none)
-  PRODUCT CATEGORY RULE (important): when a specific branded product/model is
-  mentioned, include BOTH the specific name AND its general category as
-  separate entries in "products" - not just the specific one. This matters
-  because a later question like "when did I buy a computer" needs the word
-  "computer" to actually appear somewhere in what you extracted; it won't
-  otherwise, since the note itself may never say that generic word.
+  PRODUCT CATEGORY RULE (important): whenever a specific branded
+  product/model/vehicle is mentioned - bought, owned, driven, used, or just
+  referenced - include BOTH the specific name AND its general category as
+  separate entries in "products", not just the specific one. This matters
+  because a later question like "what color is my car" or "when did I buy a
+  computer" needs the word "car"/"computer" to actually appear somewhere in
+  what you extracted; it won't otherwise, since the note itself may never
+  say that generic word - only the brand/model.
   Example: "Bought a Lenovo Legion 5" => products: ["Lenovo Legion 5", "laptop", "computer"]
   Example: "Got an iPhone 15 Pro"    => products: ["iPhone 15 Pro", "phone", "smartphone"]
   Example: "Picked up a KitchenAid stand mixer" => products: ["KitchenAid stand mixer", "mixer", "kitchen appliance"]
+  Example: "I have a yellow BMW"     => products: ["BMW", "car", "vehicle"] (plain ownership statement, no purchase verb - still applies)
+  Example: "My Honda Civic needs an oil change" => products: ["Honda Civic", "car", "vehicle"]
 - amounts: [{value: number, currency: string (ISO code, e.g. GEL/USD), label}] (empty if none)
 - category: 1-2 words, e.g. "shopping", "health", "work", "home", "learning", "reading"
 - importance: 1 (trivial) to 5 (life-important)
@@ -125,6 +129,21 @@ Return ONLY JSON:
 }
 Relevant memory types: thought, idea, task, event, purchase, expense, knowledge, book, question,
 decision, promise, commitment, goal, habit, person, place, project, observation, reflection, reminder.
+
+IMPORTANT about "types": this EXCLUDES every memory of a different type from
+the search entirely - it is not a hint or a ranking boost, it is a hard
+filter. You do not actually know how any given note was classified when it
+was written (the same fact - "I have a yellow BMW" - could reasonably have
+been stored as "thought", "knowledge", or something else), so guessing a
+specific type for an open-ended factual, descriptive, or pattern question
+("what color is my car", "what is my sleep schedule", "what does she like")
+risks silently filtering out the exact memory that would answer it. Only set
+"types" when the question is UNAMBIGUOUSLY asking for a category of items
+that essentially defines a type ("what tasks do I have" => ["task"], "what
+books have I read" => ["book"], "show my reminders" => ["reminder"]).
+For anything else - facts, attributes, preferences, schedules, "what/who/
+when" questions about a specific thing - leave "types": null and let semantic
++ keyword search work across everything.
 Resolve relative time ranges against CURRENT DATE/TIME (e.g. "last month" => from = first day of previous month).`;
 }
 
