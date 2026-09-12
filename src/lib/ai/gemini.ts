@@ -14,10 +14,17 @@ export interface UsageCtx {
   feature: string;
 }
 
+class NonRetryableError extends Error {}
+
 async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
   let last: unknown;
   for (let i = 0; i < tries; i++) {
-    try { return await fn(); } catch (e) { last = e; await new Promise((r) => setTimeout(r, 400 * 2 ** i)); }
+    try { return await fn(); }
+    catch (e) {
+      last = e;
+      if (e instanceof NonRetryableError) throw e; // no point retrying a deterministic failure
+      await new Promise((r) => setTimeout(r, 400 * 2 ** i));
+    }
   }
   throw last;
 }
@@ -44,11 +51,26 @@ async function generate(
       });
       if (!res.ok) {
         const body = (await res.text()).slice(0, 300);
-        throw new Error(`Gemini ${model} HTTP ${res.status}: ${body}`);
+        const msg = `Gemini ${model} HTTP ${res.status}: ${body}`;
+        // 4xx (bad API key, invalid model name, malformed request, quota
+        // exceeded) won't succeed on retry - only network hiccups and 5xx
+        // are worth retrying.
+        if (res.status >= 400 && res.status < 500) throw new NonRetryableError(msg);
+        throw new Error(msg);
       }
       const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
-      if (!text) throw new Error(`Gemini ${model} returned empty response`);
+      const candidate = data?.candidates?.[0];
+      const text = candidate?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+      if (!text) {
+        // A 200 OK with no text is almost always Gemini's safety filter
+        // blocking the response (finishReason "SAFETY"/"RECITATION"/etc.),
+        // not a transient failure - retrying won't change the outcome, and
+        // the previous version of this code retried 3 times anyway, which
+        // is exactly what made a safety-blocked answer look like "the
+        // language model couldn't be reached" after a long pointless delay.
+        const reason = candidate?.finishReason ?? "unknown";
+        throw new NonRetryableError(`Gemini ${model} returned no text (finishReason: ${reason})`);
+      }
       const inputTokens = data?.usageMetadata?.promptTokenCount ?? 0;
       const outputTokens = data?.usageMetadata?.candidatesTokenCount ?? 0;
       return { text, inputTokens, outputTokens, raw: data };
