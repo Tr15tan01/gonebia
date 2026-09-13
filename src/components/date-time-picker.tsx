@@ -67,10 +67,10 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
         📅 {label}
       </button>
 
-      {open && <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />}
 
       {open && (
-        <div className="absolute z-20 mt-2 w-72 card p-3 shadow-lg rise">
+        <div className="absolute z-[61] mt-2 w-72 card p-3 shadow-lg rise">
           {/* month header */}
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => setMonth(new Date(y, m - 1, 1))} className="btn-ghost !px-2 !py-1" aria-label="Previous month">‹</button>

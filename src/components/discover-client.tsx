@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import Link from "next/link";
 import { Spinner, useToast } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
@@ -77,58 +77,65 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
 
       <div className="grid sm:grid-cols-2 gap-3">
         {TOOLS.map((t) => (
-          <button key={t.kind}
-            onClick={() => { setActive(t.kind); setWindow(t.windows ? t.windows[1] : null); setData(null); }}
-            className={`card p-4 text-left cursor-pointer hover:border-ember/60 transition-colors ${active === t.kind ? "!border-ember" : ""}`}>
-            <p className="font-medium">{t.icon} {t.name}</p>
-            <p className="text-sm text-ink-2 mt-1">{t.desc}</p>
-          </button>
-        ))}
-      </div>
+          <Fragment key={t.kind}>
+            <button
+              onClick={() => { setActive(active === t.kind ? null : t.kind); setWindow(t.windows ? t.windows[1] : null); setData(null); setRunError(null); }}
+              className={`card p-4 text-left cursor-pointer hover:border-ember/60 transition-colors ${active === t.kind ? "!border-ember" : ""}`}>
+              <p className="font-medium">{t.icon} {t.name}</p>
+              <p className="text-sm text-ink-2 mt-1">{t.desc}</p>
+            </button>
 
-      {tool && (
-        <div className="card p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium">{tool.icon} {tool.name}</p>
-            {tool.windows && (
-              <div className="flex gap-1.5">
-                {tool.windows.map((w) => (
-                  <button key={w} onClick={() => setWindow(w)}
-                    className={`chip cursor-pointer ${window === w ? "!bg-ember !text-white !border-ember" : ""}`}>
-                    {w === 30 ? "30 days" : w === 90 ? "90 days" : w === 180 ? "6 months" : w === 365 ? "1 year" : `${w}d`}
-                  </button>
-                ))}
+            {/* Rendered directly after the card that was clicked (col-span-full
+               so it takes the whole row on the 2-column desktop layout too) -
+               previously this whole panel lived after the entire grid, so on
+               mobile clicking an early card meant scrolling past every
+               remaining card to find the Run button. */}
+            {tool && t.kind === active && (
+              <div className="card p-5 space-y-4 col-span-full rise">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium">{tool.icon} {tool.name}</p>
+                  {tool.windows && (
+                    <div className="flex gap-1.5">
+                      {tool.windows.map((w) => (
+                        <button key={w} onClick={() => setWindow(w)}
+                          className={`chip cursor-pointer ${window === w ? "!bg-ember !text-white !border-ember" : ""}`}>
+                          {w === 30 ? "30 days" : w === 90 ? "90 days" : w === 180 ? "6 months" : w === 365 ? "1 year" : `${w}d`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => run(tool.kind, window)} disabled={busy || outOfRuns} className="btn-primary w-full">
+                  {busy ? "Analyzing your memories..." : "Run analysis"}
+                </button>
+
+                {runError && !busy && (
+                  <div className="card p-4 text-sm" style={{ background: "var(--danger-soft)", borderLeft: "3px solid var(--danger)" }}>
+                    <p className="font-medium" style={{ color: "var(--danger)" }}>Not yet</p>
+                    <p className="text-ink-2 mt-1">{runError}</p>
+                  </div>
+                )}
+
+                {busy && (
+                  <div className="text-center py-8 flex flex-col items-center gap-3">
+                    <div className="run-ring" style={{ "--run-ring-color": PHASES[phase].color } as React.CSSProperties} />
+                    <p className="text-sm font-medium transition-colors duration-500" style={{ color: PHASES[phase].color }}>
+                      <span className="mr-1.5">{PHASES[phase].icon}</span>
+                      {PHASES[phase].text}<span className="loader-dots"><span /><span /><span /></span>
+                    </p>
+                    <p className="text-xs text-ink-2">Usually 10-30 seconds.</p>
+                  </div>
+                )}
+
+                {data && !busy && (
+                  <DiscoverResult kind={tool.kind} data={data} sources={sources} cached={cached}
+                    onRegenerate={() => run(tool.kind, window, true)} />
+                )}
               </div>
             )}
-          </div>
-          <button onClick={() => run(tool.kind, window)} disabled={busy || outOfRuns} className="btn-primary w-full">
-            {busy ? "Analyzing your memories..." : "Run analysis"}
-          </button>
-
-          {runError && !busy && (
-            <div className="card p-4 text-sm" style={{ background: "var(--danger-soft)", borderLeft: "3px solid var(--danger)" }}>
-              <p className="font-medium" style={{ color: "var(--danger)" }}>Not yet</p>
-              <p className="text-ink-2 mt-1">{runError}</p>
-            </div>
-          )}
-
-          {busy && (
-            <div className="text-center py-8 flex flex-col items-center gap-3">
-              <div className="run-ring" style={{ "--run-ring-color": PHASES[phase].color } as React.CSSProperties} />
-              <p className="text-sm font-medium transition-colors duration-500" style={{ color: PHASES[phase].color }}>
-                <span className="mr-1.5">{PHASES[phase].icon}</span>
-                {PHASES[phase].text}<span className="loader-dots"><span /><span /><span /></span>
-              </p>
-              <p className="text-xs text-ink-2">Usually 10-30 seconds.</p>
-            </div>
-          )}
-
-          {data && !busy && (
-            <DiscoverResult kind={tool.kind} data={data} sources={sources} cached={cached}
-              onRegenerate={() => run(tool.kind, window, true)} />
-          )}
-        </div>
-      )}
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }

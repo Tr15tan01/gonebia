@@ -24,6 +24,13 @@ export async function POST(req: Request) {
     );
   }
   const { messages, timezone } = chatSchema.parse(await req.json());
+  const question = messages.at(-1);
+  if (question?.role === "user" && question.content.length > 180) {
+    return NextResponse.json({
+      error: "Questions are limited to 180 characters - try shortening it.",
+      code: "too_long",
+    }, { status: 400 });
+  }
   const sb = await createClient();
 
   // server-side AI question limits (daily + monthly)
@@ -32,13 +39,13 @@ export async function POST(req: Request) {
   const usage = await getUsage(sb, user.id);
   if (usage.chatToday >= lim.chatPerDay) {
     return NextResponse.json({
-      error: `You've used all ${lim.chatPerDay} AI questions for today on the ${plan === "free" ? "Free" : "Pro"} plan. ${plan === "free" ? "Upgrade to Pro for 500/month." : "They reset at midnight."}`,
+      error: `You've used all ${lim.chatPerDay} AI questions for today on the ${lim.label} plan. ${plan === "free" ? "Upgrade for more." : "They reset at midnight."}`,
       code: "limit", feature: "chat", limit: lim.chatPerDay, period: "day", upgrade: plan === "free",
     }, { status: 402 });
   }
   if (usage.chatMonth >= lim.chatPerMonth) {
     return NextResponse.json({
-      error: `You've used all ${lim.chatPerMonth} AI questions this month on the ${plan === "free" ? "Free" : "Pro"} plan. ${plan === "free" ? "Upgrade to Pro for 500/month." : "They reset next month."}`,
+      error: `You've used all ${lim.chatPerMonth} AI questions this month on the ${lim.label} plan. ${plan === "free" ? "Upgrade for more." : "They reset next month."}`,
       code: "limit", feature: "chat", limit: lim.chatPerMonth, period: "month", upgrade: plan === "free",
     }, { status: 402 });
   }

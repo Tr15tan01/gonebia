@@ -39,7 +39,7 @@ export const structuredSchema = z.object({
 });
 
 export const captureSchema = z.object({
-  text: z.string().min(1).max(4000),
+  text: z.string().min(1).max(840),
   source: z.enum(["typed", "voice"]).default("typed"),
   timezone: z.string().max(64).default("UTC"),
   at: z.string().nullable().optional()
@@ -47,7 +47,7 @@ export const captureSchema = z.object({
 });
 
 export const correctionSchema = z.object({
-  original_text: z.string().min(1).max(4000).optional(),
+  original_text: z.string().min(1).max(840).optional(),
   title: z.string().min(1).max(140).optional(),
   type: z.enum(MEMORY_TYPES).optional(),
   status: z.enum(["open", "done", "archived"]).optional(),

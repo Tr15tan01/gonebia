@@ -75,23 +75,34 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
     rec.continuous = true;
     rec.interimResults = true;
     const base = text.trim() ? text.trim() + " " : "";
-    // Mobile browsers (especially Android Chrome) silently restart/resegment
-    // the recognition session and can re-send part of the previous segment's
-    // already-final text as "new" content afterward. The previous approach
-    // deduped by POSITION (a global result index that grows on each restart)
-    // - that only works if a new segment's index 0 never overlaps content
-    // from before, which mobile browsers don't guarantee, so overlapping
-    // resends slipped through as literal duplicated words.
-    // This tracks by CONTENT instead: `committed` is text we've locked in for
-    // good; `lastSessionFinal` is the current segment's final text so far.
-    // As long as the segment's final text keeps growing (normal speech), we
-    // just show committed + this segment's final + interim - nothing is
-    // double-counted because the segment's own final text is always shown
-    // exactly once. The moment a segment's final text ISN'T still growing
-    // from what we last saw (a restart/resegment happened), we fold whatever
-    // was pending into `committed` exactly once and start tracking the new
-    // segment fresh - so a resent overlap is absorbed into the same
-    // `committed` text instead of being appended a second time.
+    // Mobile browsers (especially Android Chrome) restart the recognition
+    // session on almost every brief pause, and very often RE-TRANSCRIBES
+    // some of the audio it just finalized as part of the new session - not
+    // just occasionally, but routinely, which is why this needs real
+    // overlap detection rather than a simple "is it still growing" check
+    // (that only catches duplication WITHIN one session; a restart resets
+    // tracking to empty, so overlap across the restart boundary needs its
+    // own check). mergeWithOverlap finds how many trailing words of what's
+    // already committed match the leading words of the new text and skips
+    // just that overlap, rather than re-appending it - this is what
+    // actually stops "how does how does how does" style growth, since that
+    // pattern is exactly a restart re-sending an overlapping chunk each time.
+    function mergeWithOverlap(committedText: string, next: string): string {
+      const a = committedText.trim();
+      const b = next.trim();
+      if (!a) return b;
+      if (!b) return a;
+      const aWords = a.split(/\s+/);
+      const bWords = b.split(/\s+/);
+      const maxOverlap = Math.min(aWords.length, bWords.length, 12);
+      for (let n = maxOverlap; n > 0; n--) {
+        const suffix = aWords.slice(-n).join(" ").toLowerCase();
+        const prefix = bWords.slice(0, n).join(" ").toLowerCase();
+        if (suffix === prefix) return `${a} ${bWords.slice(n).join(" ")}`.trim();
+      }
+      return `${a} ${b}`.trim();
+    }
+
     let committed = base;
     let lastSessionFinal = "";
     rec.onresult = (e: any) => {
@@ -103,16 +114,17 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
         else interim += r[0].transcript;
       }
       if (!sessionFinal.startsWith(lastSessionFinal)) {
-        committed = (committed + " " + lastSessionFinal).replace(/\s+/g, " ").trim();
+        committed = mergeWithOverlap(committed, lastSessionFinal);
         if (committed) committed += " ";
         lastSessionFinal = "";
       }
       lastSessionFinal = sessionFinal;
-      setText((committed + sessionFinal + " " + interim).replace(/\s+/g, " ").trimStart());
+      const shown = mergeWithOverlap(committed.trim(), sessionFinal);
+      setText(`${shown} ${interim}`.replace(/\s+/g, " ").trimStart());
     };
     rec.onend = () => {
       if (listeningRef.current) {
-        committed = (committed + " " + lastSessionFinal).replace(/\s+/g, " ").trim();
+        committed = mergeWithOverlap(committed, lastSessionFinal);
         if (committed) committed += " ";
         lastSessionFinal = "";
         // Android Chrome ends sessions aggressively - restart while listening.
@@ -193,10 +205,16 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save(); }}
           rows={2}
+          maxLength={840}
           placeholder="Tell TimelyMemo something..."
           className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
           disabled={saving}
         />
+        {text.length > 700 && (
+          <p className={`text-xs mt-1 text-right ${text.length >= 840 ? "text-danger" : "text-ink-2"}`}>
+            {text.length}/840
+          </p>
+        )}
 
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-2">

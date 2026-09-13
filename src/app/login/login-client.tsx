@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { Loader } from "@/components/ui";
@@ -78,6 +78,11 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
   const [resent, setResent] = useState(false);
   const [now, setNow] = useState(0);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Only ever an internal path - never redirect to an arbitrary external URL
+  // from a query param (open-redirect risk).
+  const rawNext = searchParams.get("next");
+  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
 
   // re-check lockout state as the user types their email, and tick a clock
   // so the "try again in Xm" message counts down instead of sitting static
@@ -160,7 +165,7 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
       clearAttempts(email);
       posthog.identify(email, {});
       posthog.capture(signup ? "signed_up_and_in" : "signed_in", { method: "password" });
-      router.push("/dashboard");
+      router.push(next);
       router.refresh();
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong - please try again.");
@@ -214,7 +219,7 @@ export function LoginClient({ googleEnabled }: { googleEnabled: boolean }) {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+                onClick={() => signIn("google", { callbackUrl: next })}
                 className="btn-ghost w-full flex items-center justify-center gap-2"
               >
                 <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.4 29.4 35.5 24 35.5c-6.4 0-11.5-5.1-11.5-11.5S17.6 12.5 24 12.5c2.9 0 5.6 1.1 7.6 2.9l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.6 15.9 18.9 12.5 24 12.5c2.9 0 5.6 1.1 7.6 2.9l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.6 0-14.1 4.3-17.4 10.6z"/><path fill="#4CAF50" d="M24 43.5c4.9 0 9.4-1.9 12.8-5l-6-4.9c-2 1.4-4.5 2.2-6.9 2.2-5.3 0-9.8-3.1-11.4-7.7l-6.6 5.1C9.8 39.1 16.4 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.9 2.5-2.6 4.6-4.8 6l6 4.9C40.1 36.6 43.5 30.8 43.5 24c0-1.2-.1-2.4-.4-3.5z"/></svg>

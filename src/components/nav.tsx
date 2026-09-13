@@ -180,7 +180,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
           </button>
           <div className="flex items-center justify-between px-3">
             {bell()}
-            <ThemeToggle />
+            <ThemeToggle size="lg" />
           </div>
         </div>
       </aside>
@@ -196,11 +196,11 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
             {bell("lg")}
             <button
               onClick={logout} disabled={loggingOut}
-              className="!px-2.5 rounded-lg cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
-              style={{ color: "var(--danger)" }}
+              className="btn-ghost !px-2.5 text-xl cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
+              style={{ color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 30%, transparent)" }}
               aria-label="Log out" title="Log out"
             >
-              {loggingOut ? <Spinner size={16} /> : "\u23fb"}
+              {loggingOut ? <Spinner size={18} /> : "\u23fb"}
             </button>
             <ThemeToggle size="lg" />
           </div>

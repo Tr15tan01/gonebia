@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui";
 import posthog from "posthog-js";
 import type { PaddleTier } from "@/components/paddle-bridge";
@@ -29,6 +31,8 @@ export function UpgradeButton({
 }) {
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const configured = !!process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN && (
     tier === "pro"
       ? !!process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO
@@ -40,16 +44,25 @@ export function UpgradeButton({
     <div className="flex flex-col items-stretch gap-2">
       <button
         onClick={() => {
-          posthog.capture("upgrade_clicked", { billing_configured: configured, tier });
+          posthog.capture("upgrade_clicked", { billing_configured: configured, tier, logged_in: status === "authenticated" });
+          if (status !== "authenticated") {
+            // No account to attribute payment to - Paddle would still take
+            // real money, but the webhook has no user_id to credit it to
+            // (see paddle-bridge.tsx's customData), so the account would
+            // never actually switch plans. Send them to log in first,
+            // then straight back here to finish upgrading.
+            router.push(`/login?next=${encodeURIComponent("/pricing")}`);
+            return;
+          }
           if (!configured) { toast("Billing isn't configured yet - add your Paddle keys to enable checkout."); return; }
           setBusy(true);
           window.dispatchEvent(new CustomEvent("timelymemo:checkout", { detail: { tier } }));
           setTimeout(() => setBusy(false), 2000);
         }}
-        disabled={busy}
+        disabled={busy || status === "loading"}
         className={`btn-primary ${className}`}
       >
-        {busy ? "Opening checkout..." : label ?? `Upgrade to ${info.label} - ${info.price}`}
+        {busy ? "Opening checkout..." : status === "authenticated" ? (label ?? `Upgrade to ${info.label} - ${info.price}`) : "Log in to upgrade"}
       </button>
       {showBenefitsLink && (
         <Link

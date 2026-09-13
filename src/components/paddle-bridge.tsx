@@ -53,6 +53,13 @@ export function PaddleBridge() {
     if (!token) return;
     const handler = (e: Event) => {
       const tier: PaddleTier = (e as CustomEvent)?.detail?.tier === "pro" ? "pro" : "premium";
+      if (!(session?.user as any)?.id) {
+        // UpgradeButton already checks this before dispatching, but this is
+        // the actual point where a real charge would happen - worth refusing
+        // here too rather than trusting every possible caller upstream.
+        alert("Please log in before upgrading.");
+        return;
+      }
       const priceId = tier === "pro" ? proPriceId : premiumPriceId;
       if (!priceId) {
         alert("That plan isn't configured yet - add its Paddle price id to enable checkout.");
@@ -60,7 +67,7 @@ export function PaddleBridge() {
       }
       if (!window.Paddle) { alert("Billing is still loading - try again in a second."); return; }
       const customer = session?.user?.email ? { email: session.user.email } : {};
-      const custom = (session?.user as any)?.id ? { user_id: (session!.user as any).id } : {};
+      const custom = { user_id: (session!.user as any).id };
       startingPlanRef.current = ((session?.user as any)?.plan as string) ?? "free";
       window.Paddle.Checkout.open({
         items: [{ priceId, quantity: 1 }],

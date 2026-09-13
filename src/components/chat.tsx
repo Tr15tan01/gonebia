@@ -142,6 +142,7 @@ export function ChatClient() {
           className="input !py-3"
           placeholder="Ask my memory..."
           value={input}
+          maxLength={180}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
         />

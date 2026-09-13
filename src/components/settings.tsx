@@ -9,12 +9,14 @@ import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
 import { signOut } from "next-auth/react";
 import { UpgradeButton } from "@/components/upgrade-button";
 import { GoogleCard } from "@/components/google-card";
+import { useInstallPrompt } from "@/lib/use-install-prompt";
 import { ManageBillingButton } from "@/components/manage-billing";
 
 type PermState = "unsupported" | "granted" | "denied" | "default" | "loading";
 
 export function SettingsClient({ email, prefs, timezone, plan = "free", usage, limits }: { email: string; prefs: any; timezone: string; plan?: string; usage?: any; limits?: any }) {
   const { theme, apply } = useTheme();
+  const { canInstall, isIOS, standalone, install } = useInstallPrompt();
   const [qs, setQs] = useState(prefs?.quiet_hours_start ?? 22);
   const [qe, setQe] = useState(prefs?.quiet_hours_end ?? 8);
   const [pushOn, setPushOn] = useState(!!prefs?.push_enabled);
@@ -199,6 +201,33 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
           <AccentPicker initial={prefs?.accent_color} canCustomize={plan !== "free"} onSaved={toast} />
         </div>
       </section>
+
+      {!standalone && (
+        <section className="card p-5 space-y-2">
+          <p className="label">Install app</p>
+          {isIOS ? (
+            <p className="text-sm text-ink-2 leading-relaxed">
+              Tap the Share <span aria-hidden>⎋</span> button in Safari, then "Add to Home Screen".
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-ink-2">Full screen, offline-ready, one tap from your home screen.</p>
+              <button
+                onClick={async () => {
+                  const result = await install();
+                  if (result === "installed") toast("Installed!");
+                  else if (result === "unavailable" || result === "error") {
+                    toast("Use your browser menu's \"Install app\" or \"Add to Home Screen\" option.");
+                  }
+                }}
+                className="btn-ghost !text-sm"
+              >
+                {canInstall ? "Install now" : "Install"}
+              </button>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="card p-5 space-y-3">
         <p className="label">Notifications</p>
