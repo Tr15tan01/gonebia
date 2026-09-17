@@ -164,10 +164,17 @@ async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
   const avgSleep = hours.length ? hours.reduce((a: number, b: number) => a + b, 0) / hours.length : null;
   const knowledge = count(researchRuns) + count(deepRuns) + count(kbItems);
 
-  const stats = [
+  const stats: { label: string; icon: string; value: number | string; sub: React.ReactNode; color: string; href: string }[] = [
     { label: "Open tasks", icon: "☑️", value: count(openTasks), sub: "promises included", color: "var(--c-task)", href: "/tasks" },
     { label: "Memories", icon: "💭", value: count(totalMems), sub: "everything you've said", color: "var(--ember)", href: "/timeline" },
-    { label: "Books", icon: "📚", value: count(booksInProcess), sub: `in process · ${count(booksDone)} finished`, color: "var(--c-book)", href: "/books" },
+    {
+      label: "Books", icon: "📚", value: count(booksDone), color: "var(--c-book)", href: "/books",
+      sub: (
+        <>
+          finished · <span className="font-semibold text-ink">{count(booksInProcess)}</span> in process
+        </>
+      ),
+    },
     { label: "Movies", icon: "🎬", value: count(movies), sub: "watched & noted", color: "var(--c-movie)", href: "/timeline?type=movie" },
     { label: "People", icon: "👥", value: count(peopleN), sub: "in your circle", color: "var(--c-decision)", href: "/people" },
     { label: "Knowledge", icon: "🧠", value: knowledge, sub: count(deepRuns) ? `${count(deepRuns)} deep report${count(deepRuns) === 1 ? "" : "s"}` : "researched topics", color: "var(--c-know)", href: "/knowledge" },

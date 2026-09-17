@@ -141,7 +141,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div>
       <div className="card p-4 focus-within:border-ember transition-colors">
         <textarea
           ref={areaRef}
@@ -177,17 +177,44 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
         </div>
       </div>
 
-      {saving && (
-        <div className="card p-4 rise flex items-center gap-4">
+      {/* Both panels grow and shrink smoothly instead of snapping the
+         dashboard header to a new height the moment you hit Remember. */}
+      <Expand open={saving}>
+        <div className="card p-4 mt-3 flex items-center gap-4">
           <div className="loader-ring" />
           <div className="min-w-0">
             <p className="text-sm font-medium">{PHASES[phase]}<span className="loader-dots"><span /><span /><span /></span></p>
             <p className="text-xs text-ink-2 mt-0.5">TimelyMemo is thinking about this — usually a few seconds.</p>
           </div>
         </div>
-      )}
+      </Expand>
 
-      {result && <Interpretation result={result} onClose={() => setResult(null)} updatingCounts={updatingCounts} />}
+      <Expand open={!!result && !saving}>
+        <div className="mt-3">
+          {result && <Interpretation result={result} onClose={() => setResult(null)} updatingCounts={updatingCounts} />}
+        </div>
+      </Expand>
+    </div>
+  );
+}
+
+/** Height-animated container. Keeps the last children mounted while closing
+ *  so the panel collapses smoothly instead of vanishing. */
+function Expand({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const [held, setHeld] = useState<React.ReactNode>(null);
+  useEffect(() => {
+    if (open) { setHeld(children); return; }
+    const t = setTimeout(() => setHeld(null), 320);
+    return () => clearTimeout(t);
+  }, [open, children]);
+  if (!open && !held) return null;
+  return (
+    <div
+      className="grid transition-all duration-300 ease-out motion-reduce:transition-none"
+      style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
+      aria-hidden={!open}
+    >
+      <div className="min-h-0 overflow-hidden">{open ? children : held}</div>
     </div>
   );
 }

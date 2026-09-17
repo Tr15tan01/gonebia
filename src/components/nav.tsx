@@ -152,29 +152,34 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
     <div className="min-h-dvh flex">
       {/* Desktop sidebar */}
       <aside
-        className="hidden md:flex flex-col w-60 shrink-0 border-r border-line p-4 gap-0.5 sticky top-0 h-dvh overflow-y-auto bg-paper-2/40"
+        className="hidden md:flex flex-col w-60 shrink-0 border-r border-line p-4 sticky top-0 h-dvh overflow-hidden bg-paper-2/40"
         style={
           plan === "premium" ? { borderTop: "3px solid var(--premium)" }
           : plan === "pro" ? { borderTop: "3px solid var(--pro)" }
           : undefined
         }
       >
-        <Link href="/dashboard" className="px-3 pt-4 pb-5 flex flex-col items-start" aria-label="TimelyMemo home">
+        <Link href="/dashboard" className="px-3 pt-2 pb-4 flex flex-col items-start shrink-0" aria-label="TimelyMemo home">
           <Logo />
           <span className="mt-2">
             <PlanBadge plan={plan} />
           </span>
         </Link>
+        {/* The list takes whatever height is left and scrolls without a
+           visible bar (with a soft fade at the edges), so a bigger text size
+           or a short window never puts a scrollbar through the menu. */}
+        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar edge-fade flex flex-col gap-0.5">
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href}
             aria-current={path.startsWith(l.href) ? "page" : undefined}
-            className={`nav-link relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${path.startsWith(l.href) ? "bg-card soft-shadow" : "hover:bg-paper-2"}`}>
+            className={`nav-link relative flex items-center gap-3 rounded-xl px-3 py-2 shrink-0 transition-colors ${path.startsWith(l.href) ? "bg-card soft-shadow" : "hover:bg-paper-2"}`}>
             {path.startsWith(l.href) && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: l.color }} />}
             <span aria-hidden className="grid place-items-center size-6 rounded-lg text-[13px]"
               style={{ color: l.color, background: `color-mix(in srgb, ${l.color} 13%, transparent)` }}>{l.icon}</span>{l.label}
           </Link>
         ))}
-        <div className="mt-auto px-3 pt-3 border-t border-line space-y-2">
+        </div>
+        <div className="shrink-0 px-3 pt-3 mt-2 border-t border-line space-y-2">
           <button
             onClick={logout}
             disabled={loggingOut}

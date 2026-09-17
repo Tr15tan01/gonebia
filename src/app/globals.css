@@ -431,3 +431,12 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01
 .nav-link { color: var(--nav-ink); font-size: 0.9375rem; font-weight: 500; }
 .nav-link:hover { color: var(--ink); }
 .nav-link[aria-current="page"] { color: var(--ink); font-weight: 650; }
+
+
+/* scroll without a visible bar (used by the sidebar menu) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+/* fades the first/last rows when a list is taller than its box */
+.edge-fade {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 6px, #000 calc(100% - 14px), transparent 100%);
+}
