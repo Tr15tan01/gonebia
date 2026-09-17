@@ -42,7 +42,7 @@ export default async function BlogPage() {
           ))}
         </div>
       </main>
-      <PublicFooter />
+      <PublicFooter loggedIn={!!user} />
     </div>
   );
 }

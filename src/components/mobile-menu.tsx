@@ -34,9 +34,14 @@ export function MobileMenu({ loggedIn }: { loggedIn?: boolean }) {
                   {l.label}
                 </Link>
               ))}
-              <Link href="/login" onClick={() => setOpen(false)} className="btn-primary mt-2 text-center">
-                Sign in
-              </Link>
+              {loggedIn ? (
+                <>
+                  <Link href="/dashboard" onClick={() => setOpen(false)} className="btn-primary mt-2 text-center">Open app</Link>
+                  <Link href="/login" onClick={() => setOpen(false)} className="py-2 px-2 mt-1 text-center text-xs text-ink-2 hover:text-ember">Switch account</Link>
+                </>
+              ) : (
+                <Link href="/login" onClick={() => setOpen(false)} className="btn-primary mt-2 text-center">Sign in</Link>
+              )}
             </nav>
           </div>
         </>

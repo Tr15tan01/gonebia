@@ -87,7 +87,7 @@ export default async function TermsPage() {
           ))}
         </div>
       </main>
-      <PublicFooter />
+      <PublicFooter loggedIn={!!user} />
     </div>
   );
 }

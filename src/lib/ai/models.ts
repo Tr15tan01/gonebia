@@ -9,8 +9,8 @@ export type AiJob =
   | "chat_answer"       // Ask My Memory - the actual grounded answer
   | "insights"          // weekly reflection / complex pattern analysis
   | "discover"          // Discover, Life Radar, and related analyses
-  | "agent"             // Research Agent, Buying Agent, Problem Solver
-  | "enrichment";       // grounded lookups: book metadata, price tracking
+  | "agent"             // Research + Deep Research agents
+  | "enrichment";       // grounded lookups: book metadata, watch-agent page reading
 
 export type AiTier = "fast" | "general" | "reasoning";
 

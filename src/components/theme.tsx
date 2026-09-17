@@ -4,9 +4,9 @@ import { ACCENT_COLORS, accentHex, type AccentId } from "@/lib/accent-colors";
 
 export function useTheme() {
   const [theme, setTheme] = useState<string>("system");
-  useEffect(() => { setTheme(localStorage.getItem("gonebia-theme") ?? "system"); }, []);
+  useEffect(() => { setTheme(localStorage.getItem("timelymemo-theme") ?? "system"); }, []);
   const apply = (t: string) => {
-    localStorage.setItem("gonebia-theme", t);
+    localStorage.setItem("timelymemo-theme", t);
     const dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.classList.toggle("dark", dark);
     setTheme(t);

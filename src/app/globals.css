@@ -2,23 +2,30 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --paper: #faf7f2; --paper-2: #f3eee5; --card: #ffffff;
-  --ink: #1c1917; --ink-2: #6b6257; --line: #e6dfd2;
+  /* "Dusk" palette: a cool twilight neutral with a warm lamp accent.
+     --ember is the user-selectable accent (amber by default). */
+  --paper: #f5f4fa; --paper-2: #ebe9f3; --card: #ffffff;
+  --ink: #1c1a2e; --ink-2: #625f7a; --line: #e0ddeb;
   --ember: #b45309; --ember-soft: #fdf0e0;
+  --dusk: #3b3a8f;
   --danger: #dc2626; --danger-soft: #fef2f2;
   --success: #059669; --success-soft: #ecfdf5;
-  /* plan accents: Premium is green, Pro stays the gold/ember tone it always was */
   --premium: #059669; --premium-soft: #ecfdf5;
   --pro: var(--ember); --pro-soft: var(--ember-soft);
   /* memory-type accents */
   --c-task: #2563eb; --c-book: #dc2626; --c-buy: #059669; --c-decision: #7c3aed;
   --c-idea: #ea580c; --c-goal: #c026d3; --c-event: #0284c7; --c-person: #b45309;
   --c-promise: #d97706; --c-ask: #0891b2; --c-know: #4f46e5; --c-place: #16a34a;
+  --c-movie: #db2777; --c-sleep: #4a5fa8;
+  --shadow-soft: 0 1px 1px rgba(28, 26, 46, 0.04), 0 2px 6px rgba(28, 26, 46, 0.05), 0 12px 28px -12px rgba(28, 26, 46, 0.12);
+  --shadow-lift: 0 2px 4px rgba(28, 26, 46, 0.05), 0 18px 40px -16px rgba(28, 26, 46, 0.22);
+  --radius-card: 1.125rem;
 }
 .dark {
-  --paper: #14110e; --paper-2: #1b1713; --card: #1e1a15;
-  --ink: #ece7de; --ink-2: #a39a8c; --line: #2e2820;
-  --ember: #e8963f; --ember-soft: #2a2013;
+  --paper: #0e0d17; --paper-2: #16152a; --card: #1a1929;
+  --ink: #ecebf5; --ink-2: #a09db8; --line: #2a2840;
+  --ember: #f0a04b; --ember-soft: #2b2114;
+  --dusk: #8f8cf0;
   --danger: #f87171; --danger-soft: #2a1515;
   --success: #34d399; --success-soft: #122419;
   --premium: #34d399; --premium-soft: #122419;
@@ -26,11 +33,14 @@
   --c-task: #60a5fa; --c-book: #f87171; --c-buy: #34d399; --c-decision: #a78bfa;
   --c-idea: #fb923c; --c-goal: #e879f9; --c-event: #38bdf8; --c-person: #fbbf24;
   --c-promise: #fbbf24; --c-ask: #22d3ee; --c-know: #818cf8; --c-place: #4ade80;
+  --c-movie: #f472b6; --c-sleep: #93a5e0;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 22px 44px -18px rgba(0, 0, 0, 0.75);
 }
 
 @theme inline {
-  --font-display: var(--font-fraunces), Georgia, serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
   --color-paper: var(--paper);
   --color-paper-2: var(--paper-2);
   --color-card: var(--card);
@@ -39,6 +49,7 @@
   --color-line: var(--line);
   --color-ember: var(--ember);
   --color-ember-soft: var(--ember-soft);
+  --color-dusk: var(--dusk);
   --color-danger: var(--danger);
   --color-success: var(--success);
   --color-premium: var(--premium);
@@ -47,13 +58,16 @@
   --color-pro-soft: var(--pro-soft);
 }
 
-body { background: var(--paper); color: var(--ink); }
+body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01", "cv11"; }
+.font-display { letter-spacing: -0.02em; font-variation-settings: "wdth" 96; }
+:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; border-radius: 6px; }
+::selection { background: color-mix(in srgb, var(--ember) 28%, transparent); }
 
 /* Tailwind v4: @apply may only reference registered utilities.
    Component classes are plain CSS on the theme variables instead. */
 @layer components {
   .card {
-    border-radius: 1rem;
+    border-radius: var(--radius-card);
     border: 1px solid var(--line);
     background: var(--card);
   }
@@ -75,8 +89,30 @@ body { background: var(--paper); color: var(--ink); }
     opacity: 0.5;
     cursor: not-allowed;
   }
-  .btn-primary { background: var(--ember); color: #ffffff; }
-  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary {
+    background: var(--ember);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px color-mix(in srgb, var(--ember) 40%, transparent),
+                0 6px 16px -8px color-mix(in srgb, var(--ember) 70%, transparent);
+  }
+  .btn-primary:hover { background: color-mix(in srgb, var(--ember) 88%, #000); }
+  .dark .btn-primary:hover { background: color-mix(in srgb, var(--ember) 88%, #fff); }
+
+  /* tinted action button - color comes from --tint (defaults to the accent) */
+  .btn-tint {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+    border-radius: 0.75rem; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 600;
+    color: var(--tint, var(--ember));
+    background: color-mix(in srgb, var(--tint, var(--ember)) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tint, var(--ember)) 35%, transparent);
+    cursor: pointer;
+    transition: transform .08s ease, background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .btn-tint:hover { background: var(--tint, var(--ember)); color: #fff; border-color: var(--tint, var(--ember)); }
+  .dark .btn-tint:hover { color: #11101c; }
+  .btn-tint:active { transform: scale(.97); }
+  .btn-tint:disabled { opacity: .5; cursor: not-allowed; }
   .btn-ghost { border: 1px solid var(--line); color: var(--ink); }
   .btn-ghost:hover { background: var(--paper-2); }
 
@@ -122,12 +158,13 @@ body { background: var(--paper); color: var(--ink); }
   .chip-c-ask      { color: var(--c-ask); }
   .chip-c-know     { color: var(--c-know); }
   .chip-c-place    { color: var(--c-place); }
+  .chip-c-movie    { color: var(--c-movie); }
+  .chip-c-sleep    { color: var(--c-sleep); }
 
   .label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
     color: var(--ink-2);
   }
 
@@ -229,16 +266,14 @@ body { background: var(--paper); color: var(--ink); }
   animation: pulseDot 1.2s ease-in-out infinite;
 }
 
-/* soft card shadows (theme-aware) */
-:root { --shadow-soft: 0 1px 2px rgba(28, 25, 23, 0.05), 0 4px 14px rgba(28, 25, 23, 0.07); }
-.dark { --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.35); }
 .soft-shadow { box-shadow: var(--shadow-soft); }
 
 
 
 .card { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+/* only interactive cards lift */
 @media (hover: hover) {
-  .card:hover { transform: translateY(-2px); }
+  a.card:hover, button.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
 }
 .btn, .btn-primary, .btn-ghost {
   transition: transform .08s ease, background-color .15s ease, border-color .15s ease, opacity .15s ease;
@@ -288,4 +323,101 @@ body { background: var(--paper); color: var(--ink); }
   background: var(--run-ring-color, var(--ember));
   animation: pulseDot 1.2s ease-in-out infinite;
   transition: background 0.5s ease;
+}
+
+
+/* ---------- dashboard hero: the one bold surface ---------- */
+.hero-dusk {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  color: #f3f2fb;
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--ember) 55%, transparent) 0%, transparent 55%),
+    radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, #6d6ae8 55%, transparent) 0%, transparent 60%),
+    linear-gradient(160deg, #24224a 0%, #17162e 100%);
+  box-shadow: var(--shadow-lift);
+}
+.hero-dusk::after {
+  /* faint constellation: memories as stars */
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 22%, rgba(255,255,255,.55), transparent 60%),
+    radial-gradient(1px 1px at 28% 68%, rgba(255,255,255,.4), transparent 60%),
+    radial-gradient(1.5px 1.5px at 46% 18%, rgba(255,255,255,.45), transparent 60%),
+    radial-gradient(1px 1px at 63% 52%, rgba(255,255,255,.35), transparent 60%),
+    radial-gradient(2px 2px at 78% 30%, rgba(255,255,255,.6), transparent 60%),
+    radial-gradient(1px 1px at 88% 76%, rgba(255,255,255,.4), transparent 60%);
+}
+.hero-dusk .card { color: var(--ink); border-color: transparent; box-shadow: 0 10px 30px -12px rgba(0,0,0,.45); }
+.hero-dusk .hero-sub { color: rgba(243, 242, 251, 0.72); }
+.hero-dusk .hero-chip {
+  display: inline-flex; align-items: center; gap: .4rem;
+  border-radius: 9999px; padding: .3rem .75rem; font-size: .75rem; font-weight: 600;
+  color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+  transition: background-color .15s ease;
+}
+.hero-dusk .hero-chip:hover { background: rgba(255,255,255,.2); }
+@media (min-width: 768px) { .hero-dusk { padding: 1.75rem 2rem; } }
+
+/* ---------- stat tiles ---------- */
+.stat-tile {
+  position: relative;
+  display: flex; flex-direction: column; justify-content: space-between; gap: .5rem;
+  min-height: 96px;
+  padding: .875rem .95rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--tile) 22%, var(--line));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tile) 9%, var(--card)) 0%, var(--card) 70%);
+  box-shadow: var(--shadow-soft);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.stat-tile:hover { border-color: color-mix(in srgb, var(--tile) 55%, transparent); }
+@media (hover: hover) { .stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); } }
+.stat-tile .stat-icon {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; font-size: 15px;
+  background: color-mix(in srgb, var(--tile) 14%, transparent);
+}
+.stat-tile .stat-value { font-family: var(--font-display); font-weight: 700; font-size: 1.65rem; line-height: 1; color: var(--tile); letter-spacing: -0.03em; }
+
+/* ---------- orbit loader (graph, agents, knowledge) ---------- */
+.orbit-loader {
+  --size: 132px;
+  position: relative;
+  width: var(--size); height: var(--size);
+}
+.orbit-loader > span {
+  position: absolute; inset: 0; border-radius: 9999px;
+  border: 1.5px solid color-mix(in srgb, var(--ink-2) 16%, transparent);
+  animation: spin var(--d, 3s) linear infinite;
+}
+.orbit-loader > span::after {
+  content: ""; position: absolute; top: -5px; left: 50%; width: 10px; height: 10px; margin-left: -5px;
+  border-radius: 9999px; background: var(--c, var(--ember));
+  box-shadow: 0 0 14px 2px color-mix(in srgb, var(--c, var(--ember)) 60%, transparent);
+}
+.orbit-loader > span:nth-child(2) { inset: 20px; --d: 2.2s; --c: var(--c-know); animation-direction: reverse; }
+.orbit-loader > span:nth-child(3) { inset: 40px; --d: 1.5s; --c: var(--c-movie); }
+.orbit-loader > i {
+  position: absolute; inset: 56px; border-radius: 9999px; background: var(--ember);
+  animation: pulseDot 1.6s ease-in-out infinite;
+  box-shadow: 0 0 24px 4px color-mix(in srgb, var(--ember) 45%, transparent);
+}
+.orbit-loader.sm { --size: 76px; }
+.orbit-loader.sm > span:nth-child(2) { inset: 12px; }
+.orbit-loader.sm > span:nth-child(3) { inset: 24px; }
+.orbit-loader.sm > i { inset: 32px; }
+
+@keyframes phaseIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.phase-in { animation: phaseIn .35s ease both; }
+
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.bar-grow { transform-origin: bottom; animation: barGrow .5s cubic-bezier(.2,.7,.2,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-loader > span, .orbit-loader > i, .phase-in, .bar-grow, .stat-tile { animation: none !important; transition: none !important; }
 }

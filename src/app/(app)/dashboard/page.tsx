@@ -8,26 +8,18 @@ import { Empty } from "@/components/ui";
 import { MemoryOpener } from "@/components/memory-opener";
 import { relTime, hourInTimezone } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
-import { LogoMark } from "@/components/logo";
+import { TYPE_CHIP, TYPE_COLOR, typeIcon } from "@/lib/type-style";
 
 export const dynamic = "force-dynamic";
 
-const TYPE_CHIP: Record<string, string> = {
-  task: "chip-c-task", book: "chip-c-book", purchase: "chip-c-buy", expense: "chip-c-buy",
-  decision: "chip-c-decision", idea: "chip-c-idea", goal: "chip-c-goal", event: "chip-c-event",
-  person: "chip-c-person", promise: "chip-c-promise", commitment: "chip-c-promise",
-  question: "chip-c-ask", knowledge: "chip-c-know", place: "chip-c-place",
-  project: "chip-c-know", habit: "chip-c-goal", reflection: "chip-c-know",
-  observation: "chip-c-event", reminder: "chip-c-ask", thought: "",
-};
 
-const TYPE_COLOR: Record<string, string> = {
-  task: "var(--c-task)", promise: "var(--c-promise)", commitment: "var(--c-promise)",
-  book: "var(--c-book)", purchase: "var(--c-buy)", expense: "var(--c-buy)",
-  decision: "var(--c-decision)", idea: "var(--c-idea)", goal: "var(--c-goal)",
-  event: "var(--c-event)", person: "var(--c-person)", question: "var(--c-ask)",
-  knowledge: "var(--c-know)", reminder: "var(--c-ask)", thought: "var(--ember)",
-};
+function todayLabel(timezone?: string | null) {
+  try {
+    return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: timezone || undefined }).format(new Date());
+  } catch {
+    return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
+  }
+}
 
 function greeting(timezone?: string | null) {
   const h = hourInTimezone(timezone);
@@ -51,8 +43,11 @@ function Section({ title, href, color, children }: { title: string; href?: strin
   return (
     <section>
       <div className="flex items-baseline justify-between mb-2.5">
-        <h2 className="label" style={color ? { color } : undefined}>{title}</h2>
-        {href && <Link href={href} className="text-xs text-ember">See all</Link>}
+        <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+          <span aria-hidden className="inline-block size-2 rounded-full" style={{ background: color ?? "var(--ink-2)" }} />
+          {title}
+        </h2>
+        {href && <Link href={href} className="text-xs font-semibold text-ember hover:underline underline-offset-2">See all</Link>}
       </div>
       {children}
     </section>
@@ -90,30 +85,27 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3">
-            <LogoMark size={34} />
-            <h1 className="font-display text-2xl md:text-3xl">
-              {greeting(profile?.timezone)}, <span style={{ color: "var(--ember)" }}>{user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}</span>.
+      <section className="hero-dusk space-y-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="hero-sub text-sm font-medium">{todayLabel(profile?.timezone)}</p>
+            <h1 className="font-display text-[1.9rem] md:text-[2.4rem] font-bold leading-[1.05] mt-1">
+              {greeting(profile?.timezone)}, {user!.name?.trim().split(" ")[0] || user!.email?.split("@")[0]}
             </h1>
+            <p className="hero-sub text-sm mt-2 max-w-md">Say it once. TimelyMemo brings it back when it matters.</p>
           </div>
-          <p className="text-ink-2 text-sm mt-1">Tell TimelyMemo anything. It remembers what matters.</p>
+          <Link href="/guide" className="hero-chip shrink-0">💡 Tips for getting more out of it</Link>
         </div>
-        <Link href="/guide" className="chip !text-xs shrink-0 cursor-pointer hover:!border-ember hover:!text-ember">
-          💡 Get the most from this app
-        </Link>
-      </header>
+        <CaptureBox />
+      </section>
 
       <Suspense fallback={
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card p-3.5 h-16 animate-pulse bg-paper-2" />)}
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton h-[96px] !rounded-2xl" />)}
         </div>
       }>
         <StatsRow sb={sb} userId={user!.id} />
       </Suspense>
-
-      <CaptureBox />
 
       <Suspense fallback={<SectionSkeleton title="Today" />}>
         <BriefingSections userId={user!.id} />
@@ -147,31 +139,54 @@ export default async function Dashboard() {
 }
 
 async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
-  const [{ count: openTasks }, { count: totalMems }, { count: booksDone }, { count: peopleN }] = await Promise.all([
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const count = (r: { count: number | null; error?: unknown }) => (r?.error ? 0 : r?.count ?? 0);
+  const [openTasks, totalMems, booksDone, booksReading, movies, peopleN, researchRuns, deepRuns, kbItems, watchesActive, watchChanges, sleepRes] = await Promise.all([
     sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
-      .eq("user_id", userId).eq("status", "open").in("type", ["task", "promise", "commitment"]),
-    sb.from("memories").select("id", { count: "exact", head: true })
-      .eq("user_id", userId).is("deleted_at", null),
-    sb.from("books").select("id", { count: "exact", head: true })
-      .eq("user_id", userId).eq("status", "finished"),
-    sb.from("people").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      .eq("status", "open").in("type", ["task", "promise", "commitment"]),
+    sb.from("memories").select("id", { count: "exact", head: true }).is("deleted_at", null),
+    sb.from("books").select("id", { count: "exact", head: true }).eq("status", "finished"),
+    sb.from("books").select("id", { count: "exact", head: true }).eq("status", "reading"),
+    sb.from("memory_metadata").select("memory_id", { count: "exact", head: true }).eq("type", "movie"),
+    sb.from("people").select("id", { count: "exact", head: true }),
+    sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", "research").eq("status", "done"),
+    sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", "deep_research").eq("status", "done"),
+    sb.from("knowledge_items").select("id", { count: "exact", head: true }),
+    sb.from("watches").select("id", { count: "exact", head: true }).eq("status", "active"),
+    sb.from("watch_events").select("id", { count: "exact", head: true })
+      .not("kind", "in", "(baseline,error)").gte("created_at", weekAgo),
+    sb.from("memory_metadata").select("sleep_hours, occurred_at")
+      .eq("type", "sleep").gte("occurred_at", weekAgo).limit(50),
   ]);
+
+  const sleepRows = sleepRes?.error ? [] : (sleepRes?.data ?? []);
+  const hours = sleepRows.map((r: any) => Number(r.sleep_hours)).filter((n: number) => Number.isFinite(n) && n > 0);
+  const avgSleep = hours.length ? hours.reduce((a: number, b: number) => a + b, 0) / hours.length : null;
+  const knowledge = count(researchRuns) + count(deepRuns) + count(kbItems);
+
   const stats = [
-    { label: "open tasks", value: openTasks ?? 0, color: "var(--c-task)", href: "/tasks" },
-    { label: "memories", value: totalMems ?? 0, color: "var(--ember)", href: "/timeline" },
-    { label: "books finished", value: booksDone ?? 0, color: "var(--success)", href: "/books" },
-    { label: "people", value: peopleN ?? 0, color: "var(--c-decision)", href: "/people" },
+    { label: "Open tasks", icon: "☑️", value: count(openTasks), sub: "promises included", color: "var(--c-task)", href: "/tasks" },
+    { label: "Memories", icon: "💭", value: count(totalMems), sub: "everything you've said", color: "var(--ember)", href: "/timeline" },
+    { label: "Books", icon: "📚", value: count(booksDone), sub: `finished · ${count(booksReading)} reading`, color: "var(--c-book)", href: "/books" },
+    { label: "Movies", icon: "🎬", value: count(movies), sub: "watched & noted", color: "var(--c-movie)", href: "/timeline?type=movie" },
+    { label: "People", icon: "👥", value: count(peopleN), sub: "in your circle", color: "var(--c-decision)", href: "/people" },
+    { label: "Knowledge", icon: "🧠", value: knowledge, sub: count(deepRuns) ? `${count(deepRuns)} deep report${count(deepRuns) === 1 ? "" : "s"}` : "researched topics", color: "var(--c-know)", href: "/knowledge" },
+    { label: "Watching", icon: "👁️", value: count(watchesActive), sub: count(watchChanges) ? `${count(watchChanges)} change${count(watchChanges) === 1 ? "" : "s"} this week` : "pages & prices", color: "var(--c-ask)", href: "/agents?tab=watch" },
+    { label: "Sleep", icon: "😴", value: avgSleep != null ? `${avgSleep.toFixed(1)}h` : "–", sub: hours.length ? `avg of ${hours.length} night${hours.length === 1 ? "" : "s"} this week` : "say \"slept 7 hours\"", color: "var(--c-sleep)", href: "/timeline?type=sleep" },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
       {stats.map((s) => (
-        <Link key={s.label} href={s.href}
-          className="card p-3.5 hover:opacity-90 transition-opacity soft-shadow"
-          style={{ borderLeft: `3px solid ${s.color}` }}>
-          <p className="font-display text-2xl font-semibold leading-none" style={{ color: s.color }}>
-            <AnimatedStatValue value={s.value} color={s.color} />
-          </p>
-          <p className="text-xs text-ink-2 mt-1.5">{s.label}</p>
+        <Link key={s.label} href={s.href} className="stat-tile"
+          style={{ "--tile": s.color } as React.CSSProperties}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-ink-2">{s.label}</span>
+            <span className="stat-icon" aria-hidden>{s.icon}</span>
+          </div>
+          <div>
+            <p className="stat-value"><AnimatedStatValue value={s.value} color={s.color} /></p>
+            <p className="text-[11px] text-ink-2 mt-1 truncate">{s.sub}</p>
+          </div>
         </Link>
       ))}
     </div>
@@ -270,12 +285,12 @@ async function BooksSection({ sb, userId }: { sb: any; userId: string }) {
       <div className="card p-4 space-y-2.5 text-sm soft-shadow">
         <p className="text-xs text-ink-2">
           <span className="font-semibold" style={{ color: "var(--success)" }}>{booksDone ?? 0} finished</span>
-          {" - "}{readingBooks?.length ?? 0} reading now
-          {" - "}{booksWant ?? 0} not finished yet
+          {" · "}<span className="font-semibold" style={{ color: "var(--c-book)" }}>{readingBooks?.length ?? 0} in progress</span>
+          {" · "}{booksWant ?? 0} on the list
         </p>
         <div className="flex flex-wrap gap-2">
           {(readingBooks ?? []).map((bk: any) => (
-            <span key={bk.id} className="chip chip-c-buy !text-sm">
+            <span key={bk.id} className="chip chip-c-book !text-sm">📖&nbsp;
               {bk.title}{bk.author ? <span className="text-ink-2"> - {bk.author}</span> : null}
             </span>
           ))}
@@ -342,7 +357,7 @@ async function RecentSection({ sb, userId }: { sb: any; userId: string }) {
                 <div className="card p-4 text-sm hover:border-ember/60 soft-shadow">
                   <p>{m.original_text}</p>
                   <div className="flex items-center gap-2 mt-2 text-xs text-ink-2">
-                    <span className={`chip ${(TYPE_CHIP as any)[meta.type] ?? ""}`}>{meta.type ?? "thought"}</span>
+                    <span className={`chip ${(TYPE_CHIP as any)[meta.type] ?? ""}`}><span aria-hidden className="mr-1">{typeIcon(meta.type)}</span>{meta.type ?? "thought"}</span>
                     <span>{relTime(m.created_at)}</span>
                   </div>
                 </div>

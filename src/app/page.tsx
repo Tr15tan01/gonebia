@@ -125,7 +125,7 @@ export default async function Landing() {
         </section>
       </main>
 
-      <PublicFooter />
+      <PublicFooter loggedIn={!!user} />
     </div>
   );
 }

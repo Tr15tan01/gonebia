@@ -1,7 +1,7 @@
 export const MEMORY_TYPES = [
   "thought","idea","task","event","purchase","expense","knowledge","book","question",
   "decision","promise","commitment","goal","habit","person","place","project",
-  "observation","reflection","reminder",
+  "observation","reflection","reminder","movie","sleep",
 ] as const;
 export type MemoryType = (typeof MEMORY_TYPES)[number];
 
@@ -44,6 +44,8 @@ export interface Structured {
   due_at: string | null;
   reminder_at: string | null;
   review_at: string | null;
+  /** hours slept - only for type "sleep", null otherwise */
+  sleep_hours: number | null;
   interpretation: string;
 }
 

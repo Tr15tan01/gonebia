@@ -20,13 +20,13 @@ if (typeof window !== "undefined") {
 }
 
 export function soundEnabled(): boolean {
-  try { return localStorage.getItem("gonebia-sound") !== "0"; } catch { return true; }
+  try { return localStorage.getItem("timelymemo-sound") !== "0"; } catch { return true; }
 }
 
 export function setSoundEnabled(on: boolean) {
   try {
-    if (on) localStorage.removeItem("gonebia-sound");
-    else localStorage.setItem("gonebia-sound", "0");
+    if (on) localStorage.removeItem("timelymemo-sound");
+    else localStorage.setItem("timelymemo-sound", "0");
   } catch {}
 }
 

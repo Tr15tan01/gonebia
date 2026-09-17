@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme";
-import { Logo, LogoMark } from "@/components/logo";
+import { Logo } from "@/components/logo";
 import { signOut } from "next-auth/react";
 import { relTime } from "@/lib/dates";
 import { Spinner } from "@/components/ui";
@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/chat", label: "Ask my memory", icon: "\u25ce", color: "var(--c-ask)" },
   { href: "/discover", label: "Discover", icon: "\u2726", color: "var(--c-decision)" },
   { href: "/agents", label: "Agents", icon: "\u26a1", color: "var(--c-idea)" },
+  { href: "/knowledge", label: "Knowledge", icon: "\u2756", color: "var(--c-know)" },
   { href: "/insights", label: "Insights", icon: "\u25c8", color: "var(--c-goal)" },
   { href: "/books", label: "Books", icon: "\u25a4", color: "var(--c-book)" },
   { href: "/people", label: "People", icon: "\u260f", color: "var(--c-person)" },
@@ -31,6 +32,7 @@ const MOBILE_PRIMARY = [
   { href: "/agents", label: "Agents", icon: "\u26a1", color: "var(--c-idea)" },
 ];
 const MOBILE_MORE = [
+  { href: "/knowledge", label: "Knowledge", icon: "\u2756", color: "var(--c-know)" },
   { href: "/insights", label: "Insights", icon: "\u25c8", color: "var(--c-goal)" },
   { href: "/timeline", label: "Timeline", icon: "\u2261", color: "var(--success)" },
   { href: "/books", label: "Books", icon: "\u25a4", color: "var(--c-book)" },
@@ -49,6 +51,7 @@ const KIND_ICON: Record<string, string> = {
   daily_briefing: "\ud83c\udf05",
   agent_done: "\ud83e\udd16",
   price_watch: "\ud83d\uded2",
+  watch: "\ud83d\udc41\ufe0f",
   future_note: "\ud83d\udd70\ufe0f",
 };
 
@@ -149,7 +152,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
     <div className="min-h-dvh flex">
       {/* Desktop sidebar */}
       <aside
-        className="hidden md:flex flex-col w-56 shrink-0 border-r border-line p-4 gap-1 sticky top-0 h-dvh"
+        className="hidden md:flex flex-col w-60 shrink-0 border-r border-line p-4 gap-0.5 sticky top-0 h-dvh overflow-y-auto bg-paper-2/40"
         style={
           plan === "premium" ? { borderTop: "3px solid var(--premium)" }
           : plan === "pro" ? { borderTop: "3px solid var(--pro)" }
@@ -164,8 +167,11 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
         </Link>
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${path.startsWith(l.href) ? "bg-ember-soft text-ember font-medium" : "text-ink-2 hover:text-ink hover:bg-paper-2"}`}>
-            <span aria-hidden style={{ color: l.color }}>{l.icon}</span>{l.label}
+            aria-current={path.startsWith(l.href) ? "page" : undefined}
+            className={`relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${path.startsWith(l.href) ? "bg-card text-ink font-semibold soft-shadow" : "text-ink-2 hover:text-ink hover:bg-paper-2"}`}>
+            {path.startsWith(l.href) && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: l.color }} />}
+            <span aria-hidden className="grid place-items-center size-6 rounded-lg text-[13px]"
+              style={{ color: l.color, background: `color-mix(in srgb, ${l.color} 13%, transparent)` }}>{l.icon}</span>{l.label}
           </Link>
         ))}
         <div className="mt-auto px-3 pt-3 border-t border-line space-y-2">
@@ -189,7 +195,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
         {/* Mobile top bar */}
         <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b border-line bg-paper/90 backdrop-blur">
           <Link href="/dashboard" className="inline-flex items-center gap-2" aria-label="TimelyMemo home">
-            <LogoMark size={24} /><span className="font-display text-lg">TimelyMemo</span>
+            <Logo size={26} />
             <PlanBadge plan={plan} />
           </Link>
           <div className="flex items-center gap-2">
@@ -206,7 +212,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
           </div>
         </header>
 
-        <main className="max-w-3xl mx-auto px-4 py-6 pb-28 md:pb-10">
+        <main className="max-w-3xl mx-auto px-4 md:px-6 py-6 md:py-8 pb-28 md:pb-12">
           <div key={path} className="page-enter">{children}</div>
         </main>
       </div>
@@ -272,7 +278,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
                   <li key={n.id} className="notif-item text-[15px] border-b border-line pb-4 last:border-0 last:pb-0"
                     style={{ animationDelay: `${i * 45}ms` }}>
                     <p className="font-medium leading-snug">
-                      <span aria-hidden>{KIND_ICON[n.kind] ?? "\U0001F514"}</span> {n.title}
+                      <span aria-hidden>{KIND_ICON[n.kind] ?? "\u{1F514}"}</span> {n.title}
                     </p>
                     {n.body && <p className="text-ink-2 mt-1 leading-snug">{n.body}</p>}
                     {n.created_at && <p className="text-xs text-ink-2 mt-1">{relTime(n.created_at)}</p>}
@@ -300,7 +306,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
                 <ul className="space-y-2.5">
                   {readNotifs.slice(0, 5).map((n: any) => (
                     <li key={n.id} className="text-xs text-ink-2 leading-snug">
-                      <span aria-hidden>{KIND_ICON[n.kind] ?? "\U0001F514"}</span> {n.title}
+                      <span aria-hidden>{KIND_ICON[n.kind] ?? "\u{1F514}"}</span> {n.title}
                       <span className="ml-1">· {relTime(n.created_at)}</span>
                     </li>
                   ))}

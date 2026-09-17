@@ -60,10 +60,22 @@ export default function GuidePage() {
 
       <section className="space-y-3">
         <p className="label">Agents</p>
-        <Tip title="Research, buying, and problem-solving agents" href="/agents">
-          The research agent answers questions with real web sources. The buying agent finds
-          specific real products (with photos and prices) and can track a price drop for you.
-          Both remember your past runs so you can revisit them later.
+        <Tip title="Research and Deep Research" href="/agents">
+          Research gives a quick, sourced answer. Deep Research splits a question into several
+          angles, searches them in parallel, cross-checks the sources and writes a full report.
+          Every result is kept in your Knowledge base.
+        </Tip>
+        <Tip title="Watch a link" href="/agents?tab=watch">
+          Paste a product page to get alerts on price drops or your target price, a careers page
+          to hear about new openings, or any page to learn when something meaningful changes.
+        </Tip>
+        <Tip title="Keep what you learn" href="/knowledge">
+          The Knowledge base collects research reports plus your own notes, links and quotes.
+          Pin the important ones, tag them, and open any memory to keep it there too.
+        </Tip>
+        <Tip title="Log movies and sleep" href="/timeline?type=sleep">
+          Say "watched Dune, loved it" or "slept 6.5 hours" - movies and sleep get their own
+          types, and your weekly sleep average shows on the dashboard.
         </Tip>
       </section>
 

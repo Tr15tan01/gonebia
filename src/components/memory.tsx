@@ -5,6 +5,7 @@ import { Sheet, useToast, Spinner } from "@/components/ui";
 import { relTime, fmtDate } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
 import { DateTimePicker } from "@/components/date-time-picker";
+import { TYPE_CHIP, typeIcon } from "@/lib/type-style";
 
 export interface Memory {
   id: string; original_text: string; created_at: string;
@@ -15,13 +16,7 @@ export interface Memory {
 
 const DATEABLE_TYPES = ["task", "promise", "commitment", "event", "reminder"];
 
-const CHIP_CLASS: Record<string, string> = {
-  task: "chip-c-task", book: "chip-c-book", purchase: "chip-c-buy", expense: "chip-c-buy",
-  decision: "chip-c-decision", idea: "chip-c-idea", goal: "chip-c-goal", event: "chip-c-event",
-  person: "chip-c-person", promise: "chip-c-promise", commitment: "chip-c-promise",
-  question: "chip-c-ask", knowledge: "chip-c-know", place: "chip-c-place",
-  project: "chip-c-know", habit: "chip-c-goal",
-};
+const CHIP_CLASS = TYPE_CHIP;
 
 export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => void }) {
   return (
@@ -30,7 +25,7 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => 
         <div className="min-w-0">
           <p className="text-[15px] leading-snug">{memory.original_text}</p>
           <div className="flex flex-wrap gap-1.5 mt-2">
-            <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{memory.type}</span>
+            <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}><span aria-hidden className="mr-1">{typeIcon(memory.type)}</span>{memory.type}</span>
             {memory.status === "open" && (memory.type === "task" || memory.type === "promise" || memory.type === "commitment") && <span className="chip !text-ember !border-ember/40">open</span>}
             {memory.due_at && <TimeChip iso={memory.due_at} prefix="due " />}
             {memory.people.slice(0, 2).map((p) => <span key={p} className="chip chip-c-person">{p}</span>)}
@@ -196,7 +191,7 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
           )}
 
           <div className="flex flex-wrap gap-1.5">
-            <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{memory.type}</span>
+            <span className={`chip ${CHIP_CLASS[memory.type] ?? ""}`}>{typeIcon(memory.type)} {memory.type}</span>
             <span className="chip">importance {memory.importance}/5</span>
             <span className="chip">{fmtDate(memory.created_at)}</span>
             {memory.status !== "open" && <span className="chip">{memory.status}</span>}
@@ -260,6 +255,18 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
 
           <div className="flex flex-wrap gap-2 pt-1">
             {!editing && <button onClick={() => setEditing(true)} className="btn-ghost !py-1.5 !text-xs">Edit text</button>}
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/knowledge", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ kind: "note", title: memory.title || undefined, content: memory.original_text, tags: [memory.type] }),
+                });
+                const d = await res.json().catch(() => ({}));
+                toast(res.ok ? "Added to your knowledge base." : d.error ?? "Couldn't add it.");
+              }}
+              className="btn-tint !py-1.5 !text-xs"
+              style={{ "--tint": "var(--c-know)" } as React.CSSProperties}
+            >🧠 Keep in knowledge base</button>
             {memory.status === "open" && (
               <button onClick={() => act("done")} disabled={!!busyAction} className="btn-primary !py-1.5 !text-xs flex items-center gap-1.5">
                 {busyAction === "done" && <Spinner size={12} />}Mark done

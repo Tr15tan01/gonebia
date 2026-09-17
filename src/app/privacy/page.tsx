@@ -75,7 +75,7 @@ export default async function PrivacyPage() {
           ))}
         </div>
       </main>
-      <PublicFooter />
+      <PublicFooter loggedIn={!!user} />
     </div>
   );
 }

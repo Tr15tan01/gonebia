@@ -16,10 +16,10 @@ export function InstallPrompt() {
   useEffect(() => {
     if (standalone) return;
     let lastShown = 0;
-    try { lastShown = +(localStorage.getItem("gonebia-install-last") ?? 0); } catch {}
+    try { lastShown = +(localStorage.getItem("timelymemo-install-last") ?? 0); } catch {}
     if (Date.now() - lastShown < SHOW_EVERY_MS) return;
 
-    const markShown = () => { try { localStorage.setItem("gonebia-install-last", String(Date.now())); } catch {} };
+    const markShown = () => { try { localStorage.setItem("timelymemo-install-last", String(Date.now())); } catch {} };
 
     // Reacts to canInstall/isIOS changing (the hook re-renders this
     // component the moment `beforeinstallprompt` fires, however long after
@@ -32,7 +32,7 @@ export function InstallPrompt() {
   }, [canInstall, isIOS, standalone]);
 
   function dismiss() {
-    try { localStorage.setItem("gonebia-install-last", String(Date.now())); } catch {}
+    try { localStorage.setItem("timelymemo-install-last", String(Date.now())); } catch {}
     setVisible(false);
   }
 

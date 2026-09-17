@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createClient } from "@/lib/supabase/server";
+import { getPlan } from "@/lib/limits";
+
+export const dynamic = "force-dynamic";
 import { PricingCards, PricingTable } from "@/components/pricing-tiers";
 
 export const metadata: Metadata = {
@@ -10,15 +13,17 @@ export const metadata: Metadata = {
 
 const FAQ = [
   { q: "What counts as an AI question?", a: "Every Ask-my-memory question you send. Discover analyses and agent runs have their own monthly budgets, shown on your Settings page." },
+  { q: "What is a Watch?", a: "Paste any link - a product, a careers page, a news page - and TimelyMemo checks it daily. You get notified when the price drops or hits your target, when new jobs open, or when the page changes in a way that matters." },
   { q: "Do unused questions roll over?", a: "No - both daily and monthly counters reset. The Settings page shows exactly where you stand at any time." },
   { q: "What happens if I hit a limit?", a: "Features keep working for reading and editing everything you've stored - only new AI work pauses, with a clear message and the upgrade option. Your memory is never held hostage." },
   { q: "Can I cancel anytime?", a: "Yes - from Settings, 'Manage billing' opens the Paddle customer portal. You keep your plan until the end of the paid period, then drop to Free with everything intact." },
   { q: "What happens to my data if I downgrade?", a: "Nothing is deleted. You keep all memories, books, people and insights - Free-plan monthly caps just apply to new captures and new AI work." },
-  { q: "Premium or Pro - which one is for me?", a: "Premium is the pick for most people: it's your AI external brain - unlimited reminders, unlimited Connect the Dots, daily briefings, and the memory graph. Pro is for people who want AI agents actively working on their behalf - the Buying Agent, long-running cases, and advanced versions of every agent." },
+  { q: "Premium or Pro - which one is for me?", a: "Premium is the pick for most people: it's your AI external brain - unlimited reminders, unlimited Connect the Dots, daily briefings, and the memory graph. Pro is for people who want agents actively working for them - 200 agent runs for research and deep research reports, plus up to 100 watches tracking prices, job openings and page changes." },
 ];
 
 export default async function PricingPage() {
   const user = await getUser();
+  const plan = user ? await getPlan(await createClient(), user.id).catch(() => null) : null;
   return (
     <div className="min-h-dvh flex flex-col">
       <PublicHeader loggedIn={!!user} />
@@ -28,7 +33,7 @@ export default async function PricingPage() {
           Start free. Upgrade when your memory becomes essential. Cancel anytime.
         </p>
 
-        <PricingCards />
+        <PricingCards currentPlan={plan} />
         <p className="text-xs text-ink-2 mt-4 text-center">Secure payments by Paddle. Prices in USD.</p>
 
         <section className="mt-16">
@@ -48,7 +53,7 @@ export default async function PricingPage() {
           </div>
         </section>
       </main>
-      <PublicFooter />
+      <PublicFooter loggedIn={!!user} />
     </div>
   );
 }

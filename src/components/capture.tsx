@@ -6,6 +6,10 @@ import { MEMORY_TYPES } from "@/lib/types";
 import { localISO } from "@/lib/dates";
 import { DateTimePicker } from "@/components/date-time-picker";
 import posthog from "posthog-js";
+import { startDictation, speechSupported, type Dictation } from "@/lib/dictation";
+
+const MAX_CHARS = 840;
+const COUNTER_FROM = 600;
 
 interface CaptureResult {
   id: string;
@@ -41,8 +45,8 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("timelymemo:refreshing-stats", { detail: updatingCounts }));
   }, [updatingCounts]);
-  const recRef = useRef<any>(null);
-  const listeningRef = useRef(false);
+  const recRef = useRef<Dictation | null>(null);
+  const usedVoiceRef = useRef(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
   const router = useRouter();
@@ -62,94 +66,34 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
   }, [saving]);
 
   function toggleMic() {
-    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SR) { toast("Voice input isn't supported in this browser - try Chrome."); return; }
     if (listening) {
-      listeningRef.current = false;
       recRef.current?.stop();
-      setListening(false);
       return;
     }
-    const rec = new SR();
-    rec.lang = navigator.language || "en-US";
-    rec.continuous = true;
-    rec.interimResults = true;
-    const base = text.trim() ? text.trim() + " " : "";
-    // Mobile browsers (especially Android Chrome) restart the recognition
-    // session on almost every brief pause, and very often RE-TRANSCRIBES
-    // some of the audio it just finalized as part of the new session - not
-    // just occasionally, but routinely, which is why this needs real
-    // overlap detection rather than a simple "is it still growing" check
-    // (that only catches duplication WITHIN one session; a restart resets
-    // tracking to empty, so overlap across the restart boundary needs its
-    // own check). mergeWithOverlap finds how many trailing words of what's
-    // already committed match the leading words of the new text and skips
-    // just that overlap, rather than re-appending it - this is what
-    // actually stops "how does how does how does" style growth, since that
-    // pattern is exactly a restart re-sending an overlapping chunk each time.
-    function mergeWithOverlap(committedText: string, next: string): string {
-      const a = committedText.trim();
-      const b = next.trim();
-      if (!a) return b;
-      if (!b) return a;
-      const aWords = a.split(/\s+/);
-      const bWords = b.split(/\s+/);
-      const maxOverlap = Math.min(aWords.length, bWords.length, 12);
-      for (let n = maxOverlap; n > 0; n--) {
-        const suffix = aWords.slice(-n).join(" ").toLowerCase();
-        const prefix = bWords.slice(0, n).join(" ").toLowerCase();
-        if (suffix === prefix) return `${a} ${bWords.slice(n).join(" ")}`.trim();
-      }
-      return `${a} ${b}`.trim();
-    }
-
-    let committed = base;
-    let lastSessionFinal = "";
-    rec.onresult = (e: any) => {
-      let sessionFinal = "";
-      let interim = "";
-      for (let i = 0; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) sessionFinal += (sessionFinal ? " " : "") + r[0].transcript.trim();
-        else interim += r[0].transcript;
-      }
-      if (!sessionFinal.startsWith(lastSessionFinal)) {
-        committed = mergeWithOverlap(committed, lastSessionFinal);
-        if (committed) committed += " ";
-        lastSessionFinal = "";
-      }
-      lastSessionFinal = sessionFinal;
-      const shown = mergeWithOverlap(committed.trim(), sessionFinal);
-      setText(`${shown} ${interim}`.replace(/\s+/g, " ").trimStart());
-    };
-    rec.onend = () => {
-      if (listeningRef.current) {
-        committed = mergeWithOverlap(committed, lastSessionFinal);
-        if (committed) committed += " ";
-        lastSessionFinal = "";
-        // Android Chrome ends sessions aggressively - restart while listening.
-        try { rec.start(); } catch { listeningRef.current = false; setListening(false); }
-      } else {
-        setListening(false);
-      }
-    };
-    rec.onerror = (e: any) => {
-      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
-        listeningRef.current = false;
-        setListening(false);
-        toast("Couldn't access the microphone.");
-      }
-      // "no-speech" / "aborted" are recovered by the onend restart
-    };
-    recRef.current = rec;
-    listeningRef.current = true;
-    rec.start();
+    if (!speechSupported()) { toast("Voice input isn't supported in this browser - try Chrome or Safari."); return; }
+    const session = startDictation({
+      baseText: text,
+      onText: (t) => { if (recRef.current === session) setText(t.slice(0, MAX_CHARS)); },
+      onEnd: () => { if (recRef.current === session) { recRef.current = null; setListening(false); } },
+      onError: (msg) => toast(msg),
+    });
+    if (!session) return;
+    recRef.current = session;
+    usedVoiceRef.current = true;
     setListening(true);
   }
 
+  // never leave the microphone running after navigating away
+  useEffect(() => () => recRef.current?.stop(), []);
+
   async function save() {
     if (!text.trim()) return;
+    const mic = recRef.current;
+    recRef.current = null; // detach first so late transcripts can't refill the box
+    mic?.stop();
+    setListening(false);
     setSaving(true);
+    const source = usedVoiceRef.current ? "voice" : "typed";
     // Signal the dashboard's stat spinners immediately, the moment the
     // button is pressed - not after the AI work finishes. The actual
     // refresh (further down, wrapped in startUpdatingCounts) will re-fire
@@ -162,7 +106,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
-          source: listening ? "voice" : "typed",
+          source,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           at: atValue ? new Date(atValue).toISOString() : null,
         }),
@@ -170,7 +114,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       posthog.capture("memory_captured", {
-        source: listening ? "voice" : "typed",
+        source,
         has_reminder: !!data.structured?.reminder_at,
         has_due_date: !!data.structured?.due_at,
         memory_type: data.structured?.type ?? "thought",
@@ -180,6 +124,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
       setResult(data);
       setText("");
       setAtValue("");
+      usedVoiceRef.current = false;
       // wrapping in a transition (rather than a plain call) gives us
       // `updatingCounts` below - a real pending flag for exactly how long
       // the dashboard's stat cards take to refetch, instead of the numbers
@@ -202,32 +147,29 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           ref={areaRef}
           autoFocus={autoFocus}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save(); }}
           rows={2}
-          maxLength={840}
-          placeholder="Tell TimelyMemo something..."
+          maxLength={MAX_CHARS}
+          aria-describedby={text.length > COUNTER_FROM ? "capture-counter" : undefined}
+          placeholder={listening ? "Listening - speak naturally…" : "Tell TimelyMemo something… \"Slept 7h\", \"Watched Dune\", \"Call mom Friday\""}
           className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
           disabled={saving}
         />
-        {text.length > 700 && (
-          <p className={`text-xs mt-1 text-right ${text.length >= 840 ? "text-danger" : "text-ink-2"}`}>
-            {text.length}/840
-          </p>
-        )}
+        {text.length > COUNTER_FROM && <CharCounter id="capture-counter" used={text.length} max={MAX_CHARS} />}
 
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-2">
             <button
               onClick={toggleMic}
               disabled={saving}
-              className={`btn-ghost !px-3 ${listening ? "!border-ember !text-ember animate-pulse" : ""}`}
+              className={`btn-ghost !px-3 ${listening ? "!border-danger !text-danger" : ""}`}
               aria-label={listening ? "Stop listening" : "Start voice input"}
-            >🎤 {listening ? "Listening..." : "Voice"}</button>
+            >{listening ? <span className="pulse-dot" aria-hidden /> : <span aria-hidden>🎤</span>} {listening ? "Stop" : "Voice"}</button>
             <DateTimePicker value={atValue} onChange={setAtValue} />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-2 hidden sm:inline">⌘↵</span>
+            <span className="text-xs text-ink-2 hidden sm:inline" title="Ctrl/⌘ + Enter">⌘↵</span>
             <button onClick={save} disabled={!text.trim() || saving} className="btn-primary">
               {saving ? "Remembering..." : "Remember"}
             </button>
@@ -360,6 +302,22 @@ function Interpretation({ result, onClose, updatingCounts }: { result: CaptureRe
           <button onClick={onClose} className="btn-ghost !py-1.5 !text-xs">Done</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Shows how close the text is to its cap - neutral, then amber, then red. */
+export function CharCounter({ used, max, id }: { used: number; max: number; id?: string }) {
+  const left = max - used;
+  const ratio = used / max;
+  const color = left <= 0 ? "var(--danger)" : ratio > 0.9 ? "var(--ember)" : "var(--ink-2)";
+  return (
+    <div id={id} className="flex items-center justify-end gap-2 mt-1.5 text-xs phase-in" aria-live="polite" style={{ color }}>
+      <div className="h-1 w-20 rounded-full overflow-hidden" style={{ background: "color-mix(in srgb, var(--ink-2) 15%, transparent)" }} aria-hidden>
+        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, ratio * 100)}%`, background: color }} />
+      </div>
+      <span className="tabular-nums font-medium">{used}/{max}</span>
+      {left <= 0 && <span>limit reached</span>}
     </div>
   );
 }

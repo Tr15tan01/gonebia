@@ -37,6 +37,13 @@ export const ApplyService = {
       if (meta.status === "archived") meta.status = "open";
     }
 
+    // sleep_hours only ever belongs to sleep notes. The key is omitted
+    // entirely when empty so a database that hasn't run migration 0023 yet
+    // still accepts ordinary captures.
+    if (meta.type !== "sleep" || meta.sleep_hours == null) {
+      delete (meta as Partial<typeof meta>).sleep_hours;
+    }
+
     // Deterministic fallback for the optional picked date/time
     if (pickedAt && !meta.occurred_at && !meta.due_at && !meta.reminder_at) {
       meta.occurred_at = pickedAt;

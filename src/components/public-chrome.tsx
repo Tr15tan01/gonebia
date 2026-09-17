@@ -12,11 +12,14 @@ export function PublicHeader({ loggedIn }: { loggedIn?: boolean }) {
           <Link href="/why" className="text-ink-2 hover:text-ember">Why it matters</Link>
           <Link href="/blog" className="text-ink-2 hover:text-ember">Blog</Link>
           <Link href="/pricing" className="text-ink-2 hover:text-ember">Pricing</Link>
-          {/* Sign in is always shown - logging in on this browser before
-              doesn't mean you want to be stuck on this account forever.
-              (loggedIn is still passed in from each page in case you want
-              an "Open app" button back later - just not rendering it for now.) */}
-          <Link href="/login" className="btn-primary !py-2">Sign in</Link>
+          {loggedIn ? (
+            <>
+              <Link href="/login" className="text-ink-2 hover:text-ember" title="Sign in with a different account">Switch account</Link>
+              <Link href="/dashboard" className="btn-primary !py-2">Open app</Link>
+            </>
+          ) : (
+            <Link href="/login" className="btn-primary !py-2">Sign in</Link>
+          )}
         </nav>
         <MobileMenu loggedIn={loggedIn} />
       </div>
@@ -24,7 +27,7 @@ export function PublicHeader({ loggedIn }: { loggedIn?: boolean }) {
   );
 }
 
-export function PublicFooter() {
+export function PublicFooter({ loggedIn }: { loggedIn?: boolean }) {
   return (
     <footer className="border-t border-line py-10">
       <div className="max-w-5xl mx-auto px-6 md:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-2">
@@ -35,7 +38,9 @@ export function PublicFooter() {
           <Link href="/pricing" className="hover:text-ember">Pricing</Link>
           <Link href="/terms" className="hover:text-ember">Terms</Link>
           <Link href="/privacy" className="hover:text-ember">Privacy</Link>
-          <Link href="/login" className="hover:text-ember">Sign in</Link>
+          {loggedIn
+            ? <Link href="/dashboard" className="hover:text-ember">Open app</Link>
+            : <Link href="/login" className="hover:text-ember">Sign in</Link>}
         </nav>
         <p>Remember things at the right time.</p>
       </div>

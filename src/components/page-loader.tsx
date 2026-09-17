@@ -25,9 +25,10 @@ function Page({ children }: { children: React.ReactNode }) {
 export function DashboardLoader() {
   return (
     <Page>
+      <Sk className="h-48 !rounded-3xl" />
       <Header title="Opening your day" sub="Collecting today's threads from your memory" />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {[0, 1, 2, 3].map((i) => <Sk key={i} className="h-[76px] rounded-2xl" />)}
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <Sk key={i} className="h-[96px] rounded-2xl" />)}
       </div>
       <Sk className="h-28 rounded-2xl" />
       <Sk className="h-20 rounded-2xl" />
@@ -96,16 +97,42 @@ export function ListLoader({ title, sub }: { title: string; sub: string }) {
   );
 }
 
+/** Big centered orbit loader - used where a page draws something heavy. */
+export function OrbitBlock({ title, sub, height = 420 }: { title: string; sub?: string; height?: number }) {
+  return (
+    <div className="card grid place-items-center" style={{ minHeight: height }} role="status" aria-live="polite" aria-busy="true">
+      <div className="flex flex-col items-center gap-5 px-6 text-center">
+        <div className="orbit-loader"><span /><span /><span /><i /></div>
+        <div>
+          <p className="font-display text-lg font-semibold">{title}<span className="loader-dots"><span /><span /><span /></span></p>
+          {sub && <p className="text-sm text-ink-2 mt-1 max-w-xs">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function OrbitPageLoader({ title, sub }: { title: string; sub: string }) {
+  return (
+    <Page>
+      <div className="space-y-2">
+        <Sk className="h-8 w-40" />
+        <Sk className="h-4 w-72" />
+      </div>
+      <OrbitBlock title={title} sub={sub} height={360} />
+    </Page>
+  );
+}
+
 export function GraphLoader() {
   return (
     <Page>
-      <Header title="Mapping connections" sub="People, books, decisions and the lines between them" />
-      <div className="card h-[420px] grid place-items-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="loader-ring" style={{ transform: "scale(1.6)" }} />
-          <Sk className="h-3 w-40" />
-        </div>
+      <div className="space-y-2">
+        <Sk className="h-8 w-48" />
+        <Sk className="h-4 w-80" />
       </div>
+      <OrbitBlock title="Mapping connections" sub="People, books, decisions and the lines between them" height={520} />
+      <Sk className="h-48 rounded-2xl" />
     </Page>
   );
 }

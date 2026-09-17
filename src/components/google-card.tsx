@@ -37,10 +37,14 @@ export function GoogleCard() {
             setState({ ...state, connected: false, email: null });
             toast("Google disconnected - tokens deleted and revoked.");
           }}
-          className="btn-ghost !py-1.5 !text-xs"
+          className="btn-tint !py-1.5 !text-xs w-fit"
+          style={{ "--tint": "var(--danger)" } as React.CSSProperties}
         >Disconnect</button>
       ) : (
-        <a href="/api/google/connect" className="btn-ghost !py-1.5 !text-xs w-fit">Connect Google</a>
+        <a href="/api/google/connect" className="btn-tint w-fit" style={{ "--tint": "var(--c-task)" } as React.CSSProperties}>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><path fill="currentColor" d="M21.35 11.1H12v2.98h5.35c-.23 1.4-1.6 4.1-5.35 4.1-3.22 0-5.85-2.67-5.85-5.95S8.78 6.28 12 6.28c1.83 0 3.06.78 3.76 1.45l2.57-2.47C16.68 3.72 14.53 2.8 12 2.8 6.92 2.8 2.8 6.92 2.8 12s4.12 9.2 9.2 9.2c5.31 0 8.83-3.73 8.83-8.99 0-.6-.07-1.06-.15-1.51z"/></svg>
+          Connect Google
+        </a>
       )}
       <p className="text-xs text-ink-2">
         Tokens are stored server-side only, encrypted in transit, and never shown in the app.

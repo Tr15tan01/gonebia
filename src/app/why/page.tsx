@@ -69,7 +69,7 @@ export default async function WhyPage() {
           <Link href="/login" className="btn-primary mt-4">Start remembering</Link>
         </div>
       </main>
-      <PublicFooter />
+      <PublicFooter loggedIn={!!user} />
     </div>
   );
 }

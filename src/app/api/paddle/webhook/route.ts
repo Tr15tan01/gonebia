@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createAdmin } from "@/lib/supabase/admin";
+import { paddleApiBase } from "@/lib/paddle";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ async function findUserId(admin: any, data: any): Promise<string | null> {
   const apiKey = process.env.PADDLE_API_KEY;
   const customerId = data?.customer_id;
   if (apiKey && customerId) {
-    const res = await fetch(`https://api.paddle.com/customers/${customerId}`, {
+    const res = await fetch(`${paddleApiBase()}/customers/${customerId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     if (res.ok) {

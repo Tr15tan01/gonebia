@@ -31,7 +31,7 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 
 async function generate(
   prompt: string, job: AiJob, ctx: UsageCtx,
-  opts: { json?: boolean; temperature?: number; tools?: unknown[] } = {}
+  opts: { json?: boolean; temperature?: number; tools?: unknown[]; maxTokens?: number } = {}
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; raw: any }> {
   const model = modelForJob(job);
   try {
@@ -44,7 +44,7 @@ async function generate(
           ...(opts.tools ? { tools: opts.tools } : {}),
           generationConfig: {
             temperature: opts.temperature ?? 0.2,
-            maxOutputTokens: 4096,
+            maxOutputTokens: opts.maxTokens ?? 4096,
             ...(opts.json ? { responseMimeType: "application/json" } : {}),
           },
         }),
@@ -89,8 +89,10 @@ async function generate(
   }
 }
 
-export async function geminiJSON<T>(prompt: string, job: AiJob, ctx: UsageCtx): Promise<T> {
-  const { text } = await generate(prompt, job, ctx, { json: true });
+export interface GenOpts { maxTokens?: number; temperature?: number }
+
+export async function geminiJSON<T>(prompt: string, job: AiJob, ctx: UsageCtx, gen: GenOpts = {}): Promise<T> {
+  const { text } = await generate(prompt, job, ctx, { json: true, ...gen });
   return extractJSON<T>(text);
 }
 
@@ -160,14 +162,15 @@ async function embedWithTask(text: string, taskType: string, ctx: UsageCtx): Pro
  *  JSON-ish text plus real source links from grounding metadata. If the model
  *  or key doesn't support grounding, callers fall back to plain generation. */
 export async function geminiGroundedJSON(
-  prompt: string, job: AiJob, ctx: UsageCtx
+  prompt: string, job: AiJob, ctx: UsageCtx, gen: GenOpts = {}
 ): Promise<{ data: Record<string, unknown>; sources: { title: string; uri: string }[] }> {
-  const { text, raw } = await generate(prompt, job, ctx, { tools: [{ google_search: {} }] });
+  const { text, raw } = await generate(prompt, job, ctx, { tools: [{ google_search: {} }], ...gen });
   const chunks = raw?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
   const sources = chunks
     .map((c: any) => c?.web ? { title: c.web.title ?? c.web.uri ?? "source", uri: c.web.uri } : null)
     .filter(Boolean)
-    .slice(0, 8);
+    .filter((s: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.uri === s.uri) === i)
+    .slice(0, 12);
   // Grounded responses sometimes carry annotation text around the JSON -
   // use the same tolerant extractor; if it STILL fails, throw so callers
   // fall back to the structured (non-grounded) call instead of showing

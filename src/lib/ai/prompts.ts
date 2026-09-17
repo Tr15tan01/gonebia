@@ -56,6 +56,14 @@ Return ONLY a JSON object with these exact fields:
   ("my wife asked me to clean the stove", "my boss wants the report by Friday"),
   type MUST be "task", with that person in people. Reserve "promise"/"commitment"
   for things the user volunteered to someone ("I promised Giorgi to review his code").
+  MOVIE RULE: films, TV series, documentaries and shows the user watched, is watching,
+  wants to watch, or was recommended => type "movie" (put the title in objects, any
+  recommender in people). "Watched Dune 2 with Nino, loved it" => type "movie".
+  A book-to-film comparison is still "movie" unless it is a reading-status update.
+  SLEEP RULE: notes about the user's own sleep - how long or how well they slept,
+  naps, insomnia, bedtime/wake time => type "sleep", and fill sleep_hours when a
+  duration is stated or can be computed ("slept 11pm to 6:30am" => 7.5).
+  "Only slept 5 hours, feel wrecked" => type "sleep", sleep_hours 5, sentiment "negative".
   Other guidance: "purchase"/"expense" for bought/spent, "task" for to-dos,
   "decision" for choices with reasons, "promise"/"commitment" when the user committed
   to someone, "goal" for aspirations.
@@ -104,6 +112,8 @@ Return ONLY a JSON object with these exact fields:
 - reminder_at: ISO 8601 ONLY if the user explicitly asks to be reminded. null otherwise.
   Short durations are exact: "in 30 minutes" = CURRENT time + 30 minutes (not tomorrow).
 - review_at: ISO 8601 ONLY for phrases like "show me this in one year". null otherwise.
+- sleep_hours: number of hours slept (decimals allowed) ONLY for type "sleep" when a
+  duration is stated or computable; null otherwise.
 - interpretation: ONE short natural confirmation sentence, e.g.
   "Got it - you finished reading Atomic Habits by James Clear."
 
@@ -128,7 +138,7 @@ Return ONLY JSON:
   "to": "ISO date" or null
 }
 Relevant memory types: thought, idea, task, event, purchase, expense, knowledge, book, question,
-decision, promise, commitment, goal, habit, person, place, project, observation, reflection, reminder.
+decision, promise, commitment, goal, habit, person, place, project, observation, reflection, reminder, movie, sleep.
 
 IMPORTANT about "types": this EXCLUDES every memory of a different type from
 the search entirely - it is not a hint or a ranking boost, it is a hard

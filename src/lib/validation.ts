@@ -35,6 +35,8 @@ export const structuredSchema = z.object({
   alternatives: z.array(z.string().max(120)).max(5).catch([]),
   book: bookInfoSchema.nullable().catch(null),
   occurred_at: isoOrNull, due_at: isoOrNull, reminder_at: isoOrNull, review_at: isoOrNull,
+  sleep_hours: z.number().min(0).max(24).nullable().optional().catch(null)
+    .transform((v) => (typeof v === "number" ? Math.round(v * 100) / 100 : null)),
   interpretation: z.string().max(240).catch("Saved to your memory."),
 });
 

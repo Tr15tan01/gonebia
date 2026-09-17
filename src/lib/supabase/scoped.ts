@@ -48,7 +48,9 @@ const OWNER_COLUMN: Record<string, string> = {
   usage_counters: "user_id",
   discover_results: "user_id",
   agent_runs: "user_id",
-  price_watches: "user_id",
+  watches: "user_id",
+  watch_events: "user_id",
+  knowledge_items: "user_id",
 };
 
 function withOwner(payload: any, col: string, userId: string) {

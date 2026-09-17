@@ -4,8 +4,8 @@
   "description": "Remember things at the right time.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#faf7f2",
-  "theme_color": "#b45309",
+  "background_color": "#f5f4fa",
+  "theme_color": "#24224a",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }],
   "shortcuts": [
     { "name": "Tell TimelyMemo something", "url": "/dashboard?capture=1" }

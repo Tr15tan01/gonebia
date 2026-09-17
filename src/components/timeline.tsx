@@ -3,13 +3,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MemoryList, type Memory } from "@/components/memory";
 import { Spinner, Empty } from "@/components/ui";
 
-const TYPES = ["task", "purchase", "idea", "decision", "goal", "book", "person", "event", "knowledge", "promise", "thought"];
+import { TYPE_CHIP, typeIcon } from "@/lib/type-style";
 
-export function TimelineClient({ initial }: { initial: Memory[] }) {
+const TYPES = ["task", "purchase", "idea", "decision", "goal", "book", "movie", "sleep", "person", "event", "knowledge", "promise", "thought"];
+
+export function TimelineClient({ initial, initialTypes = [] }: { initial: Memory[]; initialTypes?: string[] }) {
   const [items, setItems] = useState<Memory[]>(initial);
   const [cursor, setCursor] = useState<string | null>(initial.length === 20 ? initial[initial.length - 1].created_at : null);
   const [loading, setLoading] = useState(false);
-  const [types, setTypes] = useState<string[]>([]);
+  const [types, setTypes] = useState<string[]>(initialTypes);
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const sentinel = useRef<HTMLDivElement>(null);
@@ -56,7 +58,8 @@ export function TimelineClient({ initial }: { initial: Memory[] }) {
         <div className="flex flex-wrap gap-1.5">
           {TYPES.map((t) => (
             <button key={t} onClick={() => toggle(t)}
-              className={`chip cursor-pointer ${types.includes(t) ? "!bg-ember !text-white !border-ember" : ""}`}>{t}</button>
+              className={`chip cursor-pointer ${types.includes(t) ? "!bg-ember !text-white !border-ember" : TYPE_CHIP[t] ?? ""}`}
+              aria-pressed={types.includes(t)}><span aria-hidden className="mr-1">{typeIcon(t)}</span>{t}</button>
           ))}
         </div>
         <div className="flex gap-2">

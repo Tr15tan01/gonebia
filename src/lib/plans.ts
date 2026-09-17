@@ -1,5 +1,9 @@
 export type Plan = "free" | "premium" | "pro";
 
+/** A Deep Research run fans out into several grounded searches plus a long
+ *  synthesis, so it draws this many runs from the monthly agent budget. */
+export const DEEP_RESEARCH_COST = 3;
+
 export const LIMITS = {
   free: {
     label: "Free",
@@ -14,7 +18,7 @@ export const LIMITS = {
     forgottenPerWeek: 1,
     discoverPerMonth: 3,
     agentRunsPerMonth: 2,
-    priceWatches: 3,
+    watchLimit: 1,
     semanticSearch: true, // now included on Free too - embeddings are genuinely cheap; see chat.ts
     memoryGraph: false,
     dailyBriefingNotification: false,
@@ -24,9 +28,9 @@ export const LIMITS = {
     futureMemory: false,
     googleCalendar: false,
     gmailContext: false,
-    buyingAgent: false,
+    deepResearch: false,
     longRunningCases: false,
-    watches: "none" as "none" | "limited" | "unlimited",
+    watches: "limited" as "none" | "limited" | "unlimited",
     colorChoices: 1,
   },
   premium: {
@@ -42,7 +46,7 @@ export const LIMITS = {
     forgottenPerWeek: 999999,
     discoverPerMonth: 30,
     agentRunsPerMonth: 50,
-    priceWatches: 25,
+    watchLimit: 15,
     semanticSearch: true,
     memoryGraph: true,
     dailyBriefingNotification: true,
@@ -52,7 +56,7 @@ export const LIMITS = {
     futureMemory: true,
     googleCalendar: true,
     gmailContext: true,
-    buyingAgent: false,
+    deepResearch: true,
     longRunningCases: false,
     watches: "limited" as "none" | "limited" | "unlimited",
     // Premium unlocks the full custom color palette (see THEME_COLORS in theme.tsx)
@@ -71,7 +75,7 @@ export const LIMITS = {
     forgottenPerWeek: 999999,
     discoverPerMonth: 999999,
     agentRunsPerMonth: 200,
-    priceWatches: 999999,
+    watchLimit: 100,
     semanticSearch: true,
     memoryGraph: true,
     dailyBriefingNotification: true,
@@ -81,7 +85,7 @@ export const LIMITS = {
     futureMemory: true,
     googleCalendar: true,
     gmailContext: true,
-    buyingAgent: true,
+    deepResearch: true,
     longRunningCases: true,
     watches: "unlimited" as "none" | "limited" | "unlimited",
     colorChoices: 999999,

@@ -46,8 +46,8 @@ export async function getUsage(sb: any, userId: string) {
   };
 }
 
-export async function bumpUsage(sb: any, userId: string, field: string): Promise<number> {
-  const { data, error } = await sb.rpc("bump_usage", { p_user: userId, p_field: field, p_amount: 1 });
+export async function bumpUsage(sb: any, userId: string, field: string, amount = 1): Promise<number> {
+  const { data, error } = await sb.rpc("bump_usage", { p_user: userId, p_field: field, p_amount: amount });
   if (error) {
     console.error(`[limits] bump_usage(${field}) failed - this interaction will NOT be counted:`, error);
     Sentry.captureException(error, { extra: { userId, field, stage: "bumpUsage" } });

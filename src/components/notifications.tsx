@@ -10,10 +10,10 @@ export function ForegroundNotifier() {
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
-    if (localStorage.getItem("gonebia-fg-notifs") === "0") return;
+    if (localStorage.getItem("timelymemo-fg-notifs") === "0") return;
 
     let seen: string[] = [];
-    try { seen = JSON.parse(localStorage.getItem("gonebia-seen-notifs") ?? "[]"); } catch {}
+    try { seen = JSON.parse(localStorage.getItem("timelymemo-seen-notifs") ?? "[]"); } catch {}
     const seenSet = new Set(seen);
 
     async function poll() {
@@ -32,7 +32,7 @@ export function ForegroundNotifier() {
           playChime();
         }
         if (changed) {
-          localStorage.setItem("gonebia-seen-notifs", JSON.stringify([...seenSet].slice(-200)));
+          localStorage.setItem("timelymemo-seen-notifs", JSON.stringify([...seenSet].slice(-200)));
         }
       } catch {}
     }

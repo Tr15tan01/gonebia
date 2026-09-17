@@ -12,6 +12,7 @@ export async function GET() {
     "memories", "memory_metadata", "memory_embeddings", "people", "memory_people",
     "tasks", "events", "purchases", "decisions", "goals", "books",
     "insights", "reminders", "notifications",
+    "agent_runs", "knowledge_items", "watches", "watch_events",
   ];
   const dump: Record<string, unknown[]> = {};
   for (const t of tables) {
@@ -48,7 +49,7 @@ export async function DELETE() {
     "reminders", "notifications", "insights", "daily_briefings", "weekly_analyses",
     "push_subscriptions", "people", "memories", "user_preferences", "profiles",
     // account-state / billing / integration tables - previously left behind:
-    "price_watches", "agent_runs", "discover_results", "usage_counters",
+    "watch_events", "watches", "knowledge_items", "agent_runs", "discover_results", "usage_counters",
     "google_integrations", "subscriptions",
   ];
 

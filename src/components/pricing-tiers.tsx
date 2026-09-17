@@ -28,7 +28,9 @@ export const TIER_CARDS: TierCard[] = [
       "Connect the Dots - 3/mo",
       "What am I forgetting - 1/week",
       "3 Discover analyses / month",
-      "Basic Life Radar",
+      "2 Research Agent runs / month",
+      "1 Watch (price, jobs or page)",
+      "Knowledge base",
       "Export and delete anytime",
     ],
   },
@@ -48,7 +50,8 @@ export const TIER_CARDS: TierCard[] = [
       "Unlimited Connect the Dots + What am I forgetting",
       "30 Discover analyses / month",
       "Daily briefing + weekly reflection",
-      "Research Agent + Problem Solver",
+      "Research + Deep Research agents (50 runs)",
+      "15 Watches - price drops, new jobs, page changes",
       "Google Calendar + Gmail context",
       "More color choices for your memories",
     ],
@@ -64,11 +67,10 @@ export const TIER_CARDS: TierCard[] = [
       "5,000 memories / month",
       "1,000 AI questions / month",
       "Unlimited Discover analyses",
-      "Advanced Research + Buying + Problem-Solving Agents",
+      "Research + Deep Research agents",
       "200 agent runs / month",
-      "Advanced price tracking",
-      "Long-running cases",
-      "Unlimited watches",
+      "100 Watches with daily checks",
+      "Knowledge base for everything you research",
       "Advanced Life Radar + cross-source intelligence",
     ],
   },
@@ -79,7 +81,7 @@ export const TIER_CARDS: TierCard[] = [
  *  not Pro - per product direction: most people want the "AI external
  *  brain", Pro is the power-user upsell for people who want agents running
  *  on their behalf. */
-export function PricingCards({ showBenefitsLinks = false }: { showBenefitsLinks?: boolean }) {
+export function PricingCards({ showBenefitsLinks = false, currentPlan = null }: { showBenefitsLinks?: boolean; currentPlan?: string | null }) {
   return (
     <div className="grid md:grid-cols-3 gap-4 mt-8">
       {TIER_CARDS.map((tier) => (
@@ -109,8 +111,12 @@ export function PricingCards({ showBenefitsLinks = false }: { showBenefitsLinks?
             ))}
           </ul>
           <div className="mt-5">
-            {tier.id === "free" ? (
-              <Link href="/login" className="btn-ghost w-full text-center block">Try it free</Link>
+            {currentPlan === tier.id ? (
+              <Link href="/settings" className="btn-ghost w-full text-center block">✓ Your current plan</Link>
+            ) : tier.id === "free" ? (
+              <Link href={currentPlan ? "/dashboard" : "/login"} className="btn-ghost w-full text-center block">{currentPlan ? "Open app" : "Try it free"}</Link>
+            ) : currentPlan && currentPlan !== "free" ? (
+              <Link href="/settings#plan" className="btn-primary w-full text-center block">Switch in Settings</Link>
             ) : (
               <UpgradeButton className="w-full" tier={tier.id as "premium" | "pro"} showBenefitsLink={showBenefitsLinks} />
             )}
@@ -135,15 +141,13 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Discover", free: "3/mo", premium: "30/mo", pro: "Unlimited" },
   { label: "Daily briefing", free: "—", premium: "✓", pro: "✓" },
   { label: "Weekly reflection", free: "—", premium: "✓", pro: "✓" },
-  { label: "Research Agent", free: "Limited", premium: "✓", pro: "Advanced" },
-  { label: "Buying Agent", free: "—", premium: "—", pro: "Advanced" },
-  { label: "Problem Solver", free: "Limited", premium: "✓", pro: "Advanced" },
-  { label: "Agent runs", free: "2", premium: "50", pro: "200" },
-  { label: "Price tracking", free: "—", premium: "✓", pro: "Advanced" },
+  { label: "Research Agent", free: "✓", premium: "✓", pro: "✓" },
+  { label: "Deep Research (3 runs each)", free: "—", premium: "✓", pro: "✓" },
+  { label: "Agent runs / month", free: "2", premium: "50", pro: "200" },
+  { label: "Watch Agent (price, jobs, changes)", free: "1", premium: "15", pro: "100" },
+  { label: "Knowledge base", free: "✓", premium: "✓", pro: "✓" },
   { label: "Google Calendar", free: "—", premium: "✓", pro: "✓" },
   { label: "Gmail context", free: "—", premium: "✓", pro: "✓" },
-  { label: "Long-running cases", free: "—", premium: "—", pro: "✓" },
-  { label: "Watches", free: "—", premium: "Limited", pro: "Unlimited" },
   { label: "Life Radar", free: "Basic", premium: "✓", pro: "Advanced" },
   { label: "Cross-source intelligence", free: "—", premium: "✓", pro: "Advanced" },
   { label: "Color choices for memories", free: "1", premium: "Full palette", pro: "Full palette" },

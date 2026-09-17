@@ -7,10 +7,9 @@ import { useTheme, AccentPicker } from "@/components/theme";
 import { useToast } from "@/components/ui";
 import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
 import { signOut } from "next-auth/react";
-import { UpgradeButton } from "@/components/upgrade-button";
 import { GoogleCard } from "@/components/google-card";
 import { useInstallPrompt } from "@/lib/use-install-prompt";
-import { ManageBillingButton } from "@/components/manage-billing";
+import { ManageBillingButton, ChangePlan } from "@/components/manage-billing";
 
 type PermState = "unsupported" | "granted" | "denied" | "default" | "loading";
 
@@ -45,7 +44,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
     }
     const p = Notification.permission as PermState;
     setPerm(p);
-    setAppOn(p === "granted" && localStorage.getItem("gonebia-fg-notifs") !== "0");
+    setAppOn(p === "granted" && localStorage.getItem("timelymemo-fg-notifs") !== "0");
   }
   useEffect(() => { readState(); setSoundOn(soundEnabled()); }, []);
 
@@ -76,7 +75,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
       return;
     }
     if (appOn) {
-      localStorage.setItem("gonebia-fg-notifs", "0");
+      localStorage.setItem("timelymemo-fg-notifs", "0");
       setAppOn(false);
       toast("In-app alerts off.");
       return;
@@ -85,7 +84,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
     if (p !== "granted") p = await Notification.requestPermission();
     await readState();
     if (p === "granted") {
-      localStorage.removeItem("gonebia-fg-notifs");
+      localStorage.removeItem("timelymemo-fg-notifs");
       setAppOn(true);
       toast("In-app alerts on.");
       try { new Notification("TimelyMemo", { body: "Alerts are on.", icon: "/icon.svg" }); } catch {}
@@ -131,7 +130,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
   /** Best-effort cleanup of everything that lives OUTSIDE the database and
    *  therefore can't be wiped server-side: the browser's push subscription
    *  (otherwise it silently keeps "belonging" to the deleted account) and
-   *  every gonebia-* localStorage key (seen notifications, snoozes, etc).
+   *  every timelymemo-* localStorage key (seen notifications, snoozes, etc).
    *  Device-only preferences (theme, sound) are intentionally left - they're
    *  not account data. */
   async function clearLocalTraces() {
@@ -143,9 +142,9 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
       }
     } catch {}
     try {
-      const keep = new Set(["gonebia-theme", "gonebia-sound"]);
+      const keep = new Set(["timelymemo-theme", "timelymemo-sound", "timelymemo-migrated"]);
       for (const key of Object.keys(localStorage)) {
-        if (key.startsWith("gonebia-") && !keep.has(key)) localStorage.removeItem(key);
+        if (key.startsWith("timelymemo-") && !keep.has(key)) localStorage.removeItem(key);
       }
     } catch {}
   }
@@ -175,8 +174,8 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
   };
 
   return (
-    <div className="space-y-6 max-w-xl">
-      <h1 className="font-display text-2xl">Settings</h1>
+    <div className="space-y-5 max-w-xl">
+      <h1 className="font-display text-3xl font-bold">Settings</h1>
 
       <section className="card p-5 space-y-3">
         <p className="label">Appearance</p>
@@ -220,9 +219,10 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
                     toast("Use your browser menu's \"Install app\" or \"Add to Home Screen\" option.");
                   }
                 }}
-                className="btn-ghost !text-sm"
+                className="btn-tint w-fit"
+                style={{ "--tint": "var(--c-event)" } as React.CSSProperties}
               >
-                {canInstall ? "Install now" : "Install"}
+                📲 {canInstall ? "Install now" : "Install"}
               </button>
             </>
           )}
@@ -268,7 +268,8 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
         )}
 
         <div className="flex flex-wrap gap-2">
-          <button onClick={testNotification} disabled={perm !== "granted"} className="btn-ghost !py-1.5 !text-xs">
+          <button onClick={testNotification} disabled={perm !== "granted"} className="btn-tint !py-1.5 !text-xs"
+            style={{ "--tint": "var(--c-ask)" } as React.CSSProperties}>
             Send test notification
           </button>
         </div>
@@ -319,6 +320,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
       </section>
 
       <section
+        id="plan"
         className="card p-5 space-y-3"
         style={
           plan === "pro" ? { borderColor: "color-mix(in srgb, var(--pro) 40%, transparent)" }
@@ -362,9 +364,13 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
             ))}
           </div>
         )}
-        {plan === "free" ? <UpgradeButton className="w-full" /> : <ManageBillingButton />}
+        <div className="pt-1 space-y-2.5">
+          <p className="text-sm font-semibold">{plan === "free" ? "Upgrade" : "Change plan"}</p>
+          <ChangePlan plan={plan} />
+          {plan !== "free" && <ManageBillingButton />}
+        </div>
         <Link href="/pricing" className="block text-center text-xs text-ink-2 hover:text-ink underline underline-offset-2">
-          {plan === "free" ? "See what you get on Premium or Pro" : "Compare plans"}
+          Compare every feature
         </Link>
       </section>
 
@@ -378,8 +384,9 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
         <p className="text-xs text-ink-2">
           {sens >= 0.85 ? "Calm - only high-confidence insights." : sens >= 0.7 ? "Balanced." : "Curious - more observations."}
         </p>
-        <button onClick={() => save({ insight_sensitivity: sens }, "Sensitivity saved.")} className="btn-ghost !py-1.5 !text-xs">
-          Save sensitivity
+        <button onClick={() => save({ insight_sensitivity: sens }, "Sensitivity saved.")} className="btn-tint !py-1.5 !text-xs"
+          style={{ "--tint": "var(--c-decision)" } as React.CSSProperties}>
+          ✨ Save sensitivity
         </button>
       </section>
 
@@ -391,7 +398,8 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
           Detected: {Intl.DateTimeFormat().resolvedOptions().timeZone}
           {timezone !== Intl.DateTimeFormat().resolvedOptions().timeZone && <span className="text-ink-2"> (stored: {timezone})</span>}
         </p>
-        <button onClick={() => save({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, "Timezone updated.")} className="btn-ghost !py-1.5 !text-xs">
+        <button onClick={() => save({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, "Timezone updated.")} className="btn-tint !py-1.5 !text-xs"
+          style={{ "--tint": "var(--c-place)" } as React.CSSProperties}>
           Use detected timezone
         </button>
       </section>
@@ -400,7 +408,7 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
         <p className="label">Your data - {email}</p>
         <p className="text-sm text-ink-2">Your memories are never used to train AI models. Only you can access them.</p>
         <div className="flex flex-wrap gap-2">
-          <a href="/api/account" className="btn-ghost !py-1.5 !text-xs">Download all my data (JSON)</a>
+          <a href="/api/account" className="btn-tint !py-1.5 !text-xs" style={{ "--tint": "var(--c-task)" } as React.CSSProperties}>⬇️ Download all my data (JSON)</a>
           <button onClick={() => setConfirmDelete(true)} className="btn-ghost !py-1.5 !text-xs !text-red-600 dark:!text-red-400">Delete account & all data</button>
         </div>
         {confirmDelete && (

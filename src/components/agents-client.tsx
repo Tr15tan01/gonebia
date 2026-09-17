@@ -1,509 +1,325 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useToast, Spinner, Empty } from "@/components/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useToast } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
+import { ResearchResult, type RunLike } from "@/components/research-result";
+import { WatchPanel } from "@/components/watch-panel";
+import { OrbitBlock } from "@/components/page-loader";
+import { CharCounter } from "@/components/capture";
 import { relTime } from "@/lib/dates";
 
-const KINDS = [
-  { kind: "research", icon: "\ud83d\udd0e", name: "Online Research", ph: "e.g. best glute exercises for desk workers", hint: "Searches the web, connects findings to your memories." },
-  { kind: "buying", icon: "\ud83d\uded2", name: "Buying Research", ph: "e.g. 27 inch 4k monitor under $400", hint: "Compares options and can track prices daily." },
-  { kind: "solver", icon: "\ud83d\udd75\ufe0f", name: "Problem Solver", ph: "e.g. I keep postponing my portfolio website", hint: "Uses your memories, tasks, calendar & email to build a plan." },
+export type AgentTab = "research" | "deep_research" | "watch";
+
+const MAX_INPUT = 500;
+
+const TABS: { id: AgentTab; icon: string; name: string; hint: string; color: string }[] = [
+  { id: "research", icon: "🔎", name: "Research", hint: "A quick, sourced answer in under 30 seconds.", color: "var(--c-idea)" },
+  { id: "deep_research", icon: "🔭", name: "Deep research", hint: "Investigates several angles, cross-checks, writes a full report.", color: "var(--c-know)" },
+  { id: "watch", icon: "👁️", name: "Watch", hint: "Tracks a link for price drops, new jobs or changes.", color: "var(--c-ask)" },
 ];
 
-/** Deterministic store-search deep links - always land on the item's search
- *  results on that store. Direct URLs for stores with stable search formats;
- *  site-scoped Google for the rest (guaranteed to resolve). */
-/** Only real http(s) URLs ever render as links - model junk schemes are dropped. */
-function safeUrl(u: unknown): string | null {
-  if (typeof u !== "string") return null;
-  try {
-    const parsed = new URL(u);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
-  } catch { return null; }
-}
+const EXAMPLES: Record<"research" | "deep_research", string[]> = {
+  research: ["Best stretches for desk workers", "Is intermittent fasting safe after 40?", "How do index funds work?"],
+  deep_research: ["Should I switch to a standing desk? Health evidence", "Remote vs hybrid work: productivity research", "Electric vs hybrid car total cost over 5 years"],
+};
 
-function optionHref(o: any): string {
-  const direct = safeUrl(o?.product_url) ?? safeUrl(o?.url);
-  if (direct) return direct;
-  const q = String(o?.model || o?.name || "").trim();
-  return `https://www.amazon.com/s?k=${encodeURIComponent(q)}`;
-}
+const DEEP_PHASES = [
+  { text: "Planning the investigation", sub: "Splitting your question into angles" },
+  { text: "Searching the web", sub: "Several searches run in parallel" },
+  { text: "Reading and cross-checking", sub: "Comparing what sources agree on" },
+  { text: "Writing your report", sub: "Summary, sections, numbers and sources" },
+];
+const QUICK_PHASES = [
+  { text: "Searching the web", sub: "Looking for reliable sources" },
+  { text: "Connecting to your memories", sub: "Finding what's relevant to you" },
+  { text: "Writing the answer", sub: "Usually 10-30 seconds" },
+];
 
-function optionStores(o: any) {
-  const q = String(o?.model || o?.name || "").trim();
-  const enc = encodeURIComponent(q);
-  const site = (domain: string) =>
-    `https://www.google.com/search?q=${encodeURIComponent(`site:${domain} ${q}`)}`;
-  return [
-    { name: "Amazon", url: `https://www.amazon.com/s?k=${enc}` },
-    { name: "eBay", url: `https://www.ebay.com/sch/i.html?_nkw=${enc}` },
-    { name: "AliExpress", url: site("aliexpress.com") },
-    { name: "Alta", url: site("alta.ge") },
-    { name: "PCShop", url: site("pcshop.ge") },
-  ];
-}
-
-function storeLinks(q: string) {
-  const enc = encodeURIComponent(q);
-  const site = (domain: string) =>
-    `https://www.google.com/search?q=${encodeURIComponent(`site:${domain} ${q}`)}`;
-  return [
-    { name: "Amazon", url: `https://www.amazon.com/s?k=${enc}` },
-    { name: "eBay", url: `https://www.ebay.com/sch/i.html?_nkw=${enc}` },
-    { name: "Walmart", url: `https://www.walmart.com/search?q=${enc}` },
-    { name: "AliExpress", url: site("aliexpress.com") },
-    { name: "Alta", url: site("alta.ge") },
-    { name: "PCShop", url: site("pcshop.ge") },
-    { name: "Zoomer", url: site("zoomer.ge") },
-  ];
-}
-
-/** A single shoppable product from the buying agent: real photo (with a
- *  graceful icon fallback if it fails to load or wasn't found), price,
- *  rating, key specs, and buttons to open the store page or track its price -
- *  this ONE product, not the whole search. */
-function ProductCard({ o, onTrack, tracking }: { o: any; onTrack: () => void; tracking: boolean }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const img = safeUrl(o?.image_url);
+function RunSkeleton() {
   return (
-    <div className="card p-4 text-sm">
-      <div className="flex gap-3">
-        {img && !imgFailed ? (
-          <img src={img} alt="" referrerPolicy="no-referrer" onError={() => setImgFailed(true)}
-            className="w-16 h-16 rounded-lg object-cover shrink-0 bg-paper-2" />
-        ) : (
-          <div className="w-16 h-16 rounded-lg shrink-0 grid place-items-center text-xl"
-            style={{ background: "color-mix(in srgb, var(--c-buy) 12%, transparent)", color: "var(--c-buy)" }}
-            aria-hidden>🛒</div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <a href={optionHref(o)} target="_blank" rel="noopener noreferrer"
-                className="font-medium cursor-pointer hover:text-ember hover:underline underline-offset-2"
-                title={safeUrl(o?.product_url) ? "Open product page" : "Search this exact model online"}>
-                {o.name} {'\u2197'}
-              </a>
-              {o.brand && <p className="text-xs text-ink-2">{o.brand}</p>}
-            </div>
-            <span className="chip shrink-0">{o.approx_price}{o.currency && o.currency !== "USD" ? ` ${o.currency}` : ""}</span>
+    <div className="space-y-2" role="status" aria-label="Loading recent runs">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="card p-4 flex items-center gap-3">
+          <div className="skeleton size-8 !rounded-lg" />
+          <div className="flex-1 space-y-1.5">
+            <div className={`skeleton h-3.5 ${i === 1 ? "w-1/2" : "w-3/4"}`} />
+            <div className="skeleton h-2.5 w-20" />
           </div>
-          {o.rating && <p className="text-xs text-ink-2 mt-1">⭐ {o.rating}</p>}
         </div>
-      </div>
-
-      {o.description && <p className="text-ink-2 mt-2.5 leading-snug">{o.description}</p>}
-
-      {(o.specs ?? []).length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {o.specs.map((s: string) => <span key={s} className="chip !text-[11px]">{s}</span>)}
-        </div>
-      )}
-
-      <p className="text-ink-2 mt-2"><span style={{ color: "var(--success)" }}>+</span> {o.pros}</p>
-      <p className="text-ink-2"><span style={{ color: "var(--danger)" }}>-</span> {o.cons}</p>
-
-      {safeUrl(o?.product_url) ? (
-        <a href={optionHref(o)} target="_blank" rel="noopener noreferrer"
-          className="flex items-center justify-center gap-1.5 mt-2.5 rounded-lg px-3 py-2 text-xs font-medium cursor-pointer"
-          style={{ background: "color-mix(in srgb, var(--c-buy) 12%, transparent)", color: "var(--c-buy)" }}>
-          Open this exact product {'\u2197'}
-        </a>
-      ) : (
-        <p className="text-xs text-ink-2 mt-2.5 text-center">
-          Couldn't confirm a direct product page - the store links below search for it instead.
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-        {optionStores(o).map((s) => (
-          <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
-            className="chip !text-[11px] cursor-pointer hover:!border-ember hover:!text-ember">{s.name}</a>
-        ))}
-        <button onClick={onTrack} disabled={tracking} className="btn-ghost !py-1 !px-2.5 !text-[11px] ml-auto">
-          {tracking ? "Tracking..." : "📉 Track this exact product's price"}
-        </button>
-      </div>
+      ))}
     </div>
   );
 }
 
-export function AgentsClient({ plan, used, limit }: { plan: string; used: number; limit: number }) {
-  const [kind, setKind] = useState("research");
-  const [input, setInput] = useState("");
+export function AgentsClient({
+  plan, used: usedInitial, limit, deepAllowed, deepCost, watchLimit, initialTab, initialQuery,
+}: {
+  plan: string; used: number; limit: number; deepAllowed: boolean; deepCost: number;
+  watchLimit: number; initialTab: AgentTab; initialQuery: string;
+}) {
+  const [tab, setTab] = useState<AgentTab>(initialTab);
+  const [input, setInput] = useState(initialQuery);
   const [busy, setBusy] = useState(false);
-  const [run, setRun] = useState<any>(null);
-  const [grounded, setGrounded] = useState(false);
-  const [sources, setSources] = useState<any[]>([]);
-  const [watches, setWatches] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
-  const [runError, setRunError] = useState<string | null>(null);
-  const [watchError, setWatchError] = useState<string | null>(null);
-  const [trackingKey, setTrackingKey] = useState<string | null>(null);
+  const [phase, setPhase] = useState(0);
+  const [run, setRun] = useState<RunLike | null>(null);
+  const [history, setHistory] = useState<RunLike[] | null>(null);
+  const [runError, setRunError] = useState<{ msg: string; upgrade?: boolean } | null>(null);
+  const [used, setUsed] = useState(usedInitial);
+  const resultRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
-  const outOfRuns = used >= limit;
-  const current = KINDS.find((k) => k.kind === kind)!;
 
-  async function loadSide() {
-    const [w, h] = await Promise.all([
-      fetch("/api/agents/watch").then((r) => r.json()).catch(() => null),
-      fetch("/api/agents").then((r) => r.json()).catch(() => null),
-    ]);
-    setWatches(w?.watches ?? []);
-    setHistory(h?.runs ?? []);
-  }
-  useEffect(() => { loadSide(); }, []);
+  const isResearch = tab === "research" || tab === "deep_research";
+  const cost = tab === "deep_research" ? deepCost : 1;
+  const locked = tab === "deep_research" && !deepAllowed;
+  const outOfRuns = used + cost > limit;
+  const phases = tab === "deep_research" ? DEEP_PHASES : QUICK_PHASES;
 
-  async function go() {
-    if (!input.trim() || busy) return;
-    setBusy(true); setRun(null); setSources([]); setGrounded(false); setRunError(null); setWatchError(null);
+  const loadHistory = useCallback(async () => {
+    try {
+      const d = await fetch("/api/agents?limit=20").then((r) => r.json());
+      setHistory(d?.runs ?? []);
+    } catch { setHistory([]); }
+  }, []);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (tab === "research") url.searchParams.delete("tab"); else url.searchParams.set("tab", tab);
+    url.searchParams.delete("q");
+    window.history.replaceState(null, "", url.toString());
+  }, [tab]);
+
+  useEffect(() => {
+    if (!busy) { setPhase(0); return; }
+    const step = tab === "deep_research" ? 9000 : 5000;
+    const t = setInterval(() => setPhase((p) => Math.min(p + 1, phases.length - 1)), step);
+    return () => clearInterval(t);
+  }, [busy, tab, phases.length]);
+
+  async function go(text = input, kind: "research" | "deep_research" = tab === "deep_research" ? "deep_research" : "research") {
+    const q = text.trim();
+    if (q.length < 3 || busy) return;
+    setBusy(true); setRun(null); setRunError(null);
     try {
       const res = await fetch("/api/agents", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, input }),
+        body: JSON.stringify({ kind, input: q }),
       });
-      const d = await res.json();
-      if (d.code === "limit") { toast(d.error); return; }
-      if (d.error) { setRunError(d.detail ? `${d.error} (${d.detail})` : d.error); return; }
-      setRun(d.run); setGrounded(!!d.grounded);
-      setSources(((d.sources ?? []) as any[]).filter((s: any) => s?.uri));
-      loadSide();
-    } catch { setRunError("The agent couldn't finish - please try again."); }
-    finally { setBusy(false); }
-  }
-
-  async function stopWatch(id: string) {
-    await fetch(`/api/agents/watch?id=${id}`, { method: "DELETE" });
-    loadSide();
-  }
-
-  async function removeWatch(id: string) {
-    if (!confirm("Remove this from your list?")) return;
-    setWatches((w) => w.filter((x) => x.id !== id)); // optimistic
-    await fetch(`/api/agents/watch?id=${id}&hard=1`, { method: "DELETE" });
-    loadSide();
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.error) {
+        setRunError({ msg: d.detail ? `${d.error} ${d.detail}` : (d.error ?? "The agent couldn't finish - please try again."), upgrade: !!d.upgrade });
+        return;
+      }
+      setRun(d.run);
+      if (d.run?.status !== "safety_blocked") setUsed((u) => u + (d.cost ?? 1));
+      loadHistory();
+      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } catch {
+      setRunError({ msg: "Connection lost while the agent was working. Check your network and try again." });
+    } finally { setBusy(false); }
   }
 
   async function removeRun(id: string) {
-    if (!confirm("Remove this from your history?")) return;
-    setHistory((h) => h.filter((x) => x.id !== id)); // optimistic
+    if (!confirm("Remove this from your history and knowledge base?")) return;
+    setHistory((h) => (h ?? []).filter((x) => x.id !== id));
+    if (run?.id === id) setRun(null);
     await fetch(`/api/agents?id=${id}`, { method: "DELETE" });
   }
 
   async function addTask(action: string) {
     const res = await fetch("/api/capture", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `I need to ${action}`, source: "typed", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      body: JSON.stringify({ text: `I need to ${action}`.slice(0, 800), source: "typed", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     });
-    const d = await res.json();
-    toast(res.ok ? "Saved as a task in your memory." : (d.error ?? "Couldn't save."));
+    const d = await res.json().catch(() => ({}));
+    toast(res.ok ? "Saved as a task." : (d.error ?? "Couldn't save."));
   }
 
-  /** Track ONE specific product the agent found - not the whole free-text
-   *  query - so the user picks exactly which item to watch, with its own
-   *  photo and store link carried along for the watch list. */
-  async function trackProduct(o: any, key: string) {
-    setWatchError(null); setTrackingKey(key);
-    const priceNum = parseFloat(String(o.approx_price ?? "").replace(/[^0-9.]/g, ""));
-    try {
-      const res = await fetch("/api/agents/watch", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: o.name || input,
-          target_price: Number.isFinite(priceNum) ? priceNum : undefined,
-          image_url: safeUrl(o.image_url),
-          product_url: optionHref(o),
-        }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (d.code === "limit" || d.error) { setWatchError(d.error ?? "Couldn't start tracking."); return; }
-      toast(`Tracking "${o.name}" - you'll get a notification if the price drops meaningfully (checked daily).`);
-      loadSide();
-    } finally { setTrackingKey(null); }
-  }
-
-  const result = run?.result ?? {};
+  const shownHistory = (history ?? []).filter((h) => !isResearch || h.kind === tab);
+  const current = TABS.find((t) => t.id === tab)!;
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-display text-2xl">Agents</h1>
-        <p className="text-sm text-ink-2 mt-1">
-          Research assistants with web access, grounded in your own context.
-          {plan === "free" && <> {used}/{limit} runs used this month.</>}
-        </p>
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-3xl font-bold">Agents</h1>
+          <p className="text-sm text-ink-2 mt-1">Assistants that research and keep watch for you, grounded in your own context.</p>
+        </div>
+        <div className="min-w-[160px]" title="Agent runs this month">
+          <div className="flex justify-between text-xs text-ink-2 mb-1">
+            <span>Runs this month</span>
+            <span className="tabular-nums font-semibold text-ink">{used}/{limit >= 9999 ? "∞" : limit}</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "color-mix(in srgb, var(--ink-2) 14%, transparent)" }}>
+            <div className="h-full rounded-full transition-all" style={{
+              width: `${Math.min(100, (used / Math.max(1, limit)) * 100)}%`,
+              background: used / Math.max(1, limit) > 0.85 ? "var(--danger)" : "var(--ember)",
+            }} />
+          </div>
+        </div>
       </header>
 
-      {outOfRuns && (
-        <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
-          <p className="font-medium">Monthly agent runs used up</p>
-          <p className="text-ink-2 mt-1">Pro includes 50 runs/month and price tracking.</p>
-          <UpgradeButton className="mt-3 !py-1.5 !text-xs" showBenefitsLink />
-        </div>
-      )}
-
-      <div className="grid sm:grid-cols-3 gap-3">
-        {KINDS.map((k) => (
-          <button key={k.kind} onClick={() => { setKind(k.kind); setRun(null); }}
-            className={`card p-4 text-left cursor-pointer hover:border-ember/60 transition-colors ${kind === k.kind ? "!border-ember" : ""}`}>
-            <p className="font-medium">{k.icon} {k.name}</p>
-            <p className="text-xs text-ink-2 mt-1">{k.hint}</p>
-          </button>
-        ))}
+      <div role="tablist" aria-label="Agent type" className="grid grid-cols-3 gap-2">
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button key={t.id} role="tab" aria-selected={active}
+              onClick={() => { setTab(t.id); setRunError(null); if (t.id !== tab) setRun(null); }}
+              className="card p-3 sm:p-4 text-left cursor-pointer transition-all"
+              style={active ? { borderColor: t.color, boxShadow: `0 0 0 3px color-mix(in srgb, ${t.color} 18%, transparent)` } : undefined}>
+              <div className="flex items-center gap-2">
+                <span className="grid place-items-center size-8 rounded-xl text-base shrink-0"
+                  style={{ background: `color-mix(in srgb, ${t.color} 14%, transparent)` }} aria-hidden>{t.icon}</span>
+                <span className="font-semibold text-sm leading-tight">{t.name}</span>
+              </div>
+              <p className="text-xs text-ink-2 mt-2 leading-snug hidden sm:block">{t.hint}</p>
+              {t.id === "deep_research" && (
+                <p className="text-[11px] mt-1.5 font-semibold" style={{ color: t.color }}>
+                  {deepAllowed ? `${deepCost} runs each` : "Premium & Pro"}
+                </p>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="card p-5 space-y-3">
-        <input className="input !py-3" placeholder={current.ph} value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && go()} disabled={busy || outOfRuns} />
-        <div className="flex gap-2">
-          <button onClick={go} disabled={busy || !input.trim() || outOfRuns} className="btn-primary flex-1">
-            {busy ? "Working..." : "Run agent"}
-          </button>
-        </div>
-        {kind === "buying" && !run && (
-          <p className="text-xs text-ink-2">Run it to see specific products with photos and prices - then pick exactly which one to track.</p>
-        )}
-        {busy && (
-          <div className="text-center py-8 flex flex-col items-center gap-3">
-            <div className="run-ring" />
-            <p className="text-sm font-medium">
-              {kind === "solver" ? "Investigating your context" : "Researching"}<span className="loader-dots"><span /><span /><span /></span>
-            </p>
-            <p className="text-xs text-ink-2">
-              {kind === "solver" ? "Memories, tasks, calendar and email - this takes up to a minute." : "Searching the web - usually 10-30 seconds."}
-            </p>
+      {tab === "watch" ? (
+        <WatchPanel plan={plan} watchLimit={watchLimit} />
+      ) : (
+        <>
+          <div className="card p-5 space-y-3 soft-shadow">
+            <p className="text-sm text-ink-2 sm:hidden">{current.hint}</p>
+            <textarea
+              className="input !py-3 resize-none"
+              rows={tab === "deep_research" ? 3 : 2}
+              placeholder={tab === "deep_research" ? "What should be investigated in depth?" : "What do you want to know?"}
+              value={input}
+              maxLength={MAX_INPUT}
+              onChange={(e) => setInput(e.target.value.slice(0, MAX_INPUT))}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); } }}
+              disabled={busy || locked}
+            />
+            {input.length > 400 && <CharCounter used={input.length} max={MAX_INPUT} />}
+            {!input && !busy && (
+              <div className="flex flex-wrap gap-1.5">
+                {EXAMPLES[tab].map((ex) => (
+                  <button key={ex} onClick={() => setInput(ex)} className="chip cursor-pointer hover:!border-ember hover:!text-ember">{ex}</button>
+                ))}
+              </div>
+            )}
+            {locked ? (
+              <div className="rounded-2xl p-4 text-sm space-y-2" style={{ background: "color-mix(in srgb, var(--c-know) 9%, transparent)" }}>
+                <p className="font-semibold">Deep research is part of Premium and Pro</p>
+                <p className="text-ink-2">Each report investigates four angles in parallel, cross-checks sources and writes a structured report you keep in your knowledge base.</p>
+                <UpgradeButton className="!py-1.5 !text-xs" showBenefitsLink />
+              </div>
+            ) : (
+              <button onClick={() => go()} disabled={busy || input.trim().length < 3 || outOfRuns} className="btn-primary w-full !py-2.5">
+                {busy ? "Working…" : tab === "deep_research" ? `Start deep research · ${deepCost} runs` : "Research"}
+              </button>
+            )}
+            {outOfRuns && !locked && (
+              <div className="rounded-2xl p-3 text-sm flex items-center justify-between gap-3 flex-wrap" style={{ background: "var(--ember-soft)" }}>
+                <span>Not enough runs left this month for this agent.</span>
+                {plan !== "pro" && <UpgradeButton className="!py-1.5 !text-xs" tier={plan === "premium" ? "pro" : "premium"} />}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {runError && !busy && (
-        <div className="card p-4 text-sm" style={{ background: "var(--danger-soft)", borderLeft: "3px solid var(--danger)" }}>
-          <p className="font-medium" style={{ color: "var(--danger)" }}>Run didn't complete</p>
-          <p className="text-ink-2 mt-1">{runError}</p>
-        </div>
-      )}
+          <div ref={resultRef} className="scroll-mt-20" />
 
-      {run && !busy && (
-        <div className="card p-5 space-y-4 rise">
-          <p className="text-xs text-ink-2">
-            {grounded ? "\ud83c\udf10 Web-grounded" : "\u26a0\ufe0f Answered without web grounding (model/key limitation)"} {" - "}
-            {new Date(run.created_at).toLocaleTimeString()}
-          </p>
-
-          {result.image_url && safeUrl(result.image_url) && (
-            <img src={result.image_url} alt="" referrerPolicy="no-referrer"
-              className="w-full max-h-56 object-cover rounded-xl bg-paper-2"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          )}
-
-          {result.answer && <p className="text-[15px] leading-relaxed">{result.answer}</p>}
-          {result.recommendation && <p className="font-display text-lg">{result.recommendation}</p>}
-          {result.understanding && <p className="text-[15px] leading-relaxed">{result.understanding}</p>}
-
-          {(result.key_points ?? []).length > 0 && (
-            <ul className="space-y-1.5 text-sm">
-              {result.key_points.map((p: any, i: number) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="shrink-0" aria-hidden>{typeof p === "string" ? "•" : (p.icon || "•")}</span>
-                  <span className="text-ink-2">{typeof p === "string" ? p : p.point}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {result.surprising_fact && (
-            <div className="card p-4 text-sm" style={{ background: "color-mix(in srgb, var(--c-idea) 10%, transparent)", borderLeft: "3px solid var(--c-idea)" }}>
-              <p className="label mb-1" style={{ color: "var(--c-idea)" }}>💡 Didn't know that</p>{result.surprising_fact}
-            </div>
-          )}
-
-          {result.try_this && (
-            <div className="card p-4 text-sm" style={{ background: "color-mix(in srgb, var(--success) 10%, transparent)", borderLeft: "3px solid var(--success)" }}>
-              <p className="label mb-1" style={{ color: "var(--success)" }}>✅ Try this</p>{result.try_this}
-            </div>
-          )}
-
-          {result.so_what && (
-            <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)" }}>
-              <p className="label mb-1">For you specifically</p>{result.so_what}
-            </div>
-          )}
-
-          {(result.follow_up_questions ?? []).length > 0 && (
-            <div>
-              <p className="label mb-2">Keep digging</p>
-              <div className="flex flex-wrap gap-2">
-                {result.follow_up_questions.map((q: string) => (
-                  <button key={q} onClick={() => { setInput(q); setTimeout(go, 0); }}
-                    className="chip cursor-pointer hover:!border-ember hover:!text-ember">{q} →</button>
+          {busy && (
+            <div className="card p-6 space-y-5">
+              <OrbitBlock title={phases[phase].text} sub={phases[phase].sub} height={240} />
+              <ol className="flex flex-wrap justify-center gap-2 text-xs" aria-label="Progress">
+                {phases.map((p, i) => (
+                  <li key={p.text} className="chip" style={i <= phase ? { color: current.color, borderColor: `color-mix(in srgb, ${current.color} 40%, transparent)` } : undefined}>
+                    {i < phase ? "✓" : i === phase ? "●" : "○"} {p.text}
+                  </li>
                 ))}
+              </ol>
+              {tab === "deep_research" && (
+                <p className="text-xs text-ink-2 text-center">Deep research takes 1–3 minutes. You'll also get a notification when the report is ready.</p>
+              )}
+            </div>
+          )}
+
+          {runError && !busy && (
+            <div className="card p-4 text-sm" style={{ background: "var(--danger-soft)", borderColor: "color-mix(in srgb, var(--danger) 30%, transparent)" }} role="alert">
+              <p className="font-semibold" style={{ color: "var(--danger)" }}>The run didn't finish</p>
+              <p className="text-ink-2 mt-1">{runError.msg}</p>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => go()} className="btn-ghost !py-1.5 !text-xs">Try again</button>
+                {runError.upgrade && <UpgradeButton className="!py-1.5 !text-xs" />}
               </div>
             </div>
           )}
 
-          {(result.options ?? []).map((o: any, i: number) => (
-            <ProductCard key={i} o={o} onTrack={() => trackProduct(o, `${run.id}-${i}`)}
-              tracking={trackingKey === `${run.id}-${i}`} />
-          ))}
-
-          {result.first_move && (
-            <div className="card p-4" style={{ borderLeft: "3px solid var(--ember)" }}>
-              <p className="label mb-1" style={{ color: "var(--ember)" }}>First move</p>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">{result.first_move}</p>
-                <button onClick={() => addTask(result.first_move)} className="btn-ghost !py-1.5 !text-xs shrink-0">Save as task</button>
-              </div>
-            </div>
-          )}
-
-          {(result.steps ?? []).length > 0 && (
-            <div className="space-y-2">
-              <p className="label">Action plan</p>
-              {(result.steps ?? []).map((s: any, i: number) => (
-                <div key={i} className="card p-4 text-sm flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium">{i + 1}. {s.action}</p>
-                    {s.detail && <p className="text-ink-2 mt-1">{s.detail}</p>}
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={`chip ${s.effort === "quick" ? "chip-c-buy" : s.effort === "big" ? "chip-c-book" : ""}`}>{s.effort}</span>
-                    <button onClick={() => addTask(s.action)} className="text-xs text-ember hover:underline cursor-pointer">save as task</button>
-                  </div>
+          {run && !busy && (
+            <div className="card p-5 md:p-6 rise soft-shadow">
+              <ResearchResult
+                run={run}
+                onFollowUp={(q) => { setInput(q); go(q); }}
+                onSaveTask={addTask}
+              />
+              <div className="mt-5 pt-4 border-t border-line flex flex-wrap items-center justify-between gap-2 text-xs text-ink-2">
+                <span>Saved to your knowledge base.</span>
+                <div className="flex gap-2">
+                  {run.kind === "research" && deepAllowed && (
+                    <button onClick={() => { setTab("deep_research"); go(run.input, "deep_research"); }}
+                      className="btn-tint !py-1.5 !text-xs" style={{ "--tint": "var(--c-know)" } as React.CSSProperties}>
+                      🔭 Go deeper on this
+                    </button>
+                  )}
+                  <Link href={`/knowledge?open=${run.id}`} className="btn-ghost !py-1.5 !text-xs">Open in knowledge base</Link>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {result.advice && <p className="text-sm text-ink-2">{result.advice}</p>}
-
-          {kind === "buying" && input.trim() && (result.options ?? []).length === 0 && (
-            <div>
-              <p className="label mb-2">Compare on stores <span className="normal-case">(opens store search)</span></p>
-              <div className="flex flex-wrap gap-2">
-                {storeLinks(input).map((s) => (
-                  <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
-                    className="chip cursor-pointer hover:!border-ember hover:!text-ember">
-                    {s.name} {'\u2197'}
-                  </a>
-                ))}
               </div>
             </div>
           )}
 
-          {sources.length > 0 && (
-            <div>
-              <p className="label mb-2">{grounded ? "Sources (web)" : "Sources (model-provided - verify before relying on them)"}</p>
-              <ul className="space-y-1.5 text-sm">
-                {sources.map((s, i) => (
-                  <li key={i}>
-                    <a href={s.uri} target="_blank" rel="noopener noreferrer" className="text-ember hover:underline">{s.title}</a>
+          <section>
+            <div className="flex items-baseline justify-between mb-2.5">
+              <h2 className="font-display text-lg font-semibold">Recent {tab === "deep_research" ? "reports" : "research"}</h2>
+              <Link href="/knowledge" className="text-xs font-semibold text-ember hover:underline underline-offset-2">Knowledge base</Link>
+            </div>
+            {history === null ? <RunSkeleton /> : shownHistory.length === 0 ? (
+              <div className="card p-8 text-center">
+                <div className="text-3xl mb-2" aria-hidden>{current.icon}</div>
+                <p className="font-semibold">Nothing here yet</p>
+                <p className="text-sm text-ink-2 mt-1">
+                  {tab === "deep_research" ? "Your deep research reports will collect here." : "Ask something above - every answer is kept for later."}
+                </p>
+              </div>
+            ) : (
+              <ul className="card divide-y divide-line overflow-hidden">
+                {shownHistory.map((h) => (
+                  <li key={h.id} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-paper-2 transition-colors">
+                    <button
+                      onClick={() => {
+                        setRun(h); setInput(h.input); setRunError(null);
+                        requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+                      }}
+                      className="min-w-0 flex-1 flex items-center gap-3 text-left cursor-pointer"
+                      title="Open this result"
+                    >
+                      <span className="grid place-items-center size-8 rounded-lg shrink-0" aria-hidden
+                        style={{ background: `color-mix(in srgb, ${h.kind === "deep_research" ? "var(--c-know)" : "var(--c-idea)"} 13%, transparent)` }}>
+                        {h.kind === "deep_research" ? "🔭" : "🔎"}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{h.result?.title || h.input}</span>
+                        <span className="block text-xs text-ink-2">{relTime(h.created_at)}</span>
+                      </span>
+                    </button>
+                    <button onClick={() => removeRun(h.id)} aria-label="Remove from history" title="Remove"
+                      className="text-ink-2 hover:text-danger cursor-pointer px-1">🗑</button>
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {kind === "buying" && input.trim() && !run && (
-        <div className="card p-5 space-y-2 soft-shadow">
-          <p className="label">Or jump straight to stores <span className="normal-case">(opens store search for "{input.slice(0, 60)}")</span></p>
-          <div className="flex flex-wrap gap-2">
-            {storeLinks(input).map((s) => (
-              <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
-                className="chip cursor-pointer hover:!border-ember hover:!text-ember">
-                {s.name} {'\u2197'}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {watchError && (
-        <div className="rounded-xl p-3 text-sm card" style={{ background: "var(--danger-soft)", borderLeft: "3px solid var(--danger)" }}>
-          <p style={{ color: "var(--danger)" }} className="font-medium">Watch limit</p>
-          <p className="text-ink-2 mt-0.5">{watchError}</p>
-        </div>
-      )}
-
-      {watches.length > 0 && (
-        <section>
-          <h2 className="label mb-2.5">Price watches ({watches.filter((w) => w.status === "active").length} active)</h2>
-          <ul className="space-y-2">
-            {watches.map((w) => {
-              const img = safeUrl(w.image_url);
-              const link = safeUrl(w.product_url);
-              return (
-                <li key={w.id} className="card p-4 text-sm flex items-center gap-3">
-                  {img ? (
-                    <img src={img} alt="" referrerPolicy="no-referrer"
-                      className="w-10 h-10 rounded-lg object-cover shrink-0 bg-paper-2"
-                      onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }} />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg shrink-0 grid place-items-center text-base"
-                      style={{ background: "color-mix(in srgb, var(--c-buy) 12%, transparent)", color: "var(--c-buy)" }}
-                      aria-hidden>🛒</div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    {link ? (
-                      <a href={link} target="_blank" rel="noopener noreferrer" className="font-medium truncate block hover:text-ember hover:underline">{w.query} {'\u2197'}</a>
-                    ) : (
-                      <p className="font-medium truncate">{w.query}</p>
-                    )}
-                    <p className="text-xs text-ink-2 mt-0.5">
-                      {w.status === "active" ? "checking daily" : "stopped"}
-                      {w.last_price != null && ` - last estimate: ${w.last_price}`}
-                      {w.last_checked && ` - ${relTime(w.last_checked)}`}
-                    </p>
-                  </div>
-                  {w.status === "active" ? (
-                    <button onClick={() => stopWatch(w.id)} className="btn-ghost !py-1 !px-2 !text-xs shrink-0">Stop</button>
-                  ) : (
-                    <button onClick={() => removeWatch(w.id)} aria-label="Remove" title="Remove from list"
-                      className="btn-ghost !py-1 !px-1.5 !text-xs shrink-0 cursor-pointer text-ink-2 hover:!text-[var(--danger)]">🗑</button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {history.length > 0 && (
-        <section>
-          <h2 className="label mb-2.5">Recent runs</h2>
-          <ul className="card divide-y divide-line">
-            {history.map((h) => (
-              <li key={h.id} className="p-4 text-sm flex items-center justify-between gap-3">
-                <button
-                  onClick={() => {
-                    setRun({ id: h.id, kind: h.kind, result: h.result ?? {} });
-                    setKind(h.kind);
-                    setInput(h.input);
-                    setGrounded(!!h.result?._grounded);
-                    setSources(((h.result?._sources ?? []) as any[]).filter((s: any) => s?.uri));
-                    setRunError(null);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className="min-w-0 truncate text-left flex-1 cursor-pointer hover:text-ember"
-                  title="View this run again"
-                >
-                  {KINDS.find((k) => k.kind === h.kind)?.icon} {h.input}
-                </button>
-                <span className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-ink-2 whitespace-nowrap">{relTime(h.created_at)}</span>
-                  <button onClick={() => removeRun(h.id)} aria-label="Remove from history" title="Remove from history"
-                    className="text-ink-2 hover:!text-[var(--danger)] cursor-pointer">🗑</button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {history.length === 0 && watches.length === 0 && !run && (
-        <Empty icon="\u26a1" title="No agent runs yet." hint="Ask the research agent anything, or give the problem solver something that's been stuck." />
+            )}
+          </section>
+        </>
       )}
     </div>
   );

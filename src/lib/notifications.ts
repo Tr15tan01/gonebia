@@ -10,6 +10,7 @@ export const NOTIF_KIND: Record<string, string> = {
   daily_briefing: "\ud83c\udf05",
   agent_done: "\ud83e\udd16",
   price_watch: "\ud83d\uded2",
+  watch: "\ud83d\udc41\ufe0f",
   future_note: "\ud83d\udd70\ufe0f",
 };
 

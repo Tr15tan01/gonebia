@@ -5,7 +5,7 @@ import { playAlert } from "@/lib/sound";
 
 interface UrgentItem { id: string; text: string; title: string; when: number }
 
-const KEY = (id: string) => `gonebia-urgent-${id}`;
+const KEY = (id: string) => `timelymemo-urgent-${id}`;
 function snoozed(id: string) {
   try {
     const v = +(localStorage.getItem(KEY(id)) ?? 0);

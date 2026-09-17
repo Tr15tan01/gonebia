@@ -74,7 +74,7 @@ export function crisisMessage(kind: "self_harm" | "violence_to_others" | "illega
     "If you or someone else is in danger, please contact local emergency services.";
 }
 
-/** Shown when an AGENT (Research/Buying/Problem Solver) refuses to run at
+/** Shown when an AGENT (Research / Deep Research / Watch) refuses to run at
  *  all, as opposed to a reminder just not being scheduled - there's no note
  *  being "saved" in that flow, so the wording is a little different. */
 export function agentSafetyMessage(kind: "self_harm" | "violence_to_others" | "illegal_activity" | "other_harm"): string {

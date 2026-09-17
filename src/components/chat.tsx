@@ -4,6 +4,10 @@ import { useSearchParams } from "next/navigation";
 import { MemorySheet } from "@/components/memory";
 import { useToast } from "@/components/ui";
 import posthog from "posthog-js";
+import { CharCounter } from "@/components/capture";
+
+const MAX_Q = 180;
+const Q_COUNTER_FROM = 100;
 
 interface Ref { n: number; id: string; title: string; date: string; snippet: string }
 interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[]; detail?: string }
@@ -137,16 +141,20 @@ export function ChatClient() {
         <div ref={bottom} />
       </div>
 
-      <div className="pt-3 flex gap-2">
-        <input
-          className="input !py-3"
-          placeholder="Ask my memory..."
-          value={input}
-          maxLength={180}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-        />
-        <button onClick={() => send()} disabled={busy || !input.trim()} className="btn-primary">Ask</button>
+      <div className="pt-3">
+        <div className="flex gap-2">
+          <input
+            className="input !py-3"
+            placeholder="Ask my memory..."
+            value={input}
+            maxLength={MAX_Q}
+            aria-describedby={input.length > Q_COUNTER_FROM ? "question-counter" : undefined}
+            onChange={(e) => setInput(e.target.value.slice(0, MAX_Q))}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+          />
+          <button onClick={() => send()} disabled={busy || !input.trim()} className="btn-primary">Ask</button>
+        </div>
+        {input.length > Q_COUNTER_FROM && <CharCounter id="question-counter" used={input.length} max={MAX_Q} />}
       </div>
 
       <MemorySheet id={openMemory} onClose={() => setOpenMemory(null)} />
