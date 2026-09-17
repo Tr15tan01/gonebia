@@ -6,6 +6,8 @@
      --ember is the user-selectable accent (amber by default). */
   --paper: #f5f4fa; --paper-2: #ebe9f3; --card: #ffffff;
   --ink: #1c1a2e; --ink-2: #625f7a; --line: #e0ddeb;
+  /* navigation reads darker than ordinary secondary text in light mode */
+  --nav-ink: #403d5c;
   --ember: #b45309; --ember-soft: #fdf0e0;
   --dusk: #3b3a8f;
   --danger: #dc2626; --danger-soft: #fef2f2;
@@ -24,6 +26,7 @@
 .dark {
   --paper: #0e0d17; --paper-2: #16152a; --card: #1a1929;
   --ink: #ecebf5; --ink-2: #a09db8; --line: #2a2840;
+  --nav-ink: #b9b6cd;
   --ember: #f0a04b; --ember-soft: #2b2114;
   --dusk: #8f8cf0;
   --danger: #f87171; --danger-soft: #2a1515;
@@ -50,6 +53,7 @@
   --color-ember: var(--ember);
   --color-ember-soft: var(--ember-soft);
   --color-dusk: var(--dusk);
+  --color-nav-ink: var(--nav-ink);
   --color-danger: var(--danger);
   --color-success: var(--success);
   --color-premium: var(--premium);
@@ -421,3 +425,9 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01
 @media (prefers-reduced-motion: reduce) {
   .orbit-loader > span, .orbit-loader > i, .phase-in, .bar-grow, .stat-tile { animation: none !important; transition: none !important; }
 }
+
+
+/* ---------- navigation text ---------- */
+.nav-link { color: var(--nav-ink); font-size: 0.9375rem; font-weight: 500; }
+.nav-link:hover { color: var(--ink); }
+.nav-link[aria-current="page"] { color: var(--ink); font-weight: 650; }

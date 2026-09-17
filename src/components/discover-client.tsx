@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useState, useSyncExternalStore, Fragment } from "react";
 import Link from "next/link";
 import { Spinner, useToast } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
@@ -20,6 +20,22 @@ const PHASES = [
   { text: "Noticing what repeats", icon: "\ud83d\udd04", color: "var(--success)" },
   { text: "Putting it into words", icon: "\ud83d\udcac", color: "var(--c-decision)" },
 ];
+
+/** true on the 2-column (sm+) layout. Used to decide WHERE the result panel
+ *  goes: inline under the clicked card on phones (so the Run button is right
+ *  there), but under the whole grid on desktop so the tool list stays intact
+ *  and doesn't get pushed apart by a long analysis. */
+function useWideLayout() {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = matchMedia("(min-width: 640px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => matchMedia("(min-width: 640px)").matches,
+    () => false,
+  );
+}
 
 export function DiscoverClient({ plan, used, limit }: { plan: string; used: number; limit: number }) {
   const [active, setActive] = useState<string | null>(null);
@@ -56,41 +72,9 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
 
   const tool = TOOLS.find((t) => t.kind === active);
   const outOfRuns = used >= limit;
+  const wide = useWideLayout();
 
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="font-display text-2xl">Discover</h1>
-        <p className="text-sm text-ink-2 mt-1">
-          AI analysis of your own memories - every claim linked to its source.
-          {plan === "free" && <> {used}/{limit} analyses used this month.</>}
-        </p>
-      </header>
-
-      {outOfRuns && (
-        <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
-          <p className="font-medium">Monthly Discover analyses used up</p>
-          <p className="text-ink-2 mt-1">Pro gives you {200} per month plus unlimited insights.</p>
-          <UpgradeButton className="mt-3 !py-1.5 !text-xs" showBenefitsLink />
-        </div>
-      )}
-
-      <div className="grid sm:grid-cols-2 gap-3">
-        {TOOLS.map((t) => (
-          <Fragment key={t.kind}>
-            <button
-              onClick={() => { setActive(active === t.kind ? null : t.kind); setWindow(t.windows ? t.windows[1] : null); setData(null); setRunError(null); }}
-              className={`card p-4 text-left cursor-pointer hover:border-ember/60 transition-colors ${active === t.kind ? "!border-ember" : ""}`}>
-              <p className="font-medium">{t.icon} {t.name}</p>
-              <p className="text-sm text-ink-2 mt-1">{t.desc}</p>
-            </button>
-
-            {/* Rendered directly after the card that was clicked (col-span-full
-               so it takes the whole row on the 2-column desktop layout too) -
-               previously this whole panel lived after the entire grid, so on
-               mobile clicking an early card meant scrolling past every
-               remaining card to find the Run button. */}
-            {tool && t.kind === active && (
+  const panel = tool ? (
               <div className="card p-5 space-y-4 col-span-full rise">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-medium">{tool.icon} {tool.name}</p>
@@ -132,10 +116,46 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
                     onRegenerate={() => run(tool.kind, window, true)} />
                 )}
               </div>
-            )}
+  ) : null;
+
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="font-display text-2xl">Discover</h1>
+        <p className="text-sm text-ink-2 mt-1">
+          AI analysis of your own memories - every claim linked to its source.
+          {plan === "free" && <> {used}/{limit} analyses used this month.</>}
+        </p>
+      </header>
+
+      {outOfRuns && (
+        <div className="card p-4 text-sm" style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 30%, transparent)" }}>
+          <p className="font-medium">Monthly Discover analyses used up</p>
+          <p className="text-ink-2 mt-1">Pro gives you {200} per month plus unlimited insights.</p>
+          <UpgradeButton className="mt-3 !py-1.5 !text-xs" showBenefitsLink />
+        </div>
+      )}
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        {TOOLS.map((t) => (
+          <Fragment key={t.kind}>
+            <button
+              onClick={() => { setActive(active === t.kind ? null : t.kind); setWindow(t.windows ? t.windows[1] : null); setData(null); setRunError(null); }}
+              className={`card p-4 text-left cursor-pointer hover:border-ember/60 transition-colors ${active === t.kind ? "!border-ember" : ""}`}>
+              <p className="font-medium">{t.icon} {t.name}</p>
+              <p className="text-sm text-ink-2 mt-1">{t.desc}</p>
+            </button>
+
+            {/* phones: right under the card you tapped, so the Run button is
+               reachable without scrolling past the remaining tools */}
+            {tool && t.kind === active && !wide && panel}
           </Fragment>
         ))}
       </div>
+
+      {/* desktop: the panel lives under the full tool grid */}
+      {wide && panel}
     </div>
   );
 }

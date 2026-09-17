@@ -14,6 +14,47 @@ export function useTheme() {
   return { theme, apply };
 }
 
+export const FONT_SIZES = [
+  { id: "s", label: "Small", px: 15 },
+  { id: "m", label: "Default", px: 16 },
+  { id: "l", label: "Large", px: 17 },
+  { id: "xl", label: "Larger", px: 18 },
+] as const;
+
+/** Text size is a per-device preference (like theme), stored locally and
+ *  applied to the root font size - every rem-based size in the app scales
+ *  with it, so the whole interface grows or shrinks a little together. */
+export function FontSizePicker() {
+  const [size, setSize] = useState<string>("m");
+  useEffect(() => { setSize(localStorage.getItem("timelymemo-fontsize") ?? "m"); }, []);
+
+  const apply = (id: string) => {
+    const px = FONT_SIZES.find((f) => f.id === id)?.px ?? 16;
+    document.documentElement.style.fontSize = `${px}px`;
+    localStorage.setItem("timelymemo-fontsize", id);
+    setSize(id);
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <p className="text-sm font-medium">Text size</p>
+        <p className="text-xs text-ink-2">Applies to this device only.</p>
+      </div>
+      <div className="flex gap-1.5" role="radiogroup" aria-label="Text size">
+        {FONT_SIZES.map((f) => (
+          <button key={f.id} role="radio" aria-checked={size === f.id} onClick={() => apply(f.id)}
+            className={`chip cursor-pointer !px-3 ${size === f.id ? "!bg-ember !text-white !border-ember" : ""}`}
+            style={{ fontSize: `${f.px - 4}px` }}>
+            A
+            <span className="sr-only">{f.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ThemeToggle({ size = "sm" }: { size?: "sm" | "lg" }) {
   const { theme, apply } = useTheme();
   return (

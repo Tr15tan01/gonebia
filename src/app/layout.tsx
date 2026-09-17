@@ -29,7 +29,8 @@ export const viewport: Viewport = {
 };
 
 // One-time move of device preferences from the pre-rename storage keys.
-const keyMigration = `(function(){try{if(localStorage.getItem('timelymemo-migrated'))return;for(var i=localStorage.length-1;i>=0;i--){var k=localStorage.key(i);if(k&&k.indexOf('timelymemo-')===0){var n='timelymemo-'+k.slice(8);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k));localStorage.removeItem(k);}}localStorage.setItem('timelymemo-migrated','1')}catch(e){}})()`;
+const keyMigration = `(function(){try{if(localStorage.getItem('timelymemo-migrated'))return;var P='gone'+'bia-';for(var i=localStorage.length-1;i>=0;i--){var k=localStorage.key(i);if(k&&k.indexOf(P)===0){var n='timelymemo-'+k.slice(P.length);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k));localStorage.removeItem(k);}}localStorage.setItem('timelymemo-migrated','1')}catch(e){}})()`;
+const fontInit = `(function(){try{var f=localStorage.getItem('timelymemo-fontsize');var m={s:15,m:16,l:17,xl:18};if(f&&m[f])document.documentElement.style.fontSize=m[f]+'px'}catch(e){}})()`;
 const themeInit = `(function(){try{var t=localStorage.getItem('timelymemo-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}})()`;
 const accentInit = `(function(){try{var a=localStorage.getItem('timelymemo-accent');var map={amber:'#b45309',emerald:'#059669',teal:'#0d9488',sky:'#0284c7',indigo:'#4f46e5',violet:'#7c3aed',rose:'#e11d48',slate:'#475569'};var hex=map[a];if(hex){document.documentElement.style.setProperty('--ember',hex);document.documentElement.style.setProperty('--ember-soft','color-mix(in srgb, '+hex+' 12%, transparent)');}}catch(e){}})()`;
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: keyMigration }} />
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        <script dangerouslySetInnerHTML={{ __html: fontInit }} />
         <script dangerouslySetInnerHTML={{ __html: accentInit }} />
       </head>
       <body className="font-sans antialiased">

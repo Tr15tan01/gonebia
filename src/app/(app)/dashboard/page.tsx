@@ -141,12 +141,12 @@ export default async function Dashboard() {
 async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const count = (r: { count: number | null; error?: unknown }) => (r?.error ? 0 : r?.count ?? 0);
-  const [openTasks, totalMems, booksDone, booksReading, movies, peopleN, researchRuns, deepRuns, kbItems, watchesActive, watchChanges, sleepRes] = await Promise.all([
+  const [openTasks, totalMems, booksDone, booksInProcess, movies, peopleN, researchRuns, deepRuns, kbItems, watchesActive, watchChanges, sleepRes] = await Promise.all([
     sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
       .eq("status", "open").in("type", ["task", "promise", "commitment"]),
     sb.from("memories").select("id", { count: "exact", head: true }).is("deleted_at", null),
     sb.from("books").select("id", { count: "exact", head: true }).eq("status", "finished"),
-    sb.from("books").select("id", { count: "exact", head: true }).eq("status", "reading"),
+    sb.from("books").select("id", { count: "exact", head: true }).in("status", ["reading", "want_to_read"]),
     sb.from("memory_metadata").select("memory_id", { count: "exact", head: true }).eq("type", "movie"),
     sb.from("people").select("id", { count: "exact", head: true }),
     sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", "research").eq("status", "done"),
@@ -167,7 +167,7 @@ async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
   const stats = [
     { label: "Open tasks", icon: "☑️", value: count(openTasks), sub: "promises included", color: "var(--c-task)", href: "/tasks" },
     { label: "Memories", icon: "💭", value: count(totalMems), sub: "everything you've said", color: "var(--ember)", href: "/timeline" },
-    { label: "Books", icon: "📚", value: count(booksDone), sub: `finished · ${count(booksReading)} reading`, color: "var(--c-book)", href: "/books" },
+    { label: "Books", icon: "📚", value: count(booksInProcess), sub: `in process · ${count(booksDone)} finished`, color: "var(--c-book)", href: "/books" },
     { label: "Movies", icon: "🎬", value: count(movies), sub: "watched & noted", color: "var(--c-movie)", href: "/timeline?type=movie" },
     { label: "People", icon: "👥", value: count(peopleN), sub: "in your circle", color: "var(--c-decision)", href: "/people" },
     { label: "Knowledge", icon: "🧠", value: knowledge, sub: count(deepRuns) ? `${count(deepRuns)} deep report${count(deepRuns) === 1 ? "" : "s"}` : "researched topics", color: "var(--c-know)", href: "/knowledge" },

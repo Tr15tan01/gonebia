@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
-import { useTheme, AccentPicker } from "@/components/theme";
+import { useTheme, AccentPicker, FontSizePicker } from "@/components/theme";
 import { useToast } from "@/components/ui";
 import { soundEnabled, setSoundEnabled, playChime } from "@/lib/sound";
 import { signOut } from "next-auth/react";
@@ -198,6 +198,9 @@ export function SettingsClient({ email, prefs, timezone, plan = "free", usage, l
               : "Pick the accent color used throughout the app."}
           </p>
           <AccentPicker initial={prefs?.accent_color} canCustomize={plan !== "free"} onSaved={toast} />
+        </div>
+        <div className="pt-3 border-t border-line">
+          <FontSizePicker />
         </div>
       </section>
 

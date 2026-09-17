@@ -1,84 +1,41 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { MemorySheet } from "@/components/memory";
 import { OrbitBlock } from "@/components/page-loader";
 import { TYPE_COLOR, typeIcon } from "@/lib/type-style";
 import { relTime } from "@/lib/dates";
 
-interface GNode {
-  id: string; label: string; kind: string; created_at?: string; importance?: number;
-  x: number; y: number; vx: number; vy: number; r: number; degree: number;
-}
+interface GNode { id: string; label: string; kind: string; created_at?: string; importance?: number; degree: number }
 interface GEdge { a: string; b: string; w: number; kind: string }
 interface Person { id: string; name: string; count: number; last: string | null }
 type TrendRow = Record<string, number | string>;
 
-const H = 520;
-
-function cssColor(el: HTMLElement, value: string): string {
-  const m = value.match(/var\((--[^)]+)\)/);
-  if (!m) return value;
-  return getComputedStyle(el).getPropertyValue(m[1]).trim() || "#999";
+/** true on the sm+ layout - the orbit gets a wider canvas and more spokes. */
+function useWideLayout() {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = matchMedia("(min-width: 640px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => matchMedia("(min-width: 640px)").matches,
+    () => false,
+  );
 }
 
-/** Fruchterman-Reingold layout, pre-settled before the first paint. */
-function layout(nodes: GNode[], edges: GEdge[], W: number) {
-  const idx = new Map(nodes.map((n, i) => [n.id, i]));
-  const pairs = edges
-    .map((e) => [idx.get(e.a), idx.get(e.b), e.w] as const)
-    .filter((p): p is readonly [number, number, number] => p[0] != null && p[1] != null);
-  const cx = W / 2, cy = H / 2;
-  const k = Math.max(28, Math.sqrt((W * H) / Math.max(1, nodes.length)) * 0.6);
-  let temp = W / 10;
-  for (let it = 0; it < 300; it++) {
-    for (const n of nodes) { n.vx = 0; n.vy = 0; }
-    for (let i = 0; i < nodes.length; i++) {
-      const a = nodes[i];
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = nodes[j];
-        let dx = a.x - b.x, dy = a.y - b.y;
-        let d2 = dx * dx + dy * dy;
-        if (d2 < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 0.5; }
-        const f = (k * k) / d2; // unit * k²/d
-        a.vx += dx * f; a.vy += dy * f;
-        b.vx -= dx * f; b.vy -= dy * f;
-      }
-    }
-    for (const [ai, bi, w] of pairs) {
-      const a = nodes[ai], b = nodes[bi];
-      const dx = a.x - b.x, dy = a.y - b.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-      const f = (d / k) * (0.6 + 0.6 * (w || 0.5)); // unit * d²/k
-      a.vx -= dx * f; a.vy -= dy * f;
-      b.vx += dx * f; b.vy += dy * f;
-    }
-    for (const n of nodes) {
-      const g = n.degree ? 0.06 : 0.14;
-      n.vx += (cx - n.x) * g * k * 0.05;
-      n.vy += (cy - n.y) * g * k * 0.05;
-      const len = Math.hypot(n.vx, n.vy) || 1;
-      const step = Math.min(len, temp);
-      n.x = Math.max(24, Math.min(W - 24, n.x + (n.vx / len) * step));
-      n.y = Math.max(28, Math.min(H - 20, n.y + (n.vy / len) * step));
-    }
-    temp = Math.max(0.5, temp * 0.982);
-  }
-}
+const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 export function GraphClient() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "empty" | "ready" | "error">("loading");
   const [data, setData] = useState<{ nodes: GNode[]; edges: GEdge[]; people: Person[]; trend: TrendRow[]; trendTypes: string[] } | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [trail, setTrail] = useState<string[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [onlyConnected, setOnlyConnected] = useState(true);
   const [query, setQuery] = useState("");
-  const [hover, setHover] = useState<GNode | null>(null);
-  const [focus, setFocus] = useState<string | null>(null);
-  const view = useRef({ scale: 1, ox: 0, oy: 0, w: 600 });
-  const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const wide = useWideLayout();
 
   useEffect(() => {
     let alive = true;
@@ -88,44 +45,30 @@ export function GraphClient() {
         if (!res.ok) throw new Error(String(res.status));
         const d = await res.json();
         if (!alive) return;
-        const rawNodes = (d.nodes ?? []) as any[];
-        if (!rawNodes.length) { setState("empty"); return; }
+        const raw = (d.nodes ?? []) as any[];
+        if (!raw.length) { setState("empty"); return; }
         const edges = (d.edges ?? []) as GEdge[];
         const degree = new Map<string, number>();
         for (const e of edges) { degree.set(e.a, (degree.get(e.a) ?? 0) + 1); degree.set(e.b, (degree.get(e.b) ?? 0) + 1); }
-        const W = wrapRef.current?.clientWidth || 640;
-        view.current.w = W;
-        const nodes: GNode[] = rawNodes.map((n, i) => {
-          const deg = degree.get(n.id) ?? 0;
-          const ang = (i / rawNodes.length) * Math.PI * 2;
-          const rad = Math.min(W, H) * (deg ? 0.22 : 0.4);
-          return {
-            ...n, degree: deg,
-            x: W / 2 + rad * Math.cos(ang) + Math.random() * 6,
-            y: H / 2 + rad * Math.sin(ang) + Math.random() * 6,
-            vx: 0, vy: 0,
-            r: n.kind === "person" ? 7 + Math.min(9, Math.sqrt(deg) * 2) : 4 + Math.min(7, Math.sqrt(deg) * 1.6),
-          };
-        });
-        // let the loader paint before the heavy layout
-        await new Promise((r) => setTimeout(r, 30));
-        layout(nodes, edges, W);
-        if (!alive) return;
+        const nodes: GNode[] = raw.map((n) => ({ ...n, degree: degree.get(n.id) ?? 0 }));
         setData({ nodes, edges, people: d.people ?? [], trend: d.trend ?? [], trendTypes: d.trendTypes ?? [] });
+        const start = [...nodes].sort((a, b) => b.degree - a.degree)[0];
+        setFocusId(start?.degree ? start.id : null);
         setState("ready");
-      } catch {
-        if (alive) setState("error");
-      }
+      } catch { if (alive) setState("error"); }
     })();
     return () => { alive = false; };
   }, []);
 
+  const byId = useMemo(() => new Map((data?.nodes ?? []).map((n) => [n.id, n])), [data]);
+
   const neighbors = useMemo(() => {
-    const m = new Map<string, Set<string>>();
+    const m = new Map<string, { id: string; kind: string }[]>();
     for (const e of data?.edges ?? []) {
-      if (!m.has(e.a)) m.set(e.a, new Set());
-      if (!m.has(e.b)) m.set(e.b, new Set());
-      m.get(e.a)!.add(e.b); m.get(e.b)!.add(e.a);
+      if (!m.has(e.a)) m.set(e.a, []);
+      if (!m.has(e.b)) m.set(e.b, []);
+      m.get(e.a)!.push({ id: e.b, kind: e.kind });
+      m.get(e.b)!.push({ id: e.a, kind: e.kind });
     }
     return m;
   }, [data]);
@@ -136,173 +79,64 @@ export function GraphClient() {
     return [...c.entries()].sort((a, b) => b[1] - a[1]);
   }, [data]);
 
-  const visible = useCallback((n: GNode) => !hidden.has(n.kind) && (!onlyConnected || n.degree > 0), [hidden, onlyConnected]);
+  const hubs = useMemo(
+    () => (data?.nodes ?? []).filter((n) => n.degree > 0).sort((a, b) => b.degree - a.degree).slice(0, 8),
+    [data],
+  );
 
-  const hubs = useMemo(() => (data?.nodes ?? []).filter((n) => n.degree > 0).sort((a, b) => b.degree - a.degree).slice(0, 6), [data]);
-
-  const matches = useMemo(() => {
+  const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return null;
-    return new Set((data?.nodes ?? []).filter((n) => n.label.toLowerCase().includes(q)).map((n) => n.id));
+    if (!q) return [];
+    return (data?.nodes ?? []).filter((n) => n.label.toLowerCase().includes(q)).slice(0, 8);
   }, [query, data]);
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !data) return;
-    const W = view.current.w;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr; canvas.height = H * dpr;
-    canvas.style.height = `${H}px`;
-    const ctx = canvas.getContext("2d")!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    const { scale, ox, oy } = view.current;
-    ctx.translate(ox, oy); ctx.scale(scale, scale);
+  const focus = focusId ? byId.get(focusId) ?? null : null;
+  const links = useMemo(() => {
+    if (!focus) return [];
+    const seen = new Set<string>();
+    return (neighbors.get(focus.id) ?? [])
+      .filter((l) => {
+        const n = byId.get(l.id);
+        if (!n || hidden.has(n.kind) || seen.has(l.id)) return false;
+        seen.add(l.id);
+        return true;
+      })
+      .map((l) => ({ ...byId.get(l.id)!, edgeKind: l.kind }))
+      .sort((a, b) => b.degree - a.degree);
+  }, [focus, neighbors, byId, hidden]);
 
-    const active = hover?.id ?? focus;
-    const near = active ? neighbors.get(active) ?? new Set<string>() : null;
-    const isDim = (id: string) => (!!active && id !== active && !near!.has(id)) || (!!matches && !matches.has(id));
-    const index = new Map(data.nodes.map((n) => [n.id, n]));
-    const lineColor = cssColor(canvas, "var(--ink-2)");
-    const inkColor = cssColor(canvas, "var(--ink)");
-    const accent = cssColor(canvas, "var(--ember)");
-    const paper = cssColor(canvas, "var(--card)");
-
-    for (const e of data.edges) {
-      const a = index.get(e.a), b = index.get(e.b);
-      if (!a || !b || !visible(a) || !visible(b)) continue;
-      const lit = !!active && (e.a === active || e.b === active);
-      ctx.strokeStyle = lit ? accent : lineColor;
-      ctx.globalAlpha = lit ? 0.9 : active ? 0.06 : 0.22;
-      ctx.lineWidth = (lit ? 2 : 1) / scale;
-      ctx.setLineDash(e.kind === "mentions" ? [3 / scale, 3 / scale] : []);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
-    ctx.setLineDash([]);
-
-    for (const n of data.nodes) {
-      if (!visible(n)) continue;
-      ctx.globalAlpha = isDim(n.id) ? 0.16 : 1;
-      ctx.fillStyle = cssColor(canvas, TYPE_COLOR[n.kind] ?? "var(--ink-2)");
-      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
-      if (n.kind === "person") { ctx.strokeStyle = paper; ctx.lineWidth = 2 / scale; ctx.stroke(); }
-      if (n.id === active || matches?.has(n.id)) {
-        ctx.strokeStyle = accent; ctx.lineWidth = 2.5 / scale;
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 3.5, 0, Math.PI * 2); ctx.stroke();
-      }
-    }
-
-    ctx.globalAlpha = 1;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.font = `600 ${11 / Math.max(0.8, scale)}px ui-sans-serif, system-ui, sans-serif`;
-    for (const n of data.nodes) {
-      if (!visible(n) || isDim(n.id)) continue;
-      const important = n.kind === "person" || n.degree >= 4 || n.id === active || near?.has(n.id) || matches?.has(n.id);
-      if (!important) continue;
-      const text = n.label.length > 24 ? `${n.label.slice(0, 23)}…` : n.label;
-      ctx.lineWidth = 3 / scale; ctx.strokeStyle = paper;
-      ctx.strokeText(text, n.x, n.y - n.r - 4);
-      ctx.fillStyle = inkColor;
-      ctx.fillText(text, n.x, n.y - n.r - 4);
-    }
-  }, [data, hover, focus, neighbors, visible, matches]);
-
-  useEffect(() => { if (state === "ready") draw(); }, [state, draw]);
-
-  // keep crisp on resize and theme/accent changes
-  useEffect(() => {
-    if (state !== "ready" || !wrapRef.current) return;
-    const ro = new ResizeObserver(() => {
-      const w = wrapRef.current?.clientWidth ?? view.current.w;
-      if (Math.abs(w - view.current.w) > 2) {
-        view.current.ox += (w - view.current.w) / 2;
-        view.current.w = w;
-      }
-      draw();
+  function goTo(id: string) {
+    if (id === focusId) return;
+    setTrail((t) => (focusId ? [...t.slice(-9), focusId] : t));
+    setFocusId(id);
+    setShowAll(false);
+    setQuery("");
+  }
+  function back() {
+    setTrail((t) => {
+      const prev = t[t.length - 1];
+      if (prev) setFocusId(prev);
+      return t.slice(0, -1);
     });
-    ro.observe(wrapRef.current);
-    const mo = new MutationObserver(() => draw());
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
-    return () => { ro.disconnect(); mo.disconnect(); };
-  }, [state, draw]);
-
-  function nodeAt(clientX: number, clientY: number): GNode | null {
-    if (!data || !canvasRef.current) return null;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const { scale, ox, oy } = view.current;
-    const px = (clientX - rect.left - ox) / scale, py = (clientY - rect.top - oy) / scale;
-    let best: GNode | null = null, bestD = Infinity;
-    for (const n of data.nodes) {
-      if (!visible(n)) continue;
-      const d = Math.hypot(n.x - px, n.y - py);
-      if (d < n.r + 8 / scale && d < bestD) { best = n; bestD = d; }
-    }
-    return best;
   }
-
-  const zoom = useCallback((factor: number, cx?: number, cy?: number) => {
-    const v = view.current;
-    const px = cx ?? v.w / 2, py = cy ?? H / 2;
-    const next = Math.max(0.5, Math.min(3.5, v.scale * factor));
-    v.ox = px - ((px - v.ox) * next) / v.scale;
-    v.oy = py - ((py - v.oy) * next) / v.scale;
-    v.scale = next;
-    draw();
-  }, [draw]);
-
-  function reset() {
-    view.current = { ...view.current, scale: 1, ox: 0, oy: 0 };
-    setFocus(null); setQuery("");
-    draw();
-  }
-
-  function centerOn(id: string) {
-    const n = data?.nodes.find((x) => x.id === id);
-    if (!n) return;
-    const v = view.current;
-    v.scale = Math.max(v.scale, 1.4);
-    v.ox = v.w / 2 - n.x * v.scale;
-    v.oy = H / 2 - n.y * v.scale;
-    if (hidden.has(n.kind)) setHidden((h) => { const s = new Set(h); s.delete(n.kind); return s; });
-    setFocus(id);
-    draw();
-    wrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
   function activate(n: GNode) {
     if (n.id.startsWith("person:")) window.location.href = `/people/${n.id.slice(7)}`;
     else setOpen(n.id);
   }
 
-  // wheel zoom needs a non-passive listener
-  useEffect(() => {
-    const c = canvasRef.current;
-    if (!c || state !== "ready") return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = c.getBoundingClientRect();
-      zoom(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
-    };
-    c.addEventListener("wheel", onWheel, { passive: false });
-    return () => c.removeEventListener("wheel", onWheel);
-  }, [state, zoom]);
-
-  const visibleCount = (data?.nodes ?? []).filter(visible).length;
-  const memCount = (data?.nodes ?? []).filter((n) => n.kind !== "person").length;
-  const peopleCount = (data?.nodes ?? []).length - memCount;
-  const focusNode = data?.nodes.find((n) => n.id === (hover?.id ?? focus)) ?? null;
+  const ringMax = wide ? 14 : 8;
+  const ringLinks = links.slice(0, ringMax);
 
   return (
     <div className="space-y-5">
       <header>
         <h1 className="font-display text-3xl font-bold">Memory graph</h1>
-        <p className="text-sm text-ink-2 mt-1">How your memories, people and ideas connect. Hover to trace links, click to open, scroll or use the buttons to zoom.</p>
+        <p className="text-sm text-ink-2 mt-1">
+          One memory or person at a time, with everything it connects to around it. Tap any spoke to travel there.
+        </p>
       </header>
 
-      {state === "loading" && (
-        <OrbitBlock title="Mapping connections" sub="Placing memories and people, then untangling the lines between them" height={H} />
-      )}
+      {state === "loading" && <OrbitBlock title="Mapping connections" sub="Linking memories, people, books and decisions" height={420} />}
       {state === "error" && (
         <div className="card p-8 text-center" role="alert">
           <p className="font-semibold">Couldn't load the graph.</p>
@@ -318,19 +152,29 @@ export function GraphClient() {
         </div>
       )}
 
-      {/* the canvas wrapper exists from the start so its width is known for layout */}
-      <div className={state === "ready" ? "space-y-3" : "h-0 overflow-hidden"} aria-hidden={state !== "ready"}>
-        {data && (
+      {state === "ready" && data && (
+        <>
           <div className="card p-3 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <input className="input !py-1.5 sm:!w-56" type="search" placeholder="Find a memory or person…"
-                value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search the graph" />
-              <label className="flex items-center gap-1.5 text-xs text-ink-2 cursor-pointer select-none">
-                <input type="checkbox" checked={onlyConnected} onChange={(e) => setOnlyConnected(e.target.checked)} className="accent-[var(--ember)]" />
-                Only connected
-              </label>
+              <div className="relative sm:w-64">
+                <input className="input !py-1.5 w-full" type="search" placeholder="Find a memory or person…"
+                  value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search the graph" />
+                {results.length > 0 && (
+                  <ul className="absolute z-20 mt-1 w-full card p-1 soft-shadow max-h-64 overflow-y-auto">
+                    {results.map((n) => (
+                      <li key={n.id}>
+                        <button onClick={() => goTo(n.id)} className="w-full text-left px-2 py-1.5 rounded-lg text-sm hover:bg-paper-2 cursor-pointer flex items-center gap-2">
+                          <span aria-hidden>{typeIcon(n.kind)}</span>
+                          <span className="truncate flex-1">{n.label}</span>
+                          <span className="text-xs text-ink-2">{n.degree}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <span className="text-xs text-ink-2 sm:ml-auto tabular-nums">
-                {memCount} memories · {peopleCount} people · {data.edges.length} links · {visibleCount} shown
+                {data.nodes.filter((n) => n.kind !== "person").length} memories · {data.nodes.filter((n) => n.kind === "person").length} people · {data.edges.length} links
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -347,74 +191,72 @@ export function GraphClient() {
               })}
             </div>
           </div>
-        )}
 
-        <div ref={wrapRef} className="card overflow-hidden relative select-none" style={{ touchAction: "none" }}>
-          <canvas ref={canvasRef} className="block w-full" style={{ cursor: "grab" }}
-            onPointerDown={(e) => {
-              (e.target as HTMLElement).setPointerCapture(e.pointerId);
-              drag.current = { x: e.clientX, y: e.clientY, ox: view.current.ox, oy: view.current.oy, moved: false };
-            }}
-            onPointerMove={(e) => {
-              const d = drag.current;
-              if (d) {
-                const dx = e.clientX - d.x, dy = e.clientY - d.y;
-                if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
-                if (d.moved) {
-                  view.current.ox = d.ox + dx; view.current.oy = d.oy + dy;
-                  canvasRef.current!.style.cursor = "grabbing";
-                  draw();
-                  return;
-                }
-              }
-              if (e.pointerType === "mouse") {
-                const hit = nodeAt(e.clientX, e.clientY);
-                canvasRef.current!.style.cursor = hit ? "pointer" : "grab";
-                if (hit?.id !== hover?.id) setHover(hit);
-              }
-            }}
-            onPointerUp={(e) => {
-              const d = drag.current;
-              drag.current = null;
-              canvasRef.current!.style.cursor = "grab";
-              if (d?.moved) return;
-              const hit = nodeAt(e.clientX, e.clientY);
-              if (!hit) { setFocus(null); return; }
-              // touch: first tap previews, second tap opens
-              if (e.pointerType !== "mouse" && focus !== hit.id) { setFocus(hit.id); return; }
-              activate(hit);
-            }}
-            onPointerLeave={() => setHover(null)}
-          />
-          <div className="absolute right-3 top-3 flex flex-col gap-1.5">
-            <button onClick={() => zoom(1.25)} className="btn-ghost !p-0 size-9 bg-card soft-shadow" aria-label="Zoom in">＋</button>
-            <button onClick={() => zoom(1 / 1.25)} className="btn-ghost !p-0 size-9 bg-card soft-shadow" aria-label="Zoom out">－</button>
-            <button onClick={reset} className="btn-ghost !p-0 size-9 bg-card soft-shadow" aria-label="Reset view">⟲</button>
-          </div>
-          {focusNode && (
-            <div className="absolute left-3 bottom-3 right-16 sm:right-auto sm:max-w-xs card p-3 soft-shadow phase-in">
-              <p className="text-[11px] font-semibold capitalize" style={{ color: TYPE_COLOR[focusNode.kind] ?? "var(--ink-2)" }}>
-                {typeIcon(focusNode.kind)} {focusNode.kind}{focusNode.created_at ? ` · ${relTime(focusNode.created_at)}` : ""}
-              </p>
-              <p className="text-sm font-semibold leading-snug mt-0.5">{focusNode.label}</p>
-              <p className="text-xs text-ink-2 mt-0.5">{focusNode.degree} connection{focusNode.degree === 1 ? "" : "s"}</p>
-              <button onClick={() => activate(focusNode)} className="text-xs font-semibold text-ember mt-1.5 cursor-pointer hover:underline">
-                {focusNode.kind === "person" ? "Open person" : "Open memory"}
-              </button>
+          {focus ? (
+            <div className="card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line text-sm">
+                <button onClick={back} disabled={!trail.length} className="btn-ghost !py-1 !px-2 !text-xs disabled:opacity-40" aria-label="Back">←</button>
+                <span className="text-ink-2 text-xs truncate flex-1">
+                  {trail.length ? `${short(byId.get(trail[trail.length - 1])?.label ?? "", 24)} → ` : ""}
+                  <span className="text-ink font-medium">{short(focus.label, 28)}</span>
+                </span>
+                <button onClick={() => activate(focus)} className="btn-tint !py-1 !px-2.5 !text-xs"
+                  style={{ "--tint": TYPE_COLOR[focus.kind] ?? "var(--ember)" } as React.CSSProperties}>
+                  {focus.kind === "person" ? "Open person" : "Open memory"}
+                </button>
+              </div>
+
+              <OrbitView focus={focus} links={ringLinks} wide={wide} onPick={goTo} />
+
+              <div className="px-4 pb-4">
+                <p className="label mb-2">
+                  {links.length} connection{links.length === 1 ? "" : "s"}
+                  {links.length > ringMax && !showAll ? ` · showing ${ringMax} in the orbit` : ""}
+                </p>
+                <ul className="grid sm:grid-cols-2 gap-1.5">
+                  {(showAll ? links : links.slice(0, ringMax)).map((n) => (
+                    <li key={n.id}>
+                      <button onClick={() => goTo(n.id)}
+                        className="w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm hover:bg-paper-2 transition-colors cursor-pointer">
+                        <span className="grid place-items-center size-7 rounded-lg shrink-0" aria-hidden
+                          style={{ background: `color-mix(in srgb, ${TYPE_COLOR[n.kind] ?? "var(--ink-2)"} 14%, transparent)` }}>
+                          {typeIcon(n.kind)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{n.label}</span>
+                          <span className="block text-[11px] text-ink-2 capitalize">
+                            {n.edgeKind === "mentions" ? "mentioned" : n.edgeKind}{n.created_at ? ` · ${relTime(n.created_at)}` : ""}
+                          </span>
+                        </span>
+                        <span className="text-[11px] text-ink-2 tabular-nums shrink-0">{n.degree}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {links.length > ringMax && (
+                  <button onClick={() => setShowAll((v) => !v)} className="btn-ghost !py-1.5 !text-xs mt-2">
+                    {showAll ? "Show fewer" : `Show all ${links.length}`}
+                  </button>
+                )}
+                {links.length === 0 && (
+                  <p className="text-sm text-ink-2">No connections match the current filters.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="card p-8 text-center">
+              <p className="font-semibold">Nothing is connected yet</p>
+              <p className="text-sm text-ink-2 mt-1">Once memories share people, books or topics, they'll link up here.</p>
             </div>
           )}
-        </div>
-      </div>
 
-      {state === "ready" && data && (
-        <>
           {hubs.length > 0 && (
             <section>
               <h2 className="font-display text-lg font-semibold mb-2">Most connected</h2>
               <div className="flex flex-wrap gap-2">
                 {hubs.map((n) => (
-                  <button key={n.id} onClick={() => centerOn(n.id)}
-                    className={`chip cursor-pointer !py-1 !px-3 !text-sm gap-1.5 ${focus === n.id ? "!border-ember !text-ember" : ""}`}>
+                  <button key={n.id} onClick={() => goTo(n.id)}
+                    className={`chip cursor-pointer !py-1 !px-3 !text-sm gap-1.5 ${focusId === n.id ? "!border-ember !text-ember" : ""}`}>
                     <span aria-hidden>{typeIcon(n.kind)}</span>
                     <span className="max-w-[16ch] truncate">{n.label}</span>
                     <span className="text-[11px] font-semibold text-ink-2">{n.degree}</span>
@@ -434,6 +276,94 @@ export function GraphClient() {
       <MemorySheet id={open} onClose={() => setOpen(null)} />
     </div>
   );
+}
+
+/** The focused node in the middle, its connections on one or two rings.
+ *  Everything always fits - no zooming, no dragging, labels stay readable. */
+function OrbitView({
+  focus, links, wide, onPick,
+}: {
+  focus: GNode;
+  links: (GNode & { edgeKind: string })[];
+  wide: boolean;
+  onPick: (id: string) => void;
+}) {
+  const W = wide ? 760 : 380;
+  const Hh = wide ? 440 : 400;
+  const cx = W / 2, cy = Hh / 2;
+  const perRing = wide ? 8 : 5;
+  const rings = links.length > perRing ? 2 : 1;
+  const r1 = wide ? (rings === 1 ? 150 : 118) : rings === 1 ? 118 : 96;
+  const r2 = wide ? 188 : 158;
+  const focusColor = TYPE_COLOR[focus.kind] ?? "var(--ink-2)";
+
+  const placed = links.map((n, i) => {
+    const ring = rings === 2 && i >= Math.ceil(links.length / 2) ? 1 : 0;
+    const group = rings === 2
+      ? (ring === 0 ? links.slice(0, Math.ceil(links.length / 2)) : links.slice(Math.ceil(links.length / 2)))
+      : links;
+    const idxInRing = rings === 2 && ring === 1 ? i - Math.ceil(links.length / 2) : i;
+    const count = group.length;
+    const angle = (idxInRing / count) * Math.PI * 2 - Math.PI / 2 + (ring === 1 ? Math.PI / count : 0);
+    const r = ring === 0 ? r1 : r2;
+    return { n, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), cos: Math.cos(angle), radius: 7 + Math.min(7, Math.sqrt(n.degree) * 1.8) };
+  });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${Hh}`} className="w-full block" style={{ maxHeight: 460 }} role="img"
+      aria-label={`${focus.label} and its ${links.length} connections`}>
+      {placed.map(({ n, x, y }) => (
+        <line key={`l-${n.id}`} x1={cx} y1={cy} x2={x} y2={y}
+          strokeDasharray={n.edgeKind === "mentions" ? "4 3" : undefined}
+          style={{ stroke: TYPE_COLOR[n.kind] ?? "var(--ink-2)", strokeOpacity: 0.35, strokeWidth: 1.5 }} />
+      ))}
+
+      <circle cx={cx} cy={cy} r={wide ? 74 : 62} style={{ fill: focusColor, fillOpacity: 0.09 }} />
+      <circle cx={cx} cy={cy} r={wide ? 74 : 62} fill="none" style={{ stroke: focusColor, strokeOpacity: 0.35, strokeWidth: 1.5 }} />
+      <text x={cx} y={cy - (wide ? 20 : 18)} textAnchor="middle" fontSize="18" aria-hidden>{typeIcon(focus.kind)}</text>
+      {wrapLabel(focus.label, wide ? 20 : 16, 3).map((line, i) => (
+        <text key={i} x={cx} y={cy + 2 + i * 14} textAnchor="middle" fontSize="12.5" fontWeight="650" style={{ fill: "var(--ink)" }}>{line}</text>
+      ))}
+      <text x={cx} y={cy + (wide ? 56 : 48)} textAnchor="middle" fontSize="11" style={{ fill: "var(--ink-2)" }}>
+        {focus.degree} connection{focus.degree === 1 ? "" : "s"}
+      </text>
+
+      {placed.map(({ n, x, y, cos, radius }) => {
+        const anchor = cos > 0.25 ? "start" : cos < -0.25 ? "end" : "middle";
+        const dx = anchor === "start" ? radius + 6 : anchor === "end" ? -(radius + 6) : 0;
+        const dy = anchor === "middle" ? (y < cy ? -(radius + 8) : radius + 16) : 4;
+        return (
+          <g key={n.id} className="cursor-pointer" onClick={() => onPick(n.id)} role="button" tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onPick(n.id); }}>
+            <title>{n.label} · {n.kind} · {n.degree} connections</title>
+            <circle cx={x} cy={y} r={radius + 8} fill="transparent" />
+            <circle cx={x} cy={y} r={radius}
+              style={{ fill: TYPE_COLOR[n.kind] ?? "var(--ink-2)", stroke: "var(--card)", strokeWidth: n.kind === "person" ? 2.5 : 0 }} />
+            <text x={x + dx} y={y + dy} textAnchor={anchor} fontSize="11.5" fontWeight="500" paintOrder="stroke"
+              style={{ fill: "var(--ink)", stroke: "var(--card)", strokeWidth: 3 }}>
+              {short(n.label, wide ? 22 : 14)}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function wrapLabel(text: string, per: number, maxLines: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if (!line.length) line = w;
+    else if (`${line} ${w}`.length <= per) line += ` ${w}`;
+    else { lines.push(line); line = w; }
+    if (lines.length === maxLines) break;
+  }
+  if (lines.length < maxLines && line) lines.push(line);
+  const out = lines.slice(0, maxLines);
+  if (out.length === maxLines) out[maxLines - 1] = short(out[maxLines - 1], per);
+  return out;
 }
 
 const otherColor = "color-mix(in srgb, var(--ink-2) 35%, transparent)";

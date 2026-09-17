@@ -168,7 +168,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href}
             aria-current={path.startsWith(l.href) ? "page" : undefined}
-            className={`relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${path.startsWith(l.href) ? "bg-card text-ink font-semibold soft-shadow" : "text-ink-2 hover:text-ink hover:bg-paper-2"}`}>
+            className={`nav-link relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${path.startsWith(l.href) ? "bg-card soft-shadow" : "hover:bg-paper-2"}`}>
             {path.startsWith(l.href) && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: l.color }} />}
             <span aria-hidden className="grid place-items-center size-6 rounded-lg text-[13px]"
               style={{ color: l.color, background: `color-mix(in srgb, ${l.color} 13%, transparent)` }}>{l.icon}</span>{l.label}
@@ -223,9 +223,9 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
           const active = path.startsWith(l.href);
           return (
             <Link key={l.href} href={l.href}
-              className={`flex flex-col items-center justify-center gap-1 ${active ? "text-ember font-medium" : "text-ink-2"}`}>
+              className={`flex flex-col items-center justify-center gap-1 ${active ? "text-ember font-semibold" : "text-[var(--nav-ink)]"}`}>
               <span className="text-[24px] leading-none" aria-hidden style={{ color: l.color }}>{l.icon}</span>
-              <span className="text-[12px] leading-tight">{l.label}</span>
+              <span className="text-[12.5px] leading-tight">{l.label}</span>
             </Link>
           );
         })}

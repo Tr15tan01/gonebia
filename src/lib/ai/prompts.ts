@@ -60,10 +60,19 @@ Return ONLY a JSON object with these exact fields:
   wants to watch, or was recommended => type "movie" (put the title in objects, any
   recommender in people). "Watched Dune 2 with Nino, loved it" => type "movie".
   A book-to-film comparison is still "movie" unless it is a reading-status update.
-  SLEEP RULE: notes about the user's own sleep - how long or how well they slept,
-  naps, insomnia, bedtime/wake time => type "sleep", and fill sleep_hours when a
-  duration is stated or can be computed ("slept 11pm to 6:30am" => 7.5).
+  SLEEP RULE: ANY note whose main point is the user's own sleep => type "sleep".
+  That includes indirect wording: "went to bed at 1am and got up at 7", "couldn't
+  fall asleep for hours", "woke up three times", "slept like a baby", "crashed at
+  10pm", "pulled an all-nighter", "took a nap after lunch", "so tired, bad night",
+  "jet lag kept me up". Fill sleep_hours whenever a duration is stated OR can be
+  computed from a bed time and a wake time ("slept 11pm to 6:30am" => 7.5,
+  "bed at 1, up at 7" => 6); use the user's wording for am/pm and assume the
+  ordinary overnight reading. Leave sleep_hours null when no duration is derivable
+  ("slept badly") rather than guessing a number. An all-nighter is sleep_hours 0.
+  A nap's own duration goes in sleep_hours ("20 minute nap" => 0.33).
   "Only slept 5 hours, feel wrecked" => type "sleep", sleep_hours 5, sentiment "negative".
+  If sleep is only mentioned in passing inside a note about something else
+  ("tired at the meeting"), keep the note's real type and do NOT set sleep_hours.
   Other guidance: "purchase"/"expense" for bought/spent, "task" for to-dos,
   "decision" for choices with reasons, "promise"/"commitment" when the user committed
   to someone, "goal" for aspirations.
