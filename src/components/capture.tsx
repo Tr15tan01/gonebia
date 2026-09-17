@@ -83,6 +83,16 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
     setListening(true);
   }
 
+  /* The box grows with the note as you write (and springs back after
+     saving), so starting a memory feels like the room making space for it. */
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const min = 2 * 24 + 4; // two rows
+    el.style.height = "auto";
+    el.style.height = `${Math.min(320, Math.max(min, el.scrollHeight))}px`;
+  }, [text]);
+
   // never leave the microphone running after navigating away
   useEffect(() => () => recRef.current?.stop(), []);
 
@@ -142,7 +152,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
 
   return (
     <div>
-      <div className="card p-4 focus-within:border-ember transition-colors">
+      <div className="card capture-card p-4 focus-within:border-ember">
         <textarea
           ref={areaRef}
           autoFocus={autoFocus}
@@ -153,7 +163,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           maxLength={MAX_CHARS}
           aria-describedby={text.length > COUNTER_FROM ? "capture-counter" : undefined}
           placeholder={listening ? "Listening - speak naturally…" : "Tell TimelyMemo something… \"Slept 7h\", \"Watched Dune\", \"Call mom Friday\""}
-          className="w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
+          className="capture-area w-full resize-none bg-transparent outline-none text-[15px] placeholder:text-ink-2/60"
           disabled={saving}
         />
         {text.length > COUNTER_FROM && <CharCounter id="capture-counter" used={text.length} max={MAX_CHARS} />}
