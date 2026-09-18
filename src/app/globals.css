@@ -438,13 +438,30 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01
 }
 
 
-/* capture box: grows with what you type, lifts while you're writing */
-.capture-card { transition: box-shadow .25s ease, border-color .25s ease, transform .25s ease; }
+/* capture box: grows with what you type, lifts while you're writing, and
+   gets a slowly drifting multi-colour border while it has focus */
+.capture-card { position: relative; transition: box-shadow .25s ease, transform .25s ease; }
 .capture-card:focus-within { box-shadow: var(--shadow-lift); }
+.capture-card::before {
+  content: "";
+  position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px;
+  background: linear-gradient(115deg, var(--c-task), var(--c-know), var(--ember), var(--c-goal), var(--c-ask), var(--c-task));
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity .35s ease;
+  pointer-events: none;
+}
+.capture-card:focus-within::before { opacity: 1; animation: borderDrift 14s linear infinite; }
+@keyframes borderDrift { to { background-position: 300% 50%; } }
 .capture-area {
   transition: height .18s cubic-bezier(.2,.7,.2,1);
   overflow: hidden;
 }
 @media (prefers-reduced-motion: reduce) {
   .capture-card, .capture-area { transition: none; }
+  .capture-card:focus-within::before { animation: none; }
 }

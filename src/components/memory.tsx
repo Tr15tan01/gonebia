@@ -38,8 +38,8 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen?: () => 
   );
 }
 
-export function MemoryList({ memories }: { memories: Memory[] }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+export function MemoryList({ memories, initialOpenId = null }: { memories: Memory[]; initialOpenId?: string | null }) {
+  const [openId, setOpenId] = useState<string | null>(initialOpenId);
   return (
     <>
       <div className="space-y-2.5">

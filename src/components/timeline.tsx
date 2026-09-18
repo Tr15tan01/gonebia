@@ -7,7 +7,7 @@ import { TYPE_CHIP, typeIcon } from "@/lib/type-style";
 
 const TYPES = ["task", "purchase", "idea", "decision", "goal", "book", "movie", "sleep", "person", "event", "knowledge", "promise", "thought"];
 
-export function TimelineClient({ initial, initialTypes = [] }: { initial: Memory[]; initialTypes?: string[] }) {
+export function TimelineClient({ initial, initialTypes = [], openMemoryId = null }: { initial: Memory[]; initialTypes?: string[]; openMemoryId?: string | null }) {
   const [items, setItems] = useState<Memory[]>(initial);
   const [cursor, setCursor] = useState<string | null>(initial.length === 20 ? initial[initial.length - 1].created_at : null);
   const [loading, setLoading] = useState(false);
@@ -70,7 +70,7 @@ export function TimelineClient({ initial, initialTypes = [] }: { initial: Memory
         </div>
       </div>
 
-      {items.length ? <MemoryList memories={items} /> :
+      {items.length ? <MemoryList memories={items} initialOpenId={openMemoryId} /> :
         <Empty icon="◌" title="No memories match." hint="Try clearing filters - or capture something new." />}
       {cursor && (
         <div className="text-center">

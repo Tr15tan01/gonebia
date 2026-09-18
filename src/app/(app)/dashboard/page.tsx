@@ -107,6 +107,17 @@ export default async function Dashboard() {
         <StatsRow sb={sb} userId={user!.id} />
       </Suspense>
 
+      <Link href="/chat" className="card p-5 md:p-6 flex items-center gap-4 group soft-shadow"
+        style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 35%, transparent)" }}>
+        <span className="grid place-items-center size-12 rounded-2xl shrink-0 text-2xl"
+          style={{ background: "color-mix(in srgb, var(--ember) 18%, transparent)" }} aria-hidden>💬</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-xl md:text-2xl font-bold" style={{ color: "var(--ember)" }}>Ask my memory</span>
+          <span className="block text-sm text-ink-2 mt-0.5 truncate">&ldquo;What did I buy last month?&rdquo; · &ldquo;What books did I finish?&rdquo;</span>
+        </span>
+        <span aria-hidden className="text-ember text-xl group-hover:translate-x-1 transition-transform">→</span>
+      </Link>
+
       <Suspense fallback={<SectionSkeleton title="Today" />}>
         <BriefingSections userId={user!.id} />
       </Suspense>
@@ -123,23 +134,43 @@ export default async function Dashboard() {
         <RecentSection sb={sb} userId={user!.id} />
       </Suspense>
 
-      <Link href="/chat" className="card p-5 flex items-center justify-between group"
-        style={{
-          background: "var(--ember-soft)",
-          borderColor: "color-mix(in srgb, var(--ember) 35%, transparent)",
-        }}>
-        <div>
-          <p className="font-display text-lg" style={{ color: "var(--ember)" }}>Ask my memory</p>
-          <p className="text-sm text-ink-2">"What did I buy last month?" - "What books did I finish?"</p>
-        </div>
-        <span className="text-ember group-hover:translate-x-1 transition-transform">→</span>
-      </Link>
     </div>
   );
 }
 
+/** Sleep notes are dated by the night they describe (occurred_at) when the
+ *  AI could work it out, otherwise by when they were written. One night keeps
+ *  one figure - the most recent note wins, so a correction replaces a guess.
+ *  The window starts at a week and widens to 14 then 30 days when there
+ *  aren't enough nights yet, and the tile always says what it averaged. */
+function summarizeSleep(rows: any[]): { avg: number; nights: number; days: number } | null {
+  const perNight = new Map<string, number>();
+  const ages: { day: string; ageDays: number }[] = [];
+  for (const r of rows) {
+    const hours = Number(r.sleep_hours);
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 20) continue;
+    const when = new Date(r.occurred_at ?? r.created_at);
+    if (Number.isNaN(when.getTime())) continue;
+    const day = when.toISOString().slice(0, 10);
+    if (perNight.has(day)) continue; // rows arrive newest-first
+    perNight.set(day, hours);
+    ages.push({ day, ageDays: Math.floor((Date.now() - when.getTime()) / 86_400_000) });
+  }
+  if (!perNight.size) return null;
+  for (const days of [7, 14, 30]) {
+    const picked = ages.filter((a) => a.ageDays < days);
+    if (picked.length >= 3 || days === 30) {
+      if (!picked.length) continue;
+      const total = picked.reduce((sum, a) => sum + (perNight.get(a.day) ?? 0), 0);
+      return { avg: total / picked.length, nights: picked.length, days };
+    }
+  }
+  return null;
+}
+
 async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const count = (r: { count: number | null; error?: unknown }) => (r?.error ? 0 : r?.count ?? 0);
   const [openTasks, totalMems, booksDone, booksInProcess, movies, peopleN, researchRuns, deepRuns, kbItems, watchesActive, watchChanges, sleepRes] = await Promise.all([
     sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
@@ -155,13 +186,12 @@ async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
     sb.from("watches").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("watch_events").select("id", { count: "exact", head: true })
       .not("kind", "in", "(baseline,error)").gte("created_at", weekAgo),
-    sb.from("memory_metadata").select("sleep_hours, occurred_at")
-      .eq("type", "sleep").gte("occurred_at", weekAgo).limit(50),
+    sb.from("memory_metadata").select("sleep_hours, occurred_at, created_at")
+      .eq("type", "sleep").not("sleep_hours", "is", null)
+      .gte("created_at", monthAgo).order("created_at", { ascending: false }).limit(120),
   ]);
 
-  const sleepRows = sleepRes?.error ? [] : (sleepRes?.data ?? []);
-  const hours = sleepRows.map((r: any) => Number(r.sleep_hours)).filter((n: number) => Number.isFinite(n) && n > 0);
-  const avgSleep = hours.length ? hours.reduce((a: number, b: number) => a + b, 0) / hours.length : null;
+  const sleep = summarizeSleep(sleepRes?.error ? [] : (sleepRes?.data ?? []));
   const knowledge = count(researchRuns) + count(deepRuns) + count(kbItems);
 
   const stats: { label: string; icon: string; value: number | string; sub: React.ReactNode; color: string; href: string }[] = [
@@ -179,7 +209,13 @@ async function StatsRow({ sb, userId }: { sb: any; userId: string }) {
     { label: "People", icon: "👥", value: count(peopleN), sub: "in your circle", color: "var(--c-decision)", href: "/people" },
     { label: "Knowledge", icon: "🧠", value: knowledge, sub: count(deepRuns) ? `${count(deepRuns)} deep report${count(deepRuns) === 1 ? "" : "s"}` : "researched topics", color: "var(--c-know)", href: "/knowledge" },
     { label: "Watching", icon: "👁️", value: count(watchesActive), sub: count(watchChanges) ? `${count(watchChanges)} change${count(watchChanges) === 1 ? "" : "s"} this week` : "pages & prices", color: "var(--c-ask)", href: "/agents?tab=watch" },
-    { label: "Sleep", icon: "😴", value: avgSleep != null ? `${avgSleep.toFixed(1)}h` : "–", sub: hours.length ? `avg of ${hours.length} night${hours.length === 1 ? "" : "s"} this week` : "say \"slept 7 hours\"", color: "var(--c-sleep)", href: "/timeline?type=sleep" },
+    {
+      label: "Sleep", icon: "😴", color: "var(--c-sleep)", href: "/timeline?type=sleep",
+      value: sleep ? `${sleep.avg.toFixed(1)}h` : "–",
+      sub: sleep
+        ? <>avg of <span className="font-semibold text-ink">{sleep.nights}</span> night{sleep.nights === 1 ? "" : "s"} · last {sleep.days} days</>
+        : <>say &ldquo;slept 7 hours&rdquo;</>,
+    },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

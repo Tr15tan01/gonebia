@@ -152,7 +152,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
 
   return (
     <div>
-      <div className="card capture-card p-4 focus-within:border-ember">
+      <div className="card capture-card p-5">
         <textarea
           ref={areaRef}
           autoFocus={autoFocus}

@@ -13,6 +13,12 @@
 alter type memory_type add value if not exists 'movie';
 alter type memory_type add value if not exists 'sleep';
 
+-- occurred_at is written by every capture; make sure it exists (older
+-- databases created before it was added would otherwise fail the sleep stats)
+alter table memory_metadata add column if not exists occurred_at timestamptz;
+create index if not exists memory_metadata_sleep_idx
+  on memory_metadata (user_id, type, occurred_at desc);
+
 alter table memory_metadata add column if not exists sleep_hours numeric(4,2)
   check (sleep_hours is null or (sleep_hours >= 0 and sleep_hours <= 24));
 

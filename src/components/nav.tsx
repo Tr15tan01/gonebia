@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme";
 import { Logo } from "@/components/logo";
@@ -70,6 +70,7 @@ function PlanBadge({ plan }: { plan?: string }) {
 
 export function AppNav({ children, plan }: { children: React.ReactNode; plan?: string }) {
   const path = usePathname();
+  const router = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [notifs, setNotifs] = useState<any[]>([]);
@@ -112,6 +113,24 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
 
   /** Optimistic: the row leaves INSTANTLY, the request finishes in the
    *  background under a small "Saving..." indicator. */
+  /** Where a notification points: an explicit url, else the memory it was
+   *  built from (opened straight in the timeline), else nothing. */
+  function targetOf(n: any): string | null {
+    const url = typeof n?.data?.url === "string" ? n.data.url : null;
+    if (url && url.startsWith("/")) return url;
+    if (n?.memory_id) return `/timeline?memory=${n.memory_id}`;
+    if (n?.insight_id) return "/insights";
+    return null;
+  }
+
+  /** "Open" marks the notification read AND takes you to the thing itself. */
+  function openNotif(n: any) {
+    const href = targetOf(n);
+    setNotifOpen(false);
+    act(n.id, "read");
+    if (href) router.push(href);
+  }
+
   async function act(id: string, action: string) {
     const leaves = action === "done" || action === "dismiss" || action === "not_relevant" || action === "snooze" || action === "read";
     if (leaves) {
@@ -288,7 +307,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
                     {n.body && <p className="text-ink-2 mt-1 leading-snug">{n.body}</p>}
                     {n.created_at && <p className="text-xs text-ink-2 mt-1">{relTime(n.created_at)}</p>}
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      <button onClick={() => act(n.id, "read")} className="btn-ghost !py-1 !px-2 !text-xs">Read</button>
+                      <button onClick={() => openNotif(n)} className="btn-tint !py-1 !px-2.5 !text-xs">Open</button>
                       <button onClick={() => act(n.id, "done")} className="btn-ghost !py-1 !px-2 !text-xs">Done</button>
                       <button onClick={() => act(n.id, "snooze")} className="btn-ghost !py-1 !px-2 !text-xs">Snooze</button>
                       <button onClick={() => act(n.id, "dismiss")} className="btn-ghost !py-1 !px-2 !text-xs">Dismiss</button>

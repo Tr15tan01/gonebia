@@ -1,8 +1,8 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Sheet, useToast } from "@/components/ui";
+import { useToast } from "@/components/ui";
 import { ResearchResult, type RunLike } from "@/components/research-result";
 import { OrbitBlock } from "@/components/page-loader";
 import { relTime } from "@/lib/dates";
@@ -23,6 +23,18 @@ const SOURCE: Record<Source, { label: string; plural: string; icon: string; colo
 };
 const ORDER: Source[] = ["deep_research", "research", "note", "link", "quote"];
 
+const QUICK_PHASES = [
+  { text: "Searching the web", sub: "Looking for reliable sources" },
+  { text: "Connecting to your memories", sub: "Finding what's relevant to you" },
+  { text: "Writing the answer", sub: "Usually 10-30 seconds" },
+];
+const DEEP_PHASES = [
+  { text: "Planning the investigation", sub: "Splitting your question into angles" },
+  { text: "Searching the web", sub: "Several searches run in parallel" },
+  { text: "Reading and cross-checking", sub: "Comparing what sources agree on" },
+  { text: "Writing your report", sub: "Summary, sections, numbers and sources" },
+];
+
 function host(u: string) {
   try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; }
 }
@@ -38,6 +50,9 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(initialOpen);
   const [researchTopic, setResearchTopic] = useState("");
+  const [running, setRunning] = useState<null | { kind: "research" | "deep_research"; phase: number }>(null);
+  const [runError, setRunError] = useState<{ msg: string; upgrade?: boolean } | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const load = useCallback(async () => {
@@ -66,6 +81,44 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
   }, [entries, filter, tag, q]);
 
   const openEntry = entries?.find((e) => e.id === openId) ?? null;
+
+  // phase ticker for the inline agent loader
+  useEffect(() => {
+    if (!running) return;
+    const phases = running.kind === "deep_research" ? DEEP_PHASES : QUICK_PHASES;
+    const t = setInterval(() => {
+      setRunning((r) => (r ? { ...r, phase: Math.min(r.phase + 1, phases.length - 1) } : r));
+    }, running.kind === "deep_research" ? 9000 : 5000);
+    return () => clearInterval(t);
+  }, [running?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Research runs right here - no trip to the Agents page. */
+  async function runResearch(kind: "research" | "deep_research", topicOverride?: string) {
+    const topic = (topicOverride ?? researchTopic).trim();
+    if (topic.length < 3 || running) return;
+    setRunError(null);
+    setRunning({ kind, phase: 0 });
+    requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, input: topic }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.error) {
+        setRunError({ msg: d.detail ? `${d.error} ${d.detail}` : (d.error ?? "The agent couldn't finish - please try again."), upgrade: !!d.upgrade });
+        return;
+      }
+      setResearchTopic("");
+      await load();
+      if (d.run?.id) setOpenId(d.run.id);
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } catch {
+      setRunError({ msg: "Connection lost while the agent was working. Check your network and try again." });
+    } finally {
+      setRunning(null);
+    }
+  }
 
   async function togglePin(e: Entry) {
     setEntries((list) => (list ?? []).map((x) => (x.id === e.id ? { ...x, pinned: !x.pinned } : x)));
@@ -121,15 +174,72 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
       <div className="card p-4 flex flex-col sm:flex-row gap-2">
         <input className="input" placeholder="Research a new topic…" value={researchTopic} maxLength={500}
           onChange={(e) => setResearchTopic(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && researchTopic.trim()) router.push(`/agents?q=${encodeURIComponent(researchTopic.trim())}`); }} />
+          onKeyDown={(e) => { if (e.key === "Enter") runResearch("research"); }}
+          disabled={!!running} />
         <div className="flex gap-2 shrink-0">
-          <Link href={`/agents?q=${encodeURIComponent(researchTopic.trim())}`} className="btn-tint flex-1" style={{ "--tint": "var(--c-idea)" } as React.CSSProperties}>🔎 Research</Link>
-          <Link href={`/agents?tab=deep_research&q=${encodeURIComponent(researchTopic.trim())}`} className="btn-tint flex-1" style={{ "--tint": "var(--c-know)" } as React.CSSProperties}>🔭 Deep</Link>
+          <button onClick={() => runResearch("research")} disabled={researchTopic.trim().length < 3 || !!running}
+            className="btn-tint flex-1" style={{ "--tint": "var(--c-idea)" } as React.CSSProperties}>🔎 Research</button>
+          <button onClick={() => runResearch("deep_research")} disabled={researchTopic.trim().length < 3 || !!running}
+            className="btn-tint flex-1" style={{ "--tint": "var(--c-know)" } as React.CSSProperties}>🔭 Deep</button>
           <button onClick={() => setAdding((a) => !a)} className="btn-primary flex-1" aria-expanded={adding}>{adding ? "Close" : "＋ Add"}</button>
         </div>
       </div>
 
       {adding && <AddForm onSaved={(e) => { setAdding(false); setEntries((list) => [e, ...(list ?? [])]); load(); }} />}
+
+      <div ref={detailRef} className="scroll-mt-20" />
+
+      {running && (
+        <div className="card p-6 space-y-4">
+          {(() => {
+            const phases = running.kind === "deep_research" ? DEEP_PHASES : QUICK_PHASES;
+            const p = phases[running.phase];
+            return (
+              <>
+                <OrbitBlock title={p.text} sub={p.sub} height={240} />
+                <ol className="flex flex-wrap justify-center gap-2 text-xs" aria-label="Progress">
+                  {phases.map((x, i) => (
+                    <li key={x.text} className="chip"
+                      style={i <= running.phase ? { color: running.kind === "deep_research" ? "var(--c-know)" : "var(--c-idea)" } : undefined}>
+                      {i < running.phase ? "✓" : i === running.phase ? "●" : "○"} {x.text}
+                    </li>
+                  ))}
+                </ol>
+                <p className="text-xs text-ink-2 text-center">
+                  {running.kind === "deep_research"
+                    ? "Deep research takes 1-3 minutes. You can keep this tab open - it lands in your knowledge base either way."
+                    : "The research agent is working on this."}
+                </p>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {runError && !running && (
+        <div className="card p-4 text-sm" role="alert"
+          style={{ background: "var(--danger-soft)", borderColor: "color-mix(in srgb, var(--danger) 30%, transparent)" }}>
+          <p className="font-semibold" style={{ color: "var(--danger)" }}>The run didn't finish</p>
+          <p className="text-ink-2 mt-1">{runError.msg}</p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => setRunError(null)} className="btn-ghost !py-1.5 !text-xs">Dismiss</button>
+            {runError.upgrade && <Link href="/settings#plan" className="btn-primary !py-1.5 !text-xs">See plans</Link>}
+          </div>
+        </div>
+      )}
+
+      {openId && !running && (
+        <div className="card p-5 md:p-6 rise soft-shadow space-y-4">
+          <button onClick={() => setOpenId(null)} className="btn-ghost !py-1.5 !text-xs">← Back to knowledge base</button>
+          <EntryDetail
+            id={openId}
+            entry={openEntry}
+            onDelete={openEntry ? () => remove(openEntry) : undefined}
+            onTagsSaved={load}
+            onFollowUp={(q, kind) => { setResearchTopic(q); setOpenId(null); runResearch(kind, q); }}
+          />
+        </div>
+      )}
 
       <div className="space-y-2.5">
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -199,16 +309,6 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
         </ul>
       )}
 
-      <Sheet open={!!openId} onClose={() => setOpenId(null)}>
-        {openId && (
-          <EntryDetail
-            id={openId}
-            entry={openEntry}
-            onDelete={openEntry ? () => remove(openEntry) : undefined}
-            onTagsSaved={load}
-          />
-        )}
-      </Sheet>
     </div>
   );
 }
@@ -265,12 +365,14 @@ function AddForm({ onSaved }: { onSaved: (e: Entry) => void }) {
   );
 }
 
-function EntryDetail({ id, entry, onDelete, onTagsSaved }: { id: string; entry: Entry | null; onDelete?: () => void; onTagsSaved: () => void }) {
+function EntryDetail({ id, entry, onDelete, onTagsSaved, onFollowUp }: {
+  id: string; entry: Entry | null; onDelete?: () => void; onTagsSaved: () => void;
+  onFollowUp: (q: string, kind: "research" | "deep_research") => void;
+}) {
   const [run, setRun] = useState<RunLike | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [tagDraft, setTagDraft] = useState("");
   const isRun = !entry || entry.source === "research" || entry.source === "deep_research";
-  const router = useRouter();
   const toast = useToast();
 
   useEffect(() => {
@@ -303,7 +405,7 @@ function EntryDetail({ id, entry, onDelete, onTagsSaved }: { id: string; entry: 
     <div className="space-y-5 pt-2">
       {isRun && run ? (
         <ResearchResult run={run} compact={false}
-          onFollowUp={(q) => router.push(`/agents?tab=${run.kind === "deep_research" ? "deep_research" : "research"}&q=${encodeURIComponent(q)}`)} />
+          onFollowUp={(q) => onFollowUp(q, run.kind === "deep_research" ? "deep_research" : "research")} />
       ) : entry ? (
         <article className="space-y-3">
           <p className="text-xs font-semibold" style={{ color: SOURCE[entry.source].color }}>{SOURCE[entry.source].icon} {SOURCE[entry.source].label} · {relTime(entry.created_at)}</p>
@@ -332,7 +434,8 @@ function EntryDetail({ id, entry, onDelete, onTagsSaved }: { id: string; entry: 
           </label>
           <div className="flex flex-wrap gap-2">
             {isRun && run?.kind === "research" && (
-              <Link href={`/agents?tab=deep_research&q=${encodeURIComponent(run.input)}`} className="btn-tint !py-1.5 !text-xs" style={{ "--tint": "var(--c-know)" } as React.CSSProperties}>🔭 Go deeper</Link>
+              <button onClick={() => onFollowUp(run.input, "deep_research")} className="btn-tint !py-1.5 !text-xs"
+                style={{ "--tint": "var(--c-know)" } as React.CSSProperties}>🔭 Go deeper</button>
             )}
             <Link href={`/chat?q=${encodeURIComponent(`What do I know about ${entry.title}?`.slice(0, 170))}`} className="btn-ghost !py-1.5 !text-xs">Ask my memory about it</Link>
             {onDelete && <button onClick={onDelete} className="btn-ghost !py-1.5 !text-xs !text-danger ml-auto">Delete</button>}
