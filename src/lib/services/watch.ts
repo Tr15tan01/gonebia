@@ -309,6 +309,25 @@ async function readPage(w: Pick<WatchRow, "url" | "kind" | "instructions" | "use
       );
       mergeAi(snap, ai, base);
     }
+    // A product page whose price never appeared in the markup (rendered by
+    // JavaScript, or behind a bot wall) still has one - ask the web instead
+    // of reporting "price not visible".
+    if (w.kind === "price" && snap.price == null) {
+      try {
+        const { data } = await geminiGroundedJSON(
+          `Find the CURRENT price of the product on this exact page: ${base}\n` +
+          `Product name (from the page): ${snap.title ?? "unknown"}\n` +
+          `${kindPrompt("price", w.instructions)}\n` +
+          `Only report a price you can actually verify for this product; otherwise use null.`,
+          "enrichment", ctx, { maxTokens: 1500 },
+        );
+        mergeAi(snap, data, base);
+        if (snap.price != null) snap.method = "search";
+      } catch (e) {
+        console.error("[watch] price search fallback failed", e);
+      }
+    }
+
     if (w.kind === "content") {
       snap.excerpt = text.slice(0, 6000);
       snap.text_hash = hash(text.toLowerCase().replace(/\d{1,2}:\d{2}(:\d{2})?/g, "").replace(/\s+/g, " "));
@@ -367,7 +386,13 @@ async function diff(w: WatchRow, prev: Partial<Snapshot> | null, next: Snapshot)
 
   if (!hadBaseline) {
     if (w.kind === "price") {
-      events.push({ kind: "baseline", summary: next.price != null ? `Started at ${money(next.price, next.currency)}` : "Started watching - price not visible yet", data: { value: next.price } });
+      events.push({
+        kind: next.price != null ? "baseline" : "error",
+        summary: next.price != null
+          ? `Started at ${money(next.price, next.currency)}`
+          : "No price found on this page. It may load prices with JavaScript or block automated reading - try the direct product page URL, or watch it as \"Any change\" instead.",
+        data: { value: next.price },
+      });
       if (w.target_price != null && next.price != null && next.price <= Number(w.target_price)) {
         events.push({ kind: "target_hit", summary: `Already at or below your target of ${money(Number(w.target_price), next.currency)}`, data: { value: next.price } });
       }
@@ -454,6 +479,11 @@ export const WatchService = {
       const events = await diff(w, prev, snap);
 
       const value = w.kind === "price" ? snap.price : w.kind === "jobs" ? snap.jobs.length : null;
+      const readingProblem = w.kind === "price" && snap.price == null
+        ? "No price found on this page yet."
+        : w.kind === "jobs" && snap.jobs.length === 0
+          ? "No job listings found on this page yet."
+          : null;
       const history = [...(w.history ?? [])];
       if (value != null) history.push({ t: nowIso, v: value });
       const changed = events.some((e) => e.kind !== "baseline");
@@ -467,7 +497,7 @@ export const WatchService = {
         history: history.slice(-HISTORY_CAP),
         last_checked_at: nowIso,
         last_changed_at: changed ? nowIso : w.last_changed_at,
-        last_error: null,
+        last_error: readingProblem,
         check_count: (w.check_count ?? 0) + 1,
       }).eq("id", w.id).eq("user_id", w.user_id);
 

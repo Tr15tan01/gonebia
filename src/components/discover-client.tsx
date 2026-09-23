@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useSyncExternalStore, Fragment } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, Fragment } from "react";
 import Link from "next/link";
 import { Spinner, useToast } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
@@ -43,6 +43,8 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
   const [data, setData] = useState<any>(null);
   const [sources, setSources] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  // state updates are async - this blocks a second click landing in the same tick
+  const runningRef = useRef(false);
   const [phase, setPhase] = useState(0);
   const [cached, setCached] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -56,6 +58,8 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
   }, [busy]);
 
   async function run(kind: string, win: number | null, force = false) {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setBusy(true); setData(null); setSources([]); setCached(false); setRunError(null);
     try {
       const res = await fetch("/api/discover", {
@@ -67,7 +71,7 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
       if (d.error) { setRunError(d.error); return; }
       setData(d.result); setSources(d.sources ?? []); setCached(!!d.cached);
     } catch { setRunError("Something went wrong - please try again."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); runningRef.current = false; }
   }
 
   const tool = TOOLS.find((t) => t.kind === active);

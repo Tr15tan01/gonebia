@@ -24,7 +24,7 @@ export const BriefingService = {
 
     const [todayRes, forgottenRes, futureRes, revisitRes, connRes] = await Promise.all([
       admin.from("memory_metadata")
-        .select("memory_id, title, type, due_at, reminder_at, memories(original_text)")
+        .select("memory_id, title, type, due_at, reminder_at, importance, people, created_at, memories(original_text)")
         .eq("user_id", userId).eq("status", "open")
         .or(`due_at.lte.${endOfToday.toISOString()},reminder_at.lte.${endOfToday.toISOString()}`)
         .order("importance", { ascending: false }).limit(5),
@@ -52,6 +52,7 @@ export const BriefingService = {
       date: today,
       today: (todayRes.data ?? []).map((m: any) => ({
         id: m.memory_id, title: m.title, type: m.type,
+        importance: m.importance ?? 3, people: m.people ?? [], created_at: m.created_at ?? null,
         when: m.due_at ? `due ${relTime(m.due_at)}` : m.reminder_at ? `reminder ${relTime(m.reminder_at)}` : "",
         iso: m.due_at ?? m.reminder_at ?? null,
         text: m.memories?.original_text ?? "",
@@ -61,12 +62,14 @@ export const BriefingService = {
       })),
       revisit: [
         ...(futureRes.data ?? []).map((m: any) => ({
-          id: m.memory_id, kind: "future_note" as const,
+          id: m.memory_id, kind: "future_note" as const, type: "thought", importance: 3,
+          created_at: m.memories?.created_at ?? null,
           title: `A message from you ${daysAgo(m.memories?.created_at) ?? "some"} days ago`,
           text: m.memories?.original_text ?? "",
         })),
         ...(revisitRes.data ?? []).map((m: any) => ({
-          id: m.memory_id, kind: "revisit" as const,
+          id: m.memory_id, kind: "revisit" as const, type: m.type, importance: m.importance ?? 3,
+          created_at: m.created_at ?? null,
           title: m.title || m.type, text: (m.memories?.original_text ?? "").slice(0, 140),
         })),
       ],

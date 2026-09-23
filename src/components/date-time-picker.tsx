@@ -30,6 +30,9 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
   function pickDay(day: number) {
     const base = selected ?? new Date();
     emit(new Date(month.getFullYear(), month.getMonth(), day, base.getHours(), base.getMinutes()));
+    // picking the day is the main act - close and let the chip show the
+    // result; the time selects stay available by reopening.
+    setOpen(false);
   }
   function setTime(h: number, m: number) {
     const base = selected ?? new Date(month.getFullYear(), month.getMonth(), 15);

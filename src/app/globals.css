@@ -8,7 +8,9 @@
   --ink: #1c1a2e; --ink-2: #625f7a; --line: #e0ddeb;
   /* navigation reads darker than ordinary secondary text in light mode */
   --nav-ink: #403d5c;
-  --ember: #b45309; --ember-soft: #fdf0e0;
+  --ember: #b45309;
+  /* derived from the live accent so accent changes tint every soft surface */
+  --ember-soft: color-mix(in srgb, var(--ember) 13%, #ffffff);
   --dusk: #3b3a8f;
   --danger: #dc2626; --danger-soft: #fef2f2;
   --success: #059669; --success-soft: #ecfdf5;
@@ -27,7 +29,8 @@
   --paper: #0e0d17; --paper-2: #16152a; --card: #1a1929;
   --ink: #ecebf5; --ink-2: #a09db8; --line: #2a2840;
   --nav-ink: #b9b6cd;
-  --ember: #f0a04b; --ember-soft: #2b2114;
+  --ember: #f0a04b;
+  --ember-soft: color-mix(in srgb, var(--ember) 18%, #14131f);
   --dusk: #8f8cf0;
   --danger: #f87171; --danger-soft: #2a1515;
   --success: #34d399; --success-soft: #122419;

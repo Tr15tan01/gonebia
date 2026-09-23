@@ -20,6 +20,45 @@ const STOPWORDS = new Set([
   "things", "stuff", "tell", "show", "find", "want", "some", "any", "all",
 ]);
 
+/** "jokes" -> "joke", "stories" -> "story", "run" -> "runs" ... Postgres'
+ *  english dictionary already stems most of this, but only when the row and
+ *  the query stem to the SAME root - and never in the ilike fallback. These
+ *  variants are ORed into a second, looser attempt so a plural (or singular)
+ *  never silently returns nothing. */
+export function wordVariants(w: string): string[] {
+  const out = new Set<string>([w]);
+  if (w.length > 4 && w.endsWith("ies")) out.add(`${w.slice(0, -3)}y`);
+  if (w.length > 3 && w.endsWith("es")) out.add(w.slice(0, -2));
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) out.add(w.slice(0, -1));
+  if (!w.endsWith("s")) { out.add(`${w}s`); out.add(`${w}es`); }
+  if (w.length > 4 && w.endsWith("ing")) out.add(w.slice(0, -3));
+  if (w.length > 3 && w.endsWith("ed")) out.add(w.slice(0, -2));
+  return [...out];
+}
+
+/** Shortest form of a word, for substring matching ("jokes" -> "joke"). */
+function root(w: string): string {
+  if (w.length > 4 && w.endsWith("ies")) return w.slice(0, -3);
+  if (w.length > 4 && w.endsWith("es")) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  if (w.length > 5 && w.endsWith("ing")) return w.slice(0, -3);
+  if (w.length > 4 && w.endsWith("ed")) return w.slice(0, -2);
+  return w;
+}
+
+function keywords(query: string): string[] {
+  return query.toLowerCase().split(/[^\p{L}\p{N}']+/u)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+    .slice(0, 6);
+}
+
+/** Every keyword and its variants as one OR query for websearch_to_tsquery. */
+function looseQuery(query: string): string {
+  const terms = new Set<string>();
+  for (const w of keywords(query)) for (const v of wordVariants(w)) terms.add(v);
+  return [...terms].join(" or ");
+}
+
 function normalizeRows(data: any[]): MemoryRow[] {
   return (data ?? []).map((m: any) => {
     const raw: unknown = m.memory_metadata;
@@ -65,7 +104,24 @@ export const MemoryRetrievalService = {
         p_limit: f.limit ?? 20,
       });
       if (error) throw error;
-      return (data ?? []) as MemoryRow[];
+      const rows = (data ?? []) as MemoryRow[];
+      if (rows.length || !query) return rows;
+      // nothing matched the words as typed - try their singular/plural forms
+      const loose = looseQuery(query);
+      if (!loose || loose === query.toLowerCase()) return rows;
+      const retry = await sb.rpc("hybrid_search", {
+        p_user: userId,
+        p_query: loose,
+        p_embedding: embedding ? JSON.stringify(embedding) : null,
+        p_types: f.types && f.types.length ? f.types : null,
+        p_person: f.person || null,
+        p_status: f.status || null,
+        p_from: f.from || null,
+        p_to: f.to || null,
+        p_limit: f.limit ?? 20,
+      });
+      if (retry.error) throw retry.error;
+      return (retry.data ?? []) as MemoryRow[];
     } catch (e) {
       console.error("[retrieval] hybrid_search failed, using fallback:", e);
       return this.basicFallback(sb, userId, f);
@@ -84,10 +140,8 @@ export const MemoryRetrievalService = {
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(f.limit ?? 20);
-    const words = (f.query ?? "")
-      .toLowerCase().split(/\s+/)
-      .filter((w) => w.length > 3 && !STOPWORDS.has(w))
-      .slice(0, 4);
+    // match on word ROOTS, so "jokes" finds "joke" and vice versa
+    const words = [...new Set(keywords(f.query ?? "").map(root))].slice(0, 4);
     if (words.length) {
       q = q.or(words.map((w) => `original_text.ilike.%${w}%`).join(","));
     }
