@@ -41,7 +41,7 @@ function endOfTodayMs() {
 
 function Section({ title, href, color, children }: { title: string; href?: string; color?: string; children: React.ReactNode }) {
   return (
-    <section>
+    <section className="fade-up">
       <div className="flex items-baseline justify-between mb-2.5">
         <h2 className="font-display text-lg font-semibold flex items-center gap-2">
           <span aria-hidden className="inline-block size-2 rounded-full" style={{ background: color ?? "var(--ink-2)" }} />
@@ -107,7 +107,7 @@ export default async function Dashboard() {
         <StatsRow sb={sb} userId={user!.id} timezone={profile?.timezone} />
       </Suspense>
 
-      <Link href="/chat" className="card p-5 md:p-6 flex items-center gap-4 group soft-shadow"
+      <Link href="/chat" className="card p-5 md:p-6 flex items-center gap-4 group soft-shadow fade-up"
         style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 35%, transparent)" }}>
         <span className="grid place-items-center size-12 rounded-2xl shrink-0 text-2xl"
           style={{ background: "color-mix(in srgb, var(--ember) 18%, transparent)" }} aria-hidden>💬</span>
@@ -138,38 +138,9 @@ export default async function Dashboard() {
   );
 }
 
-/** Consecutive days with at least one memory, counted in the user's own
- *  timezone. Today not being captured yet doesn't break a streak - it only
- *  stops growing, so the tile nudges instead of punishing. */
-function streakFrom(dates: string[], todayKey: string, yesterdayKey: string): { current: number; best: number; capturedToday: boolean } {
-  const days = [...new Set(dates)].sort().reverse();
-  const set = new Set(days);
-  const capturedToday = set.has(todayKey);
-  let current = 0;
-  let cursor = capturedToday ? todayKey : yesterdayKey;
-  while (set.has(cursor)) {
-    current++;
-    const d = new Date(`${cursor}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - 1);
-    cursor = d.toISOString().slice(0, 10);
-  }
-  let best = 0, run = 0;
-  let prev: string | null = null;
-  for (const day of [...days].reverse()) {
-    if (prev) {
-      const next = new Date(`${prev}T12:00:00Z`);
-      next.setUTCDate(next.getUTCDate() + 1);
-      run = next.toISOString().slice(0, 10) === day ? run + 1 : 1;
-    } else run = 1;
-    best = Math.max(best, run);
-    prev = day;
-  }
-  return { current, best, capturedToday };
-}
-
 async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; timezone?: string | null }) {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const twoWeeksAgo = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const count = (r: { count: number | null; error?: unknown }) => (r?.error ? 0 : r?.count ?? 0);
   const [openTasks, totalMems, booksDone, booksInProcess, movies, peopleN, researchRuns, deepRuns, kbItems, watchesActive, watchChanges, recentRes] = await Promise.all([
     sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
@@ -185,20 +156,28 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
     sb.from("watches").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("watch_events").select("id", { count: "exact", head: true })
       .not("kind", "in", "(baseline,error)").gte("created_at", weekAgo),
-    sb.from("memories").select("created_at").is("deleted_at", null)
-      .gte("created_at", monthAgo).order("created_at", { ascending: false }).limit(400),
+    sb.from("memories").select("created_at, memory_metadata(type)").is("deleted_at", null)
+      .gte("created_at", twoWeeksAgo).order("created_at", { ascending: false }).limit(600),
   ]);
 
-  const dayKey = (d: Date) => {
-    try {
-      return new Intl.DateTimeFormat("en-CA", { timeZone: timezone || undefined, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-    } catch { return d.toISOString().slice(0, 10); }
-  };
-  const streak = streakFrom(
-    (recentRes?.error ? [] : (recentRes?.data ?? [])).map((m: any) => dayKey(new Date(m.created_at))),
-    dayKey(new Date()),
-    dayKey(new Date(Date.now() - 86_400_000)),
-  );
+  // Momentum: this week's captures against the week before, and what they
+  // were mostly about.
+  const weekMs = 7 * 86_400_000;
+  const recent = recentRes?.error ? [] : (recentRes?.data ?? []);
+  let thisWeek = 0, lastWeek = 0;
+  const typeCount = new Map<string, number>();
+  for (const m of recent as any[]) {
+    const age = Date.now() - new Date(m.created_at).getTime();
+    if (age < weekMs) {
+      thisWeek++;
+      const meta = Array.isArray(m.memory_metadata) ? m.memory_metadata[0] : m.memory_metadata;
+      const t = meta?.type ?? "thought";
+      typeCount.set(t, (typeCount.get(t) ?? 0) + 1);
+    } else lastWeek++;
+  }
+  const topType = [...typeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const delta = thisWeek - lastWeek;
+
   const knowledge = count(researchRuns) + count(deepRuns) + count(kbItems);
 
   const stats: { label: string; icon: string; value: number | string; sub: React.ReactNode; color: string; href: string }[] = [
@@ -217,17 +196,20 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
     { label: "Knowledge", icon: "🧠", value: knowledge, sub: count(deepRuns) ? `${count(deepRuns)} deep report${count(deepRuns) === 1 ? "" : "s"}` : "researched topics", color: "var(--c-know)", href: "/knowledge" },
     { label: "Watching", icon: "👁️", value: count(watchesActive), sub: count(watchChanges) ? `${count(watchChanges)} change${count(watchChanges) === 1 ? "" : "s"} this week` : "pages & prices", color: "var(--c-ask)", href: "/agents?tab=watch" },
     {
-      label: "Streak", icon: "🔥", color: "var(--c-idea)", href: "/timeline",
-      value: streak.current,
-      sub: streak.current === 0
-        ? <>capture something to start one</>
-        : streak.capturedToday
-          ? <>day{streak.current === 1 ? "" : "s"} in a row · best <span className="font-semibold text-ink">{streak.best}</span></>
-          : <><span className="font-semibold text-ink">capture today</span> to keep it going</>,
+      label: "This week", icon: "📈", color: "var(--c-idea)",
+      href: topType ? `/timeline?type=${topType}` : "/timeline",
+      value: thisWeek,
+      sub: thisWeek === 0 && lastWeek === 0
+        ? <>new memories show up here</>
+        : <>
+            <span className="font-semibold" style={{ color: delta > 0 ? "var(--success)" : delta < 0 ? "var(--danger)" : "var(--ink-2)" }}>
+              {delta > 0 ? "▲" : delta < 0 ? "▼" : "="} {Math.abs(delta)}
+            </span>{" "}vs last week{topType ? <> · mostly {topType}</> : null}
+          </>,
     },
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 stagger">
       {stats.map((s) => (
         <Link key={s.label} href={s.href} className="stat-tile"
           style={{ "--tile": s.color } as React.CSSProperties}>

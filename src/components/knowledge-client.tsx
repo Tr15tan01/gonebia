@@ -151,7 +151,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 stagger">
         <div className="stat-tile sm:col-span-2" style={{ "--tile": "var(--c-know)" } as React.CSSProperties}>
           <span className="text-xs font-semibold text-ink-2">Topics researched</span>
           <div className="flex items-end justify-between gap-3">
@@ -171,7 +171,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
         ))}
       </div>
 
-      <div className="card p-4 flex flex-col sm:flex-row gap-2">
+      <div className="card p-4 flex flex-col sm:flex-row gap-2 fade-up" style={{ animationDelay: "120ms" }}>
         <input className="input" placeholder="Research a new topic…" value={researchTopic} maxLength={500}
           onChange={(e) => setResearchTopic(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") runResearch("research"); }}
@@ -279,7 +279,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
           </p>
         </div>
       ) : (
-        <ul className="grid sm:grid-cols-2 gap-2.5">
+        <ul className="grid sm:grid-cols-2 gap-2.5 stagger">
           {shown.map((e) => {
             const st = SOURCE[e.source];
             return (

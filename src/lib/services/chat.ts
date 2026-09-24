@@ -1,6 +1,6 @@
 import { geminiJSON, geminiText } from "@/lib/ai/gemini";
 import { groundedAnswerPrompt, searchPlanPrompt } from "@/lib/ai/prompts";
-import { MemoryRetrievalService } from "./retrieval";
+import { MemoryRetrievalService, literalPhrases } from "./retrieval";
 import type { ChatReference } from "@/lib/types";
 
 function fmt(iso: string) {
@@ -23,6 +23,7 @@ export const AIChatService = {
     }
 
     const appliedTypes = (plan_.types as string[] | null) ?? null;
+    let mentionedBook = false;
     let rows = await MemoryRetrievalService.hybrid(sb, userId, {
       query: (plan_.query as string) || question,
       types: appliedTypes,
@@ -36,6 +37,24 @@ export const AIChatService = {
       // retrieval quality from free users.
       semantic: true,
     });
+
+    // Literal pass: titles and exact phrases the user typed (a bare book or
+    // film title often fails full-text search). Exact hits go first.
+    try {
+      const { data: shelf } = await sb.from("books").select("title").limit(300);
+      const lower = question.toLowerCase();
+      const titleHits = (shelf ?? [])
+        .map((b: any) => String(b.title ?? ""))
+        .filter((t: string) => t.length >= 3 && lower.includes(t.toLowerCase()));
+      if (titleHits.length) mentionedBook = true;
+      const literal = await MemoryRetrievalService.literal(sb, userId, [...titleHits, ...literalPhrases(question)], 10);
+      if (literal.length) {
+        const seen = new Set(literal.map((r) => r.id));
+        rows = [...literal, ...rows.filter((r: any) => !seen.has(r.id))].slice(0, 10);
+      }
+    } catch (e) {
+      console.error("[chat] literal pass failed:", e);
+    }
 
     // The search-plan step is GUESSING how a note was classified when it was
     // written - "types" is a hard filter in hybrid(), so a wrong guess
@@ -54,7 +73,8 @@ export const AIChatService = {
         limit: 10,
         semantic: true,
       });
-      if (unfiltered.length > rows.length) rows = unfiltered;
+      const seen = new Set(rows.map((r: any) => r.id));
+      rows = [...rows, ...unfiltered.filter((r: any) => !seen.has(r.id))].slice(0, 10);
     }
 
     // "What books am I reading/have I read" is an aggregate, structured
@@ -68,7 +88,7 @@ export const AIChatService = {
     // anything" even with books plainly on the shelf, if memory search
     // alone came up empty.
     let bookContext = "";
-    const looksBookRelated = BOOK_QUESTION.test(question)
+    const looksBookRelated = BOOK_QUESTION.test(question) || mentionedBook
       || (plan_.types as string[] | null)?.includes("book");
     if (looksBookRelated) {
       const { data: books } = await sb

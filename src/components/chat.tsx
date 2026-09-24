@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MemorySheet } from "@/components/memory";
 import { useToast } from "@/components/ui";
@@ -10,7 +10,7 @@ const MAX_Q = 180;
 const Q_COUNTER_FROM = 100;
 
 interface Ref { n: number; id: string; title: string; date: string; snippet: string }
-interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[]; detail?: string }
+interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[]; detail?: string; fresh?: boolean }
 
 const EXAMPLES = [
   "What did I buy last month?",
@@ -49,7 +49,7 @@ export function ChatClient() {
   }, [busy]);
   useEffect(() => {
     const q = params.get("q");
-    if (q && !sentAuto.current) { sentAuto.current = true; send([{ role: "user", content: q }]); }
+    if (q && !sentAuto.current) { sentAuto.current = true; send([], q); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
@@ -78,7 +78,10 @@ export function ChatClient() {
         }
         throw new Error(data.error);
       }
-      setMessages([...next, { role: "assistant", content: data.answer, refs: data.references, detail: data.detail }]);
+      setMessages([
+        ...next.map((m) => ({ ...m, fresh: false })),
+        { role: "assistant", content: data.answer, refs: data.references, detail: data.detail, fresh: true },
+      ]);
     } catch (e: any) {
       toast(e.message); setMessages(next);
     } finally { setBusy(false); }
@@ -100,33 +103,12 @@ export function ChatClient() {
           </div>
         )}
         {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === "user" ? "bg-ember text-white" : "card"}`}>
-              {m.role === "assistant"
-                ? m.content.split(/(\[\d+\])/g).map((p, j) => {
-                    const n = p.match(/^\[(\d+)\]$/)?.[1];
-                    if (!n) return <span key={j}>{p}</span>;
-                    const ref = m.refs?.find((r) => r.n === +n);
-                    return ref ? (
-                      <button key={j} onClick={() => setOpenMemory(ref.id)}
-                        className="text-ember font-medium align-super text-xs mx-0.5 hover:underline" title={ref.snippet}>[{n}]</button>
-                    ) : null;
-                  })
-                : m.content}
-              {m.detail && (
-                <p className="mt-2 pt-2 border-t border-line text-xs text-ink-2">Technical detail: {m.detail}</p>
-              )}
-              {m.refs && m.refs.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3 pt-2 border-t border-line">
-                  {m.refs.map((r) => (
-                    <button key={r.n} onClick={() => setOpenMemory(r.id)}
-                      className="chip hover:!border-ember hover:!text-ember text-left max-w-full">
-                      [{r.n}] {r.title.slice(0, 34)}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div key={i} className={`fade-up ${m.role === "user" ? "flex justify-end" : ""}`}>
+            {m.role === "user" ? (
+              <div className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-3 text-[15px] leading-relaxed bg-ember text-white">{m.content}</div>
+            ) : (
+              <AssistantMessage msg={m} onOpen={setOpenMemory} />
+            )}
           </div>
         ))}
         {busy && (
@@ -158,6 +140,81 @@ export function ChatClient() {
       </div>
 
       <MemorySheet id={openMemory} onClose={() => setOpenMemory(null)} />
+    </div>
+  );
+}
+
+/** An answer that writes itself in word by word (only when it's new), with
+ *  its source memories as large clickable cards underneath. */
+function AssistantMessage({ msg, onOpen }: { msg: Msg; onOpen: (id: string) => void }) {
+  const tokens = useMemo(() => msg.content.split(/(\[\d+\]|\s+)/g).filter((t) => t !== ""), [msg.content]);
+  const [shown, setShown] = useState(msg.fresh ? 0 : tokens.length);
+  const done = shown >= tokens.length;
+
+  useEffect(() => {
+    if (done) return;
+    // ~ 40 words a second, faster for long answers so nobody waits > ~4s
+    const step = Math.max(1, Math.ceil(tokens.length / 160));
+    const t = setTimeout(() => setShown((n) => Math.min(tokens.length, n + step)), 22);
+    return () => clearTimeout(t);
+  }, [shown, done, tokens.length]);
+
+  const refFor = (n: number) => msg.refs?.find((r) => r.n === n);
+
+  return (
+    <div className="max-w-[92%] card rounded-2xl rounded-bl-md px-4 py-3.5 text-[15px] leading-relaxed">
+      <p className="whitespace-pre-wrap">
+        {tokens.slice(0, shown).map((tok, j) => {
+          const n = tok.match(/^\[(\d+)\]$/)?.[1];
+          if (n) {
+            const ref = refFor(+n);
+            if (!ref) return null;
+            return (
+              <button key={j} onClick={() => onOpen(ref.id)} title={`Open: ${ref.title}`}
+                className="word-in inline-grid place-items-center align-[0.15em] mx-0.5 min-w-[1.35rem] h-[1.35rem] px-1 rounded-full text-[11px] font-bold cursor-pointer transition-transform hover:scale-110"
+                style={{ background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>
+                {n}
+              </button>
+            );
+          }
+          return /^\s+$/.test(tok) ? tok : <span key={j} className={msg.fresh ? "word-in" : undefined}>{tok}</span>;
+        })}
+        {!done && <span className="inline-block w-1.5 h-4 align-middle ml-0.5 rounded-sm bg-ember animate-pulse" aria-hidden />}
+      </p>
+
+      {done && msg.detail && (
+        <p className="mt-2 pt-2 border-t border-line text-xs text-ink-2 fade-up">Technical detail: {msg.detail}</p>
+      )}
+
+      {done && msg.refs && msg.refs.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-line">
+          <p className="text-xs font-semibold text-ink-2 mb-2">From your memories</p>
+          <ul className="grid gap-2 stagger">
+            {msg.refs.map((r) => (
+              <li key={r.n}>
+                <button onClick={() => onOpen(r.id)}
+                  className="group w-full flex items-start gap-3 rounded-xl border border-line p-3 text-left cursor-pointer transition-all hover:border-ember hover:bg-ember-soft hover:-translate-y-px">
+                  <span className="grid place-items-center size-7 shrink-0 rounded-full text-xs font-bold"
+                    style={{ background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>{r.n}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-sm leading-snug group-hover:text-ember">{r.title || "Memory"}</span>
+                    {r.snippet && <span className="block text-[13px] text-ink-2 mt-0.5 line-clamp-2">{r.snippet}</span>}
+                    {r.date && (
+                      <span className="block text-[11px] text-ink-2 mt-1">
+                        {(() => {
+                          const d = new Date(r.date);
+                          return Number.isNaN(d.getTime()) ? r.date : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+                        })()}
+                      </span>
+                    )}
+                  </span>
+                  <span aria-hidden className="text-ink-2 group-hover:text-ember self-center transition-transform group-hover:translate-x-0.5">›</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

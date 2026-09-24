@@ -160,7 +160,7 @@ export function AgentsClient({
         </div>
       </header>
 
-      <div role="tablist" aria-label="Agent type" className="grid grid-cols-3 gap-2">
+      <div role="tablist" aria-label="Agent type" className="grid grid-cols-3 gap-2 stagger">
         {TABS.map((t) => {
           const active = tab === t.id;
           return (
@@ -184,6 +184,7 @@ export function AgentsClient({
         })}
       </div>
 
+      <div key={tab} className="fade-up space-y-6">
       {tab === "watch" ? (
         <WatchPanel plan={plan} watchLimit={watchLimit} />
       ) : (
@@ -292,7 +293,7 @@ export function AgentsClient({
                 </p>
               </div>
             ) : (
-              <ul className="card divide-y divide-line overflow-hidden">
+              <ul className="card divide-y divide-line overflow-hidden stagger">
                 {shownHistory.map((h) => (
                   <li key={h.id} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-paper-2 transition-colors">
                     <button
@@ -321,6 +322,7 @@ export function AgentsClient({
           </section>
         </>
       )}
+      </div>
     </div>
   );
 }

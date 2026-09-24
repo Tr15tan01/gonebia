@@ -168,14 +168,14 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
         />
         {text.length > COUNTER_FROM && <CharCounter id="capture-counter" used={text.length} max={MAX_CHARS} />}
 
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={toggleMic}
               disabled={saving}
               className={`btn-ghost !px-3 ${listening ? "!border-danger !text-danger" : ""}`}
               aria-label={listening ? "Stop listening" : "Start voice input"}
-            >{listening ? <span className="pulse-dot" aria-hidden /> : <span aria-hidden>🎤</span>} {listening ? "Stop" : "Voice"}</button>
+            >{listening ? <span className="pulse-dot" aria-hidden /> : <span aria-hidden>🎤</span>}<span className={listening ? "" : "hidden sm:inline"}>{listening ? "Stop" : "Voice"}</span></button>
             <DateTimePicker value={atValue} onChange={setAtValue} />
           </div>
           <div className="flex items-center gap-2">

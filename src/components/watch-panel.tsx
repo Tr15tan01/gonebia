@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useToast } from "@/components/ui";
+import { useToast, SmartImage } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
 import { OrbitBlock } from "@/components/page-loader";
 import { relTime } from "@/lib/dates";
@@ -164,7 +164,7 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
         </div>
       )}
 
-      <div className="card p-5 space-y-4 soft-shadow">
+      <div className="card p-5 space-y-4 soft-shadow fade-up">
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="What to watch">
           {KINDS.map((k) => (
             <button key={k.id} role="radio" aria-checked={kind === k.id} onClick={() => setKind(k.id)}
@@ -241,7 +241,7 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
             <p className="text-sm text-ink-2 mt-1 max-w-sm mx-auto">Paste a product, careers page or any link above. TimelyMemo checks it every day and only speaks up when something actually changes.</p>
           </div>
         ) : (
-          <ul className="space-y-2.5">
+          <ul className="space-y-2.5 stagger">
             {watches.map((w) => {
               const k = KINDS.find((x) => x.id === w.kind)!;
               const evs = eventsByWatch.get(w.id) ?? [];
@@ -256,9 +256,9 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
                   <button onClick={() => setExpanded(open ? null : w.id)} aria-expanded={open}
                     className="w-full p-4 flex items-center gap-3 text-left cursor-pointer hover:bg-paper-2 transition-colors">
                     {w.image_url ? (
-                      <img src={w.image_url} alt="" referrerPolicy="no-referrer"
-                        className="size-12 rounded-xl object-cover shrink-0 bg-paper-2"
-                        onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }} />
+                      <SmartImage src={w.image_url} className="size-12 rounded-xl shrink-0"
+                        fallback={<span className="size-12 rounded-xl grid place-items-center text-xl shrink-0" aria-hidden
+                          style={{ background: `color-mix(in srgb, ${color} 13%, transparent)` }}>{k.icon}</span>} />
                     ) : (
                       <span className="size-12 rounded-xl grid place-items-center text-xl shrink-0" aria-hidden
                         style={{ background: `color-mix(in srgb, ${color} 13%, transparent)` }}>{k.icon}</span>

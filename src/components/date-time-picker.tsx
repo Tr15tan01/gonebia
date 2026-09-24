@@ -55,19 +55,26 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
   const hour = selected ? selected.getHours() : 12;
   const minute = selected ? selected.getMinutes() : 0;
 
+  // compact on purpose: it has to sit on one line between Voice and
+  // Remember on a phone ("Sep 24, 15:00", year only when it isn't this one)
   const label = selected
-    ? selected.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    ? selected.toLocaleString(undefined, {
+        month: "short", day: "numeric",
+        ...(selected.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+        hour: "numeric", minute: "2-digit",
+      })
     : "When";
 
   return (
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`chip cursor-pointer !py-1.5 ${value ? "!border-ember !text-ember" : ""}`}
-        aria-label="Choose date and time"
+        className={`btn-ghost !px-3 whitespace-nowrap max-w-[10.5rem] sm:max-w-none ${value ? "!border-ember !text-ember" : ""}`}
+        aria-label={selected ? `Date and time: ${label}. Change` : "Choose date and time"}
         aria-expanded={open}
       >
-        📅 {label}
+        <span aria-hidden>📅</span>
+        <span className="truncate">{label}</span>
       </button>
 
       {open && <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />}

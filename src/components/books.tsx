@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { MemorySheet } from "@/components/memory";
-import { useToast } from "@/components/ui";
+import { useToast, SmartImage } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 
 export interface BookRow {
@@ -206,22 +206,13 @@ function NotesList({ notes, onOpenMemory }: {
 }
 
 function Cover({ book }: { book: BookRow }) {
-  if (book.cover_url) {
-    return (
-      <img
-        src={book.cover_url}
-        alt=""
-        referrerPolicy="no-referrer"
-        className="w-14 h-20 rounded-lg object-cover shrink-0 bg-paper-2"
-        onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
-      />
-    );
-  }
-  return (
+  const placeholder = (
     <div className="w-14 h-20 rounded-lg shrink-0 grid place-items-center text-xl"
       style={{ background: "color-mix(in srgb, var(--c-book) 12%, transparent)", color: "var(--c-book)" }}
       aria-hidden>▤</div>
   );
+  if (!book.cover_url) return placeholder;
+  return <SmartImage src={book.cover_url} className="w-14 h-20 rounded-lg shrink-0" fallback={placeholder} />;
 }
 
 function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying, onRemove, removing }: {

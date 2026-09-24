@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sheet, useToast, Spinner } from "@/components/ui";
+import { Sheet, SheetLoading, useToast, Spinner } from "@/components/ui";
 import { relTime, fmtDate } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
 import { DateTimePicker } from "@/components/date-time-picker";
-import { TYPE_CHIP, typeIcon } from "@/lib/type-style";
+import { TYPE_CHIP, TYPE_COLOR, typeIcon } from "@/lib/type-style";
 
 export interface Memory {
   id: string; original_text: string; created_at: string;
@@ -42,7 +42,7 @@ export function MemoryList({ memories, initialOpenId = null }: { memories: Memor
   const [openId, setOpenId] = useState<string | null>(initialOpenId);
   return (
     <>
-      <div className="space-y-2.5">
+      <div className="space-y-2.5 stagger">
         {memories.map((m) => <MemoryCard key={m.id} memory={m} onOpen={() => setOpenId(m.id)} />)}
       </div>
       <MemorySheet id={openId} onClose={() => setOpenId(null)} />
@@ -102,14 +102,23 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
     if (!id) { setMemory(null); setRelated([]); setEditing(false); return; }
     let alive = true;
     (async () => {
-      const [mRes, rRes] = await Promise.all([
-        fetch(`/api/memories/${id}`),
-        fetch(`/api/memories/${id}/related`),
-      ]);
-      const mData = mRes.ok ? await mRes.json().catch(() => null) : null;
-      const rData = rRes.ok ? await rRes.json().catch(() => null) : null;
+      setMemory(null);
+      let mData: any = null, rData: any = null;
+      try {
+        const [mRes, rRes] = await Promise.all([
+          fetch(`/api/memories/${id}`),
+          fetch(`/api/memories/${id}/related`),
+        ]);
+        mData = mRes.ok ? await mRes.json().catch(() => null) : null;
+        rData = rRes.ok ? await rRes.json().catch(() => null) : null;
+      } catch { /* handled below */ }
       if (!alive) return;
-      setMemory(mData?.memory ?? null);
+      if (!mData?.memory) {
+        toast("That memory couldn't be opened - it may have been deleted.");
+        onClose();
+        return;
+      }
+      setMemory(mData.memory);
       setDraft(mData?.memory?.original_text ?? "");
       setRelated(rData?.related ?? []);
     })();
@@ -161,8 +170,9 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
   }
 
   return (
-    <Sheet open={!!id} onClose={onClose}>
-      {!memory ? <p className="text-ink-2 text-sm">Loading...</p> : (
+    !id ? null : !memory || memory.id !== id ? <SheetLoading onCancel={onClose} /> :
+    <Sheet open onClose={onClose} accent={TYPE_COLOR[memory.type] ?? "var(--ember)"}>
+      {(
         <div className="space-y-4">
           {editing ? (
             <div className="space-y-2">

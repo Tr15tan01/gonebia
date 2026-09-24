@@ -154,7 +154,7 @@ export function GraphClient() {
 
       {state === "ready" && data && (
         <>
-          <div className="card p-3 space-y-3">
+          <div className="card p-3 space-y-3 fade-up relative z-10">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative sm:w-64">
                 <input className="input !py-1.5 w-full" type="search" placeholder="Find a memory or person…"
@@ -193,7 +193,7 @@ export function GraphClient() {
           </div>
 
           {focus ? (
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden fade-up" style={{ animationDelay: "90ms" }}>
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line text-sm">
                 <button onClick={back} disabled={!trail.length} className="btn-ghost !py-1 !px-2 !text-xs disabled:opacity-40" aria-label="Back">←</button>
                 <span className="text-ink-2 text-xs truncate flex-1">
@@ -251,7 +251,7 @@ export function GraphClient() {
           )}
 
           {hubs.length > 0 && (
-            <section>
+            <section className="fade-up" style={{ animationDelay: "220ms" }}>
               <h2 className="font-display text-lg font-semibold mb-2">Most connected</h2>
               <div className="flex flex-wrap gap-2">
                 {hubs.map((n) => (
@@ -266,7 +266,7 @@ export function GraphClient() {
             </section>
           )}
 
-          <div className="grid md:grid-cols-5 gap-4">
+          <div className="grid md:grid-cols-5 gap-4 fade-up" style={{ animationDelay: "320ms" }}>
             <FocusTrend rows={data.trend} types={data.trendTypes} />
             <PeopleList people={data.people} />
           </div>

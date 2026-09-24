@@ -59,6 +59,29 @@ function looseQuery(query: string): string {
   return [...terms].join(" or ");
 }
 
+const QUESTION_WORD = /^(what|when|where|who|whom|which|how|why|did|do|does|is|are|was|were|have|has|had|can|could|should|would|will|tell|show|list|find|give)$/i;
+const QUESTION_LEAD = /^(what|when|where|who|which|how|why|did|do|does|have|has|is|are|was|were|can|could|tell me|show me|find|search|remind me|list|give me)\b[^?]*?\b(about|of|on|regarding|for|with|called|named|titled)\s+/i;
+
+/** Phrases worth matching literally: quoted text, Capitalised Multi Word
+ *  names, and the subject of the question once its lead-in is removed
+ *  ("what did I write about atomic habits" -> "atomic habits"). A short
+ *  question that is just a title is used whole. */
+export function literalPhrases(question: string): string[] {
+  const q = question.trim().replace(/[?!.]+$/, "");
+  const out: string[] = [];
+  for (const m of q.matchAll(/["“'‘]([^"”'’]{3,80})["”'’]/g)) out.push(m[1]);
+  for (const m of q.matchAll(/\b([A-Z][\p{L}'’-]*(?:\s+(?:of|the|and|a|an|in|on|to|with|for|&)?\s*[A-Z][\p{L}'’-]*)+)/gu)) {
+    // "Did I", "What I" etc. are sentence starts, not names
+    const words = m[1].split(/\s+/);
+    if (words.includes("I") || QUESTION_WORD.test(words[0])) continue;
+    out.push(m[1]);
+  }
+  const subject = q.replace(QUESTION_LEAD, "");
+  if (subject !== q && subject.split(/\s+/).length <= 7) out.push(subject.replace(/^["“'‘]|["”'’]$/g, ""));
+  if (subject === q && q.split(/\s+/).length <= 6 && !QUESTION_WORD.test(q.split(/\s+/)[0])) out.push(q);
+  return out;
+}
+
 function normalizeRows(data: any[]): MemoryRow[] {
   return (data ?? []).map((m: any) => {
     const raw: unknown = m.memory_metadata;
@@ -150,6 +173,48 @@ export const MemoryRetrievalService = {
     const { data, error } = await q;
     if (error) { console.error("[retrieval] fallback also failed:", error); return []; }
     return normalizeRows(data ?? []);
+  },
+
+  /** Exact-text pass: every memory that literally contains one of these
+   *  phrases (in its text or title), plus memories linked to a book whose
+   *  title matches. Full-text search drops short/stop words and needs every
+   *  word to match, so a bare title like "The Road" or "It Ends with Us" can
+   *  miss; this pass never does. */
+  async literal(sb: any, userId: string, phrases: string[], limit = 10): Promise<MemoryRow[]> {
+    const clean = [...new Set(phrases
+      .map((p) => p.replace(/["%,()\\*]/g, " ").replace(/\s+/g, " ").trim())
+      .filter((p) => p.length >= 3))].slice(0, 5);
+    if (!clean.length) return [];
+    const select = "id, original_text, created_at, memory_metadata!inner(type, title, summary, importance, status, due_at, occurred_at, people)";
+    try {
+      const [textRes, titleRes, bookRes] = await Promise.all([
+        sb.from("memories").select(select).eq("user_id", userId).is("deleted_at", null)
+          .or(clean.map((p) => `original_text.ilike."%${p}%"`).join(","))
+          .order("created_at", { ascending: false }).limit(limit),
+        sb.from("memory_metadata").select("memory_id").eq("user_id", userId)
+          .or(clean.map((p) => `title.ilike."%${p}%"`).join(",")).limit(limit),
+        sb.from("books").select("id").eq("user_id", userId)
+          .or(clean.map((p) => `title.ilike."%${p}%"`).join(",")).limit(5),
+      ]);
+      const rows: any[] = textRes.data ?? [];
+      const have = new Set(rows.map((r) => r.id));
+      const extraIds = new Set<string>((titleRes.data ?? []).map((r: any) => r.memory_id).filter((id: string) => !have.has(id)));
+      const bookIds = (bookRes.data ?? []).map((b: any) => b.id);
+      if (bookIds.length) {
+        const { data: linked } = await sb.from("memory_metadata").select("memory_id")
+          .eq("user_id", userId).in("book_id", bookIds).limit(limit);
+        for (const l of linked ?? []) if (!have.has(l.memory_id)) extraIds.add(l.memory_id);
+      }
+      if (extraIds.size) {
+        const { data: more } = await sb.from("memories").select(select).eq("user_id", userId)
+          .is("deleted_at", null).in("id", [...extraIds].slice(0, limit));
+        rows.push(...(more ?? []));
+      }
+      return normalizeRows(rows).slice(0, limit);
+    } catch (e) {
+      console.error("[retrieval] literal pass failed:", e);
+      return [];
+    }
   },
 
   async similar(sb: any, userId: string, embedding: number[], minSim: number, limit: number) {

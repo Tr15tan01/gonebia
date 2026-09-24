@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { SmartImage } from "@/components/ui";
 
 export interface RunLike {
   id: string;
@@ -50,7 +51,6 @@ export function ResearchResult({
   const sources: { title: string; uri: string }[] = ((r._sources ?? []) as any[]).filter((s) => safeUrl(s?.uri));
   const grounded = !!r._grounded;
   const [openSection, setOpenSection] = useState<number | null>(0);
-  const [imgOk, setImgOk] = useState(true);
   const img = safeUrl(r.image_url);
   const conf = CONFIDENCE[r.confidence?.level as string];
 
@@ -73,9 +73,8 @@ export function ResearchResult({
         {r.title && r.title !== run.input && <p className="text-xs text-ink-2">You asked: “{run.input}”</p>}
       </header>
 
-      {img && imgOk && !compact && (
-        <img src={img} alt="" referrerPolicy="no-referrer" onError={() => setImgOk(false)}
-          className="w-full max-h-60 object-cover rounded-2xl bg-paper-2" />
+      {img && !compact && (
+        <SmartImage src={img} className="block w-full h-56 rounded-2xl" />
       )}
 
       {r.answer && (

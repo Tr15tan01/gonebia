@@ -468,3 +468,59 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01
   .capture-card, .capture-area { transition: none; }
   .capture-card:focus-within::before { animation: none; }
 }
+
+
+/* ---------- sheets (memory popups etc.) ---------- */
+.sheet-backdrop {
+  background: rgba(14, 13, 23, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn .22s ease both;
+}
+.sheet-backdrop-light { background: rgba(14, 13, 23, 0.18); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.sheet-panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 30px 80px -20px rgba(14, 13, 23, 0.45), var(--shadow-lift);
+  animation: sheetUp .38s cubic-bezier(.16, 1, .3, 1) both;
+}
+.sheet-panel::before {
+  /* thin accent bar in the memory's type colour */
+  content: ""; display: block; height: 4px;
+  margin: -1.25rem -1.25rem 1rem; border-radius: 1.5rem 1.5rem 0 0;
+  background: linear-gradient(90deg, var(--sheet-accent), color-mix(in srgb, var(--sheet-accent) 30%, transparent));
+}
+@media (min-width: 768px) {
+  .sheet-panel { animation-name: sheetPop; }
+  .sheet-panel::before { margin: -1.5rem -1.5rem 1.25rem; }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheetUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes sheetPop { from { opacity: 0; transform: translateY(14px) scale(.965); } to { opacity: 1; transform: none; } }
+@keyframes popIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+.pop-in { animation: popIn .2s ease both; }
+
+/* ---------- gentle entrance for content blocks ---------- */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* "backwards" (not "both"): the start state covers the delay, but nothing is
+   held afterwards, so hover transforms on these elements keep working */
+.fade-up { animation: fadeUp .45s cubic-bezier(.2,.7,.2,1) backwards; }
+/* children of .stagger fade up one after another */
+.stagger > * { animation: fadeUp .45s cubic-bezier(.2,.7,.2,1) backwards; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 360ms; }
+.stagger > *:nth-child(8) { animation-delay: 420ms; }
+.stagger > *:nth-child(n+9) { animation-delay: 460ms; }
+
+/* word-by-word answer reveal */
+@keyframes wordIn { from { opacity: 0; filter: blur(3px); } to { opacity: 1; filter: none; } }
+.word-in { animation: wordIn .35s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-backdrop, .sheet-panel, .pop-in, .fade-up, .stagger > *, .word-in { animation: none !important; }
+}
