@@ -20,12 +20,14 @@ You never organize anything manually.
    npm install
    cp .env.example .env.local
 
-2. **Supabase** - create a project at supabase.com. Run BOTH migrations in the SQL
-   editor (or "supabase db push"):
-   - supabase/migrations/0001_init.sql - full schema, RLS, search functions
-   - supabase/migrations/0002_books.sql - books feature
-   (If 0002 errors on "alter type ... add value" inside a transaction, run its first
-   line alone, then the rest.)
+2. **Supabase** - create a project at supabase.com. Run EVERY file in
+   supabase/migrations in numeric order in the SQL editor (or "supabase db push").
+   Every migration is safe to run again. The most recent ones:
+   - 0023_timelymemo_v2.sql - movie/sleep types, Watch agent, Knowledge base,
+     Deep Research
+   - 0024_book_identity.sql - books are told apart by title AND author
+   (If a migration errors on "alter type ... add value" inside a transaction, run
+   that line alone first, then the rest.)
 
 3. **Gemini** - get an API key at aistudio.google.com, set GEMINI_API_KEY.
 

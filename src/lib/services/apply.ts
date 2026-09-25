@@ -79,8 +79,16 @@ export const ApplyService = {
     // book - a status update OR just a thought/quote about it - carries book_id
     // and shows up when you open that book.
     let bookId: string | null = null;
+    let bookNeedsLookup = false;
     if (book) {
-      bookId = await BookService.upsertFromCapture(admin, userId, memoryId, book, originalText);
+      const link = await BookService.upsertFromCapture(admin, userId, memoryId, book, originalText);
+      bookId = link?.id ?? null;
+      if (link) {
+        // look details up for a new entry, or one never successfully looked
+        // up - an existing, enriched book keeps its cover and description
+        const { data: shelfRow } = await admin.from("books").select("enrich_status").eq("id", link.id).maybeSingle();
+        bookNeedsLookup = link.created || shelfRow?.enrich_status !== "enriched";
+      }
     }
 
     const { error } = await admin.from("memory_metadata").insert({
@@ -95,10 +103,10 @@ export const ApplyService = {
 
     let safetyWarning: string | undefined;
     try {
-      if (book && meta.type === "book" && bookId) {
+      if (book && meta.type === "book" && bookId && bookNeedsLookup) {
         try {
           const { BookEnrichmentService } = await import("./book-enrich");
-          await BookEnrichmentService.enrich(admin, userId, bookId, book.title, book.author);
+          await BookEnrichmentService.enrich(admin, userId, bookId);
         } catch (e) {
           console.error("[apply] book enrichment failed:", e);
         }

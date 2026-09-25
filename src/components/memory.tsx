@@ -12,6 +12,8 @@ export interface Memory {
   type: string; title: string; summary: string;
   importance: number; status: string; due_at: string | null; reminder_at?: string | null;
   occurred_at?: string | null; people: string[];
+  /** the shelf entry this note is attached to, if any */
+  book?: { id: string; title: string; author: string | null } | null;
 }
 
 const DATEABLE_TYPES = ["task", "promise", "commitment", "event", "reminder"];
@@ -154,8 +156,11 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
         toast("Marked as done.");
         router.refresh();
       } else if (action === "delete") {
-        await fetch(`/api/memories/${id}`, { method: "DELETE" });
-        toast("Memory deleted.");
+        const res = await fetch(`/api/memories/${id}`, { method: "DELETE" });
+        const body = await res.json().catch(() => ({}));
+        toast(body?.removedBook
+          ? `Memory deleted - "${body.removedBook}" was only on your shelf because of it, so it's removed too.`
+          : "Memory deleted.");
         onClose();
         router.refresh();
       } else if (action === "merge" && mergeTarget) {
@@ -206,6 +211,34 @@ export function MemorySheet({ id, onClose }: { id: string | null; onClose: () =>
             <span className="chip">{fmtDate(memory.created_at)}</span>
             {memory.status !== "open" && <span className="chip">{memory.status}</span>}
           </div>
+
+          {memory.book && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-sm"
+              style={{ background: "color-mix(in srgb, var(--c-book) 9%, transparent)" }}>
+              <span aria-hidden>📚</span>
+              <span className="min-w-0 flex-1">
+                <span className="text-ink-2">On your shelf as </span>
+                <a href="/books" className="font-semibold hover:underline">{memory.book.title}</a>
+                {memory.book.author && <span className="text-ink-2"> · {memory.book.author}</span>}
+              </span>
+              <button
+                onClick={async () => {
+                  const book = memory.book!;
+                  const res = await fetch("/api/books", {
+                    method: "PATCH", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: book.id, unlink_memory: memory.id }),
+                  });
+                  if (res.ok) {
+                    setMemory({ ...memory, book: null });
+                    toast(`No longer linked to "${book.title}".`);
+                    router.refresh();
+                  } else toast("Couldn't unlink - please try again.");
+                }}
+                className="btn-ghost !py-1 !px-2 !text-xs"
+                title="This note isn't about that book"
+              >Wrong book? Unlink</button>
+            </div>
+          )}
 
           {DATEABLE_TYPES.includes(memory.type) ? (
             <div className="flex flex-wrap items-center gap-3">

@@ -19,10 +19,12 @@ export async function POST(req: NextRequest) {
     const { data } = await sb.from("books").update({ enrich_status: "not_found" }).eq("id", id).select().single();
     return NextResponse.json({ ok: false, book: data });
   }
-  const { data } = await sb.from("books").update({
-    topic: info.topic, pub_year: info.pub_year, description: info.description,
-    cover_url: info.cover_url, isbn: info.isbn, enrich_status: "enriched",
-    updated_at: new Date().toISOString(),
-  }).eq("id", id).select().single();
+  const fields = { ...BookEnrichmentService.fieldsFor(info, book.author), updated_at: new Date().toISOString() };
+  let { data, error } = await sb.from("books").update(fields).eq("id", id).select().single();
+  if (error) {
+    // filling the author collided with an identical entry - keep the details only
+    const { author: _skip, ...rest } = fields as Record<string, unknown>;
+    ({ data } = await sb.from("books").update(rest).eq("id", id).select().single());
+  }
   return NextResponse.json({ ok: true, book: data });
 }

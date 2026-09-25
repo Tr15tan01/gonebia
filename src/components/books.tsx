@@ -66,6 +66,23 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
     } finally { setRemovingId(null); }
   }
 
+  /** Fix a book's identity (wrong title or author). The old cover/details
+   *  may belong to a different book, so they're looked up again. */
+  async function saveIdentity(id: string, title: string, author: string | null): Promise<boolean> {
+    const res = await fetch("/api/books", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, title, author }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { toast(d.error ?? "Couldn't save that change."); return false; }
+    if (d.book) replaceBook(d.book);
+    if (d.identityChanged) {
+      toast("Saved - looking up the right cover and details…");
+      relookup(id);
+    }
+    return true;
+  }
+
   async function replaceBook(book: BookRow) {
     setBooks((bs) => bs.map((b) => (b.id === book.id ? { ...b, ...book } : b)));
   }
@@ -114,6 +131,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="📖 Reading now" count={reading.length}>
           {reading.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onSaveIdentity={saveIdentity}
               onRelookup={relookup} retrying={retrying === b.id}
               onRemove={removeBook} removing={removingId === b.id} />
           ))}
@@ -124,6 +142,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="🔖 Up next" count={nextUp.length}>
           {nextUp.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onSaveIdentity={saveIdentity}
               onRelookup={relookup} retrying={retrying === b.id}
               onRemove={removeBook} removing={removingId === b.id} />
           ))}
@@ -134,6 +153,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="📗 Finished" count={finished.length}>
           {finished.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onSaveIdentity={saveIdentity}
               onRelookup={relookup} retrying={retrying === b.id}
               onRemove={removeBook} removing={removingId === b.id} />
           ))}
@@ -144,6 +164,7 @@ export function BooksClient({ initial }: { initial: BookRow[] }) {
         <Section title="⏸ Paused / not finished" count={abandoned.length}>
           {abandoned.map((b) => (
             <BookCard key={b.id} book={b} onPatch={patch} onOpenMemory={setOpenMemory}
+              onSaveIdentity={saveIdentity}
               onRelookup={relookup} retrying={retrying === b.id}
               onRemove={removeBook} removing={removingId === b.id} />
           ))}
@@ -215,26 +236,62 @@ function Cover({ book }: { book: BookRow }) {
   return <SmartImage src={book.cover_url} className="w-14 h-20 rounded-lg shrink-0" fallback={placeholder} />;
 }
 
-function BookCard({ book, onPatch, onOpenMemory, onRelookup, retrying, onRemove, removing }: {
+function BookCard({ book, onPatch, onOpenMemory, onSaveIdentity, onRelookup, retrying, onRemove, removing }: {
   book: BookRow;
   onPatch: (id: string, p: Partial<BookRow>) => void;
   onOpenMemory: (id: string) => void;
+  onSaveIdentity: (id: string, title: string, author: string | null) => Promise<boolean>;
   onRelookup: (id: string) => void;
   retrying: boolean;
   onRemove: (id: string, title: string) => void;
   removing: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(book.title);
+  const [author, setAuthor] = useState(book.author ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!title.trim()) return;
+    setSaving(true);
+    const ok = await onSaveIdentity(book.id, title.trim(), author.trim() || null);
+    setSaving(false);
+    if (ok) setEditing(false);
+  }
+
   return (
     <div className={`card p-4 soft-shadow ${removing ? "toast-out" : ""}`}>
       <div className="flex gap-3">
         <Cover book={book} />
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-display text-lg leading-snug">{book.title}</p>
-              {book.author && <p className="text-sm text-ink-2">{book.author}</p>}
-            </div>
+            {editing ? (
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <input className="input !py-1.5 !text-sm" value={title} maxLength={200} aria-label="Title"
+                  onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} autoFocus />
+                <input className="input !py-1.5 !text-sm" value={author} maxLength={120} aria-label="Author"
+                  placeholder="Author" onChange={(e) => setAuthor(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
+                <div className="flex gap-2">
+                  <button onClick={save} disabled={saving || !title.trim()} className="btn-primary !py-1 !px-3 !text-xs">
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                  <button onClick={() => { setEditing(false); setTitle(book.title); setAuthor(book.author ?? ""); }}
+                    className="btn-ghost !py-1 !px-3 !text-xs">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="min-w-0">
+                <p className="font-display text-lg leading-snug">{book.title}</p>
+                {book.author
+                  ? <p className="text-sm text-ink-2">{book.author}</p>
+                  : <button onClick={() => setEditing(true)} className="text-xs text-ember hover:underline cursor-pointer">+ add author</button>}
+              </div>
+            )}
             <div className="flex items-center gap-1.5 shrink-0">
+              {!editing && (
+                <button onClick={() => setEditing(true)} aria-label={`Edit title or author of ${book.title}`}
+                  title="Fix title or author" className="btn-ghost !py-1 !px-1.5 !text-xs cursor-pointer text-ink-2">✎</button>
+              )}
               <select
                 value={book.status}
                 onChange={(e) => onPatch(book.id, { status: e.target.value })}

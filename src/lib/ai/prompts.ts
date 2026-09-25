@@ -52,6 +52,12 @@ Return ONLY a JSON object with these exact fields:
   Example: "the ending of Sapiens really got me thinking" => type "thought",
     book {"title":"Sapiens","status":null,"mention_only":true}
   If the note doesn't reference any book at all: book = null.
+  BOOK IDENTITY RULE: copy book.title and book.author EXACTLY as the user wrote them
+  (fix only capitalization and strip surrounding quotes). Never swap in a better-known
+  book with a similar title, never lengthen or shorten the title, and never supply an
+  author the user did not name - leave author null instead.
+    "reading 'free will' by sam harris" => book {"title":"Free Will","author":"Sam Harris",...}
+    (NOT "Time and Free Will", which is a different book by Henri Bergson)
   TASK RULE (important): if someone asked or assigned the user to do something
   ("my wife asked me to clean the stove", "my boss wants the report by Friday"),
   type MUST be "task", with that person in people. Reserve "promise"/"commitment"

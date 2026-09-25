@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const sb = await createClient();
   const { data } = await sb
     .from("memories")
-    .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, reminder_at, occurred_at, people, category)")
+    .select("id, original_text, created_at, memory_metadata(type, title, summary, importance, status, due_at, reminder_at, occurred_at, people, category, book_id)")
     .eq("id", id)
     .single();
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -22,7 +22,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const meta = (Array.isArray(rawMeta) ? rawMeta[0] : rawMeta) as {
     type?: string; title?: string; summary?: string; importance?: number;
     status?: string; due_at?: string | null; reminder_at?: string | null; occurred_at?: string | null; people?: string[]; category?: string;
+    book_id?: string | null;
   } | null | undefined;
+  const { data: book } = meta?.book_id
+    ? await sb.from("books").select("id, title, author").eq("id", meta.book_id).maybeSingle()
+    : { data: null };
   return NextResponse.json({
     memory: {
       id: data.id, original_text: data.original_text, created_at: data.created_at,
@@ -31,6 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       status: meta?.status ?? "open", due_at: meta?.due_at ?? null,
       reminder_at: meta?.reminder_at ?? null, occurred_at: meta?.occurred_at ?? null,
       people: meta?.people ?? [],
+      book: book ? { id: book.id, title: book.title, author: book.author ?? null } : null,
     },
   });
 }
@@ -94,13 +99,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ]);
     if (mem?.original_text) {
       const rawTitle = patch.title ?? meta?.title ?? mem.original_text.slice(0, 60);
-      await BookService.upsertFromCapture(admin, user.id, id, {
+      const link = await BookService.upsertFromCapture(admin, user.id, id, {
         title: rawTitle,
         author: null,
         status: deriveBookStatus(mem.original_text),
         rating: null,
         recommended_by: null,
       }, mem.original_text);
+      if (link) {
+        await admin.from("memory_metadata").update({ book_id: link.id }).eq("memory_id", id).eq("user_id", user.id);
+        if (link.created) {
+          const { BookEnrichmentService } = await import("@/lib/services/book-enrich");
+          await BookEnrichmentService.enrich(admin, user.id, link.id);
+        }
+      }
     }
   }
   if (patch.status === "done") {
@@ -132,8 +144,32 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const sb = await createClient();
   const { error } = await sb.from("memories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // Deleting the note that put a book on the shelf takes that book off
+  // again - but only when no other live note is attached to it. Otherwise a
+  // wrong entry survives the delete and the next capture links to it again.
+  let removedBook: string | null = null;
+  try {
+    const { data: meta } = await sb.from("memory_metadata").select("book_id").eq("memory_id", id).maybeSingle();
+    if (meta?.book_id) {
+      const { data: book } = await sb.from("books").select("id, title, memory_id").eq("id", meta.book_id).maybeSingle();
+      if (book && book.memory_id === id) {
+        const { count } = await sb.from("memory_metadata")
+          .select("memory_id, memories!inner(deleted_at)", { count: "exact", head: true })
+          .eq("book_id", book.id).neq("memory_id", id).is("memories.deleted_at", null);
+        if (!count) {
+          await sb.from("memory_metadata").update({ book_id: null }).eq("book_id", book.id);
+          await sb.from("books").delete().eq("id", book.id);
+          removedBook = book.title;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[memories] book cleanup after delete failed:", e);
+  }
+
   // the dashboard reads a cached daily briefing - drop it so Today/
   // Don't forget reflect this change immediately on refresh
   await sb.from("daily_briefings").delete().eq("user_id", user.id);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, removedBook });
 }

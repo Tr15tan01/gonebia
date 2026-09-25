@@ -19,8 +19,9 @@ export default async function BooksPage() {
   if (bookIds.length) {
     const { data: notes } = await sb
       .from("memory_metadata")
-      .select("book_id, title, created_at, memories!inner(id, original_text)")
+      .select("book_id, title, created_at, memories!inner(id, original_text, deleted_at)")
       .in("book_id", bookIds)
+      .is("memories.deleted_at", null) // deleted notes don't belong under a book
       .order("created_at", { ascending: false });
     for (const n of (notes ?? []) as any[]) {
       const list = notesByBook[n.book_id] ?? (notesByBook[n.book_id] = []);
