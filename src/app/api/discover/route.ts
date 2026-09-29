@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutageOf, friendlyAiMessage } from "@/lib/ai/errors";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
 import { getPlan, getUsage, bumpUsage, LIMITS, isAiPaused, aiPausedResponse } from "@/lib/limits";
@@ -99,9 +100,10 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("[discover] failed:", e);
     const msg = e instanceof Error ? e.message : String(e);
-    const friendly = msg.includes("unparseable JSON") || msg.includes("Gemini")
-      ? "The analysis couldn't complete this time - the AI service hiccuped. Please try again; it usually works on retry."
-      : "Analysis failed - please try again. If it keeps happening, the exact reason is in the server logs (tag: [discover]).";
-    return NextResponse.json({ error: friendly });
+    const friendly = friendlyAiMessage(e,
+      msg.includes("unparseable JSON") || msg.includes("Gemini")
+        ? "The analysis couldn't complete this time - the AI service hiccuped. Please try again; it usually works on retry."
+        : "Analysis failed - please try again.");
+    return NextResponse.json({ error: friendly, code: aiOutageOf(e) ? "ai_unavailable" : "failed" });
   }
 }

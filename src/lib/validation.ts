@@ -37,6 +37,7 @@ export const structuredSchema = z.object({
   occurred_at: isoOrNull, due_at: isoOrNull, reminder_at: isoOrNull, review_at: isoOrNull,
   sleep_hours: z.number().min(0).max(24).nullable().optional().catch(null)
     .transform((v) => (typeof v === "number" ? Math.round(v * 100) / 100 : null)),
+  sleep_event: z.enum(["bedtime", "wake"]).nullable().optional().catch(null).transform((v) => v ?? null),
   interpretation: z.string().max(240).catch("Saved to your memory."),
 });
 

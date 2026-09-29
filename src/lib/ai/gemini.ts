@@ -1,5 +1,6 @@
 import { modelForJob, embeddingModel, type AiJob } from "./models";
 import { AiUsageService } from "@/lib/services/ai-usage";
+import { AiUnavailableError, OWNER_ACTION_OUTAGES, classifyAiHttpError } from "./errors";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const KEY = () => process.env.GEMINI_API_KEY;
@@ -22,11 +23,32 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
     try { return await fn(); }
     catch (e) {
       last = e;
-      if (e instanceof NonRetryableError) throw e; // no point retrying a deterministic failure
-      await new Promise((r) => setTimeout(r, 400 * 2 ** i));
+      // no point retrying a deterministic failure (bad request, spend cap,
+      // exhausted quota, rejected key)
+      if (e instanceof NonRetryableError) throw e;
+      if (e instanceof AiUnavailableError && !e.retryable) throw e;
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 400 * 2 ** i));
     }
   }
   throw last;
+}
+
+/** Turns a failed Gemini HTTP response into the right error type. */
+function httpError(label: string, status: number, body: string): Error {
+  const msg = `${label} HTTP ${status}: ${body}`;
+  const outage = classifyAiHttpError(status, body);
+  if (outage) return new AiUnavailableError(outage, msg);
+  // other 4xx (invalid model name, malformed request) won't succeed on retry
+  if (status >= 400 && status < 500) return new NonRetryableError(msg);
+  return new Error(msg);
+}
+
+/** Owner-fixable outages alert the admins (throttled inside). */
+async function reportOutage(e: unknown) {
+  if (e instanceof AiUnavailableError && OWNER_ACTION_OUTAGES.includes(e.reason)) {
+    const { raiseAiOutageAlert } = await import("@/lib/services/ai-alerts");
+    await raiseAiOutageAlert(e.reason, e.message);
+  }
 }
 
 async function generate(
@@ -35,6 +57,7 @@ async function generate(
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; raw: any }> {
   const model = modelForJob(job);
   try {
+    if (!KEY()) throw new AiUnavailableError("auth", "No Gemini API key configured (GEMINI_API_KEY)");
     const result = await withRetry(async () => {
       const res = await fetch(`${BASE}/${model}:generateContent?key=${KEY()}`, {
         method: "POST",
@@ -50,13 +73,7 @@ async function generate(
         }),
       });
       if (!res.ok) {
-        const body = (await res.text()).slice(0, 300);
-        const msg = `Gemini ${model} HTTP ${res.status}: ${body}`;
-        // 4xx (bad API key, invalid model name, malformed request, quota
-        // exceeded) won't succeed on retry - only network hiccups and 5xx
-        // are worth retrying.
-        if (res.status >= 400 && res.status < 500) throw new NonRetryableError(msg);
-        throw new Error(msg);
+        throw httpError(`Gemini ${model}`, res.status, (await res.text()).slice(0, 400));
       }
       const data = await res.json();
       const candidate = data?.candidates?.[0];
@@ -85,6 +102,7 @@ async function generate(
       userId: ctx.userId, feature: ctx.feature, job, model, success: false,
       error: e instanceof Error ? e.message : String(e),
     });
+    await reportOutage(e);
     throw e;
   }
 }
@@ -124,6 +142,7 @@ export async function embedDocument(text: string, ctx: UsageCtx): Promise<number
 async function embedWithTask(text: string, taskType: string, ctx: UsageCtx): Promise<number[]> {
   const model = embeddingModel();
   try {
+    if (!KEY()) throw new AiUnavailableError("auth", "No Gemini API key configured (GEMINI_API_KEY)");
     const values = await withRetry(async () => {
       const res = await fetch(`${BASE}/${model}:embedContent?key=${KEY()}`, {
         method: "POST",
@@ -135,7 +154,7 @@ async function embedWithTask(text: string, taskType: string, ctx: UsageCtx): Pro
           outputDimensionality: 768,
         }),
       });
-      if (!res.ok) throw new Error(`Embedding ${model} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      if (!res.ok) throw httpError(`Embedding ${model}`, res.status, (await res.text()).slice(0, 400));
       const data = await res.json();
       const v = data?.embedding?.values;
       if (!Array.isArray(v) || v.length !== 768) throw new Error("Bad embedding response");
@@ -154,6 +173,7 @@ async function embedWithTask(text: string, taskType: string, ctx: UsageCtx): Pro
       userId: ctx.userId, feature: ctx.feature, job: "embedding", model, success: false,
       error: e instanceof Error ? e.message : String(e),
     });
+    await reportOutage(e);
     throw e;
   }
 }

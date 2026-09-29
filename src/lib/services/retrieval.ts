@@ -82,6 +82,24 @@ export function literalPhrases(question: string): string[] {
   return out;
 }
 
+/** Everyday question words that aren't in anyone's notes and must never be
+ *  "corrected" to something that is. */
+const QUESTION_FILLER = new Set([
+  "remember", "remind", "tell", "know", "think", "could", "would", "should", "please", "anything",
+  "something", "everything", "there", "their", "these", "those", "been", "were", "your", "they",
+  "them", "then", "than", "said", "says", "wrote", "write", "note", "notes", "memory", "memories",
+  "mention", "mentioned", "talk", "talked", "happen", "happened", "much", "many", "often", "ever",
+]);
+
+/** "joke"/"jokes", "walk"/"walked" - grammar, not typos; full-text search
+ *  already treats them as the same word. */
+function sameWordFamily(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (!long.startsWith(short.replace(/e$/, ""))) return false;
+  const rest = long.slice(short.replace(/e$/, "").length);
+  return ["s", "es", "ed", "d", "e", "ing", "er", "ers", "ly", "ies", "y"].includes(rest);
+}
+
 function normalizeRows(data: any[]): MemoryRow[] {
   return (data ?? []).map((m: any) => {
     const raw: unknown = m.memory_metadata;
@@ -215,6 +233,52 @@ export const MemoryRetrievalService = {
       console.error("[retrieval] literal pass failed:", e);
       return [];
     }
+  },
+
+  /** Typo tolerance. Query words that never appear in the user's own notes
+   *  are mapped to the closest words that do ("freind" -> "friend",
+   *  "cofee" -> "coffee", "wrok" -> "work"): one cheap RPC over their own
+   *  vocabulary (migration 0025). Empty when nothing needs correcting, or
+   *  when the migration hasn't been run. */
+  async corrections(sb: any, userId: string, query: string): Promise<{ from: string; to: string }[]> {
+    const terms = [...new Set(keywords(query))]
+      .filter((w) => w.length >= 4 && !QUESTION_FILLER.has(w)).slice(0, 8);
+    if (!terms.length) return [];
+    try {
+      const { data, error } = await sb.rpc("fuzzy_terms", { p_user: userId, p_terms: terms });
+      if (error) {
+        if (!/fuzzy_terms|does not exist|Could not find the function/i.test(error.message ?? "")) {
+          console.error("[retrieval] fuzzy_terms failed:", error);
+        }
+        return [];
+      }
+      return ((data ?? []) as { term: string; match: string }[])
+        .filter((r) => r.term && r.match && r.term !== r.match && !sameWordFamily(r.term, r.match))
+        .map((r) => ({ from: r.term, to: r.match }));
+    } catch (e) {
+      console.error("[retrieval] fuzzy_terms threw:", e);
+      return [];
+    }
+  },
+
+  /** hybrid() plus typo tolerance: when a word was corrected, memories that
+   *  contain the corrected word are ranked first. Filters still apply. */
+  async search(sb: any, userId: string, f: SearchFilters): Promise<{ rows: MemoryRow[]; corrections: { from: string; to: string }[] }> {
+    const limit = f.limit ?? 20;
+    const query = (f.query ?? "").trim();
+    const [rows, corrections] = await Promise.all([
+      this.hybrid(sb, userId, f),
+      query ? this.corrections(sb, userId, query) : Promise.resolve([]),
+    ]);
+    if (!corrections.length) return { rows, corrections };
+    const fixed = (await this.literal(sb, userId, [...new Set(corrections.map((c) => c.to))], Math.min(limit, 8)))
+      .filter((r) =>
+        (!f.types?.length || f.types.includes(r.type))
+        && (!f.status || r.status === f.status)
+        && (!f.from || r.created_at >= f.from)
+        && (!f.to || r.created_at <= f.to));
+    const seen = new Set(fixed.map((r) => r.id));
+    return { rows: [...fixed, ...rows.filter((r) => !seen.has(r.id))].slice(0, limit), corrections };
   },
 
   async similar(sb: any, userId: string, embedding: number[], minSim: number, limit: number) {

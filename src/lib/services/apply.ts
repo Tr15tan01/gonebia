@@ -43,6 +43,10 @@ export const ApplyService = {
     if (meta.type !== "sleep" || meta.sleep_hours == null) {
       delete (meta as Partial<typeof meta>).sleep_hours;
     }
+    // same for bedtime/wake-up tags (column added in migration 0025)
+    if (meta.type !== "sleep" || !meta.sleep_event) {
+      delete (meta as Partial<typeof meta>).sleep_event;
+    }
 
     // Deterministic fallback for the optional picked date/time
     if (pickedAt && !meta.occurred_at && !meta.due_at && !meta.reminder_at) {

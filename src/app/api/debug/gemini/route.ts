@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAdminApi } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
-/** Logged-in diagnostics: tests the Gemini key/models directly and reports
+/** Admin-only diagnostics: tests the Gemini key/models directly and reports
  *  recent extraction health. Visit /api/debug/gemini in your browser.
  *  Rate-limited: this makes real (billed) Gemini calls on the shared server
  *  key, so without a limit any signed-up user could hammer it to run up
@@ -13,6 +14,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized - log in first" }, { status: 401 });
+  // raw provider responses and billed test calls - admins only
+  if (!(await requireAdminApi())) return NextResponse.json({ error: "admins only" }, { status: 403 });
   if (!rateLimit(`debug-gemini:${user.id}`, 5, 3600_000)) {
     return NextResponse.json({ error: "Rate limited - try again in a bit." }, { status: 429 });
   }

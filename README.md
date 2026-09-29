@@ -26,6 +26,8 @@ You never organize anything manually.
    - 0023_timelymemo_v2.sql - movie/sleep types, Watch agent, Knowledge base,
      Deep Research
    - 0024_book_identity.sql - books are told apart by title AND author
+   - 0025_sleep_events_fuzzy_search.sql - bedtime/wake-up tags for sleep totals,
+     and typo-tolerant search (installs the fuzzystrmatch extension)
    (If a migration errors on "alter type ... add value" inside a transaction, run
    that line alone first, then the rest.)
 
@@ -48,18 +50,27 @@ You never organize anything manually.
 | NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY | client + server Supabase |
 | SUPABASE_SERVICE_ROLE_KEY | background jobs only (reminders, crons, export/delete) |
 | GEMINI_API_KEY | extraction, embeddings, chat, insights, weekly report |
-| CRON_SECRET | authenticates the three cron endpoints |
+| CRON_SECRET | authenticates the cron endpoints |
 | WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY | web push |
 | NEXT_PUBLIC_SITE_URL | canonical URL for metadata/manifest |
 | NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED | shows the Google button when set to 1 |
 
 ## Background jobs (deploy to Vercel; crons are pre-wired in vercel.json)
 
-- /api/cron/reminders (every 5 min) - fires due reminders as in-app notifications
-  and web push, honoring quiet hours; re-surfaces snoozed notifications.
-- /api/cron/insights (daily 03:00) - "What am I forgetting", "Connect the dots",
-  "Intention vs reality", recurring purchase patterns.
+All times UTC, once a day (the Vercel Hobby limit):
+
+- /api/cron/daily (03:30) - fires due reminders, re-surfaces snoozed
+  notifications, runs insights ("What am I forgetting", "Connect the dots", ...).
 - /api/cron/weekly (Mondays 04:00) - weekly AI reflection.
+- /api/cron/reprocess (06:30) - sorts notes that were saved while the AI was
+  unavailable (spend cap, quota, outage). Also runs after a user's next
+  successful capture, and from the admin panel's "Sort them now" button.
+- /api/cron/watches (07:00) - checks every active Watch (prices, job
+  openings, page changes); stops early if the AI is unavailable.
+
+If Gemini hits its spending cap or quota, users see a friendly "AI is paused"
+message (saving notes keeps working), every admin gets a notification, and the
+admin panel shows a red AI-health banner with a link to fix it.
 
 All crons require the x-cron-secret header (or ?secret=) matching CRON_SECRET.
 

@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { AIChatService } from "@/lib/services/chat";
 import { getPlan, getUsage, bumpChatUsage, LIMITS, isAiPaused, aiPausedResponse } from "@/lib/limits";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { aiOutageOf, friendlyAiMessage } from "@/lib/ai/errors";
 
 // "Ask my memory" runs a search-plan extraction, hybrid retrieval (keyword +
 // embedding), and an answer-generation call, sequentially - can exceed
@@ -56,18 +57,20 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error("[chat]", e);
     Sentry.captureException(e, { extra: { userId: user.id, plan, question: messages.at(-1)?.content } });
+    // raw provider errors stay in the logs/Sentry - never in the chat
     return NextResponse.json({
-      answer: "I couldn't search your memories just now. Please try again.",
+      answer: friendlyAiMessage(e, "I couldn't search your memories just now. Please try again."),
       references: [],
-      detail: e instanceof Error ? e.message : String(e),
+      aiUnavailable: !!aiOutageOf(e),
     });
   }
 
   // Bookkeeping (usage counting, analytics) happens AFTER a real answer is in
   // hand and is never allowed to throw away that answer if it fails - a flaky
   // RPC or PostHog outage here shouldn't make a working answer look broken.
+  // a fallback answer (the AI was unavailable) doesn't use up a question
   try {
-    await bumpChatUsage(sb, user.id);
+    if (!(result as any).degraded) await bumpChatUsage(sb, user.id);
   } catch (e) {
     console.error("[chat] usage bump failed (answer still returned):", e);
     Sentry.captureException(e, { extra: { userId: user.id, stage: "bumpChatUsage" } });

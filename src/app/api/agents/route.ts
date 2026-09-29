@@ -6,6 +6,7 @@ import { DEEP_RESEARCH_COST } from "@/lib/plans";
 import { AgentService, AGENT_KINDS, type AgentKind } from "@/lib/services/agents";
 import { createNotification } from "@/lib/notifications";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { aiOutageMessage, aiOutageOf } from "@/lib/ai/errors";
 
 // Deep research fans out into several grounded calls. Vercel (Fluid compute)
 // allows up to 300s on every plan; on older Hobby setups the platform caps
@@ -95,13 +96,13 @@ export async function POST(req: NextRequest) {
       : await AgentService.research(sb, user.id, input);
   } catch (e) {
     console.error("[agents] run failed:", e);
-    const msg = e instanceof Error ? e.message : String(e);
+    const outage = aiOutageOf(e);
     return NextResponse.json({
-      error: "The agent couldn't finish this run. Please try again.",
-      detail: msg.includes("unparseable JSON") || msg.includes("Gemini")
-        ? "The AI service hiccuped - a retry usually works."
-        : msg.slice(0, 200),
-    }, { status: 500 });
+      error: outage
+        ? aiOutageMessage(outage)
+        : "The agent couldn't finish this run - the AI service hiccuped. A retry usually works.",
+      code: outage ? "ai_unavailable" : "failed",
+    }, { status: outage ? 503 : 500 });
   }
 
   if (outcome.safetyBlocked) {

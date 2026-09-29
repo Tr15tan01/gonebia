@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireAdmin } from "@/lib/admin";
+import { AiHealthBanner } from "./ai-health";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // This is the actual security boundary for the whole /admin section - not
@@ -23,6 +25,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/dashboard" className="btn-ghost !py-1 !px-2.5 !text-xs">Back to app</Link>
         </div>
       </header>
+      {/* live AI outage warning on every admin page (renders nothing when healthy) */}
+      <Suspense fallback={null}><AiHealthBanner /></Suspense>
       <main className="flex-1 p-6 max-w-6xl mx-auto w-full">{children}</main>
     </div>
   );

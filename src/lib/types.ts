@@ -46,6 +46,8 @@ export interface Structured {
   review_at: string | null;
   /** hours slept - only for type "sleep", null otherwise */
   sleep_hours: number | null;
+  /** a bedtime / wake-up note - lets the app pair them into nights */
+  sleep_event: "bedtime" | "wake" | null;
   interpretation: string;
 }
 

@@ -64,7 +64,7 @@ export function AgentsClient({
   const [phase, setPhase] = useState(0);
   const [run, setRun] = useState<RunLike | null>(null);
   const [history, setHistory] = useState<RunLike[] | null>(null);
-  const [runError, setRunError] = useState<{ msg: string; upgrade?: boolean } | null>(null);
+  const [runError, setRunError] = useState<{ msg: string; upgrade?: boolean; paused?: boolean } | null>(null);
   const [used, setUsed] = useState(usedInitial);
   const resultRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -108,7 +108,7 @@ export function AgentsClient({
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || d.error) {
-        setRunError({ msg: d.detail ? `${d.error} ${d.detail}` : (d.error ?? "The agent couldn't finish - please try again."), upgrade: !!d.upgrade });
+        setRunError({ msg: d.error ?? "The agent couldn't finish - please try again.", upgrade: !!d.upgrade, paused: d.code === "ai_unavailable" });
         return;
       }
       setRun(d.run);
@@ -248,7 +248,9 @@ export function AgentsClient({
 
           {runError && !busy && (
             <div className="card p-4 text-sm" style={{ background: "var(--danger-soft)", borderColor: "color-mix(in srgb, var(--danger) 30%, transparent)" }} role="alert">
-              <p className="font-semibold" style={{ color: "var(--danger)" }}>The run didn't finish</p>
+              <p className="font-semibold" style={{ color: runError.paused ? "var(--ember)" : "var(--danger)" }}>
+                {runError.paused ? "⏸ AI is taking a short break" : "The run didn't finish"}
+              </p>
               <p className="text-ink-2 mt-1">{runError.msg}</p>
               <div className="flex gap-2 mt-3">
                 <button onClick={() => go()} className="btn-ghost !py-1.5 !text-xs">Try again</button>

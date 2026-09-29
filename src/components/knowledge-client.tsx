@@ -51,7 +51,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
   const [openId, setOpenId] = useState<string | null>(initialOpen);
   const [researchTopic, setResearchTopic] = useState("");
   const [running, setRunning] = useState<null | { kind: "research" | "deep_research"; phase: number }>(null);
-  const [runError, setRunError] = useState<{ msg: string; upgrade?: boolean } | null>(null);
+  const [runError, setRunError] = useState<{ msg: string; upgrade?: boolean; paused?: boolean } | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -106,7 +106,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || d.error) {
-        setRunError({ msg: d.detail ? `${d.error} ${d.detail}` : (d.error ?? "The agent couldn't finish - please try again."), upgrade: !!d.upgrade });
+        setRunError({ msg: d.error ?? "The agent couldn't finish - please try again.", upgrade: !!d.upgrade, paused: d.code === "ai_unavailable" });
         return;
       }
       setResearchTopic("");
@@ -219,7 +219,9 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
       {runError && !running && (
         <div className="card p-4 text-sm" role="alert"
           style={{ background: "var(--danger-soft)", borderColor: "color-mix(in srgb, var(--danger) 30%, transparent)" }}>
-          <p className="font-semibold" style={{ color: "var(--danger)" }}>The run didn't finish</p>
+          <p className="font-semibold" style={{ color: runError.paused ? "var(--ember)" : "var(--danger)" }}>
+                {runError.paused ? "⏸ AI is taking a short break" : "The run didn't finish"}
+              </p>
           <p className="text-ink-2 mt-1">{runError.msg}</p>
           <div className="flex gap-2 mt-3">
             <button onClick={() => setRunError(null)} className="btn-ghost !py-1.5 !text-xs">Dismiss</button>

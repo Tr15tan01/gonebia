@@ -129,6 +129,15 @@ Return ONLY a JSON object with these exact fields:
 - review_at: ISO 8601 ONLY for phrases like "show me this in one year". null otherwise.
 - sleep_hours: number of hours slept (decimals allowed) ONLY for type "sleep" when a
   duration is stated or computable; null otherwise.
+- sleep_event: ONLY for type "sleep" notes that mark ONE moment rather than a duration:
+  "bedtime" when the user is going / went to bed or to sleep, "wake" when they woke up /
+  got up. null otherwise, and null when sleep_hours already covers the whole night.
+  For these notes set occurred_at to that exact moment if a clock time is given ("went to
+  bed at 23:40", written the next morning => the previous evening 23:40 in the user's
+  timezone); if no clock time is given and it's happening now ("going to bed",
+  "just woke up"), leave occurred_at null. Plans ("I'll go to bed at 10") are NOT events.
+    "going to bed" => type "sleep", sleep_event "bedtime"
+    "woke up at 6:40" => type "sleep", sleep_event "wake", occurred_at today 06:40
 - interpretation: ONE short natural confirmation sentence, e.g.
   "Got it - you finished reading Atomic Habits by James Clear."
 
@@ -199,6 +208,9 @@ Rules:
 - If the memories do not contain enough evidence to answer, say so explicitly and
   suggest the user tell you about it. Do not guess.
 - If memories conflict, mention both with citations.
+- If a block above says it was CALCULATED BY THE APP, use its numbers exactly as
+  written (averages, totals, hours) - never add up or recompute them yourself. You may
+  mention which nights are missing and add one short, kind observation.
 
 Write the answer now.`;
 }

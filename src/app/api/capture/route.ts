@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
 import { captureSchema } from "@/lib/validation";
@@ -75,9 +75,15 @@ export async function POST(req: Request) {
   // count this capture against the plan (after the row exists)
   await bumpUsage(sb, user.id, isVoice ? "voice_month" : "text_month");
 
-  const structured = await MemoryExtractionService.extract(
+  const { structured, outage } = await MemoryExtractionService.extractDetailed(
     body.text, new Date(), body.timezone, user.id, body.at ?? null
   );
+  if (outage) {
+    warnings.push(
+      "Saved! AI sorting is paused for a little while, so this note isn't categorized yet - " +
+      "it will be organized automatically once the AI is back. Nothing is lost."
+    );
+  }
 
   if (structured) {
     // Future Memory is Pro - keep the note, drop the scheduling, say so
@@ -161,9 +167,25 @@ export async function POST(req: Request) {
     await ph.flush();
   }
 
+  // The AI works again - quietly sort this user's notes that were saved
+  // while it was unavailable (after the response, so capture stays fast).
+  if (structured) {
+    after(async () => {
+      try {
+        const { ReprocessService } = await import("@/lib/services/reprocess");
+        if (await ReprocessService.pendingCount(admin, user.id)) {
+          await ReprocessService.run(admin, { userId: user.id, limit: 5, budgetMs: 25_000 });
+        }
+      } catch (e) {
+        console.error("[capture] background reprocess failed:", e);
+      }
+    });
+  }
+
   return NextResponse.json({
     id: mem.id,
-    interpretation: structured?.interpretation ?? "Saved to your memory.",
+    interpretation: structured?.interpretation
+      ?? (outage ? "Saved - it will be sorted automatically once the AI is back." : "Saved to your memory."),
     structured,
     similar,
     plan,

@@ -3,6 +3,7 @@ import { lookup } from "dns/promises";
 import { isIP } from "net";
 import { geminiJSON, geminiGroundedJSON } from "@/lib/ai/gemini";
 import { createNotification } from "@/lib/notifications";
+import { aiOutageOf } from "@/lib/ai/errors";
 
 /* =====================================================================
  * Watch Agent
@@ -517,6 +518,15 @@ export const WatchService = {
       }
       return { events };
     } catch (e) {
+      // The AI being unavailable isn't the page's fault: don't log it as a
+      // broken link, don't alert the user, and don't count it as a check -
+      // the next run simply tries again.
+      if (aiOutageOf(e)) {
+        const paused = "AI checks are paused for a little while - this watch will be checked again automatically.";
+        await admin.from("watches").update({ last_error: paused })
+          .eq("id", w.id).eq("user_id", w.user_id);
+        return { events: [], error: paused };
+      }
       const msg = (e instanceof Error ? e.message : String(e)).slice(0, 240);
       const failures = (w.last_error ? 1 : 0) + 1;
       await admin.from("watches").update({

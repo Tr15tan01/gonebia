@@ -1,5 +1,7 @@
 import { createAdmin } from "@/lib/supabase/admin";
+import { Suspense } from "react";
 import { AiUsageService } from "@/lib/services/ai-usage";
+import { AiHealthCard } from "./ai-health";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,10 @@ export default async function AdminOverviewPage() {
   return (
     <div className="space-y-8">
       <h1 className="font-display text-2xl">Overview</h1>
+
+      <Suspense fallback={<div className="card p-5 h-28 animate-pulse" />}>
+        <AiHealthCard />
+      </Suspense>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Total users" value={totalUsers ?? 0} />

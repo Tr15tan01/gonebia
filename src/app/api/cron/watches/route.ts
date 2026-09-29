@@ -25,17 +25,21 @@ async function handle(req: NextRequest) {
 
   const queue = [...(due ?? [])] as WatchRow[];
   let checked = 0, changed = 0, failed = 0;
+  let aiPaused = false;
   async function worker() {
-    while (queue.length && Date.now() - started < BUDGET_MS) {
+    while (queue.length && !aiPaused && Date.now() - started < BUDGET_MS) {
       const w = queue.shift()!;
       const r = await WatchService.check(admin, w);
       checked++;
+      // the AI is unavailable (e.g. spend cap) - every other check would fail
+      // the same way, so stop and let tomorrow's run pick them up
+      if (r.error?.startsWith("AI checks are paused")) { aiPaused = true; break; }
       if (r.error) failed++;
       if (r.events.some((e) => e.kind !== "baseline")) changed++;
     }
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  return NextResponse.json({ due: due?.length ?? 0, checked, changed, failed, remaining: queue.length });
+  return NextResponse.json({ due: due?.length ?? 0, checked, changed, failed, aiPaused, remaining: queue.length });
 }
 export const GET = handle;
 export const POST = handle;
