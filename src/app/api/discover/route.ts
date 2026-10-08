@@ -42,7 +42,9 @@ export async function POST(req: NextRequest) {
     const { count: memCount } = await admin.from("memories").select("id", { count: "exact", head: true }).eq("user_id", user.id);
     const { data: latest } = await admin.from("memories").select("created_at").eq("user_id", user.id)
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const freshFingerprint = `${memCount ?? 0}:${latest?.created_at ?? ""}`;
+    // the "v2" prefix is the prompt version - bumping it retires analyses
+    // written by an older prompt (v2: second-person voice)
+    const freshFingerprint = `v2:${memCount ?? 0}:${latest?.created_at ?? ""}`;
 
     if (!force) {
       const { data: cached, error: cacheErr } = await admin

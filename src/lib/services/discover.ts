@@ -24,8 +24,14 @@ function contextBlock(items: { id: string; text: string; date: string }[]) {
   return items.map((m) => `[${m.id.slice(0, 8)}] (${m.date}) ${m.text}`).join("\n");
 }
 
+// Every string the person reads is spoken TO them - "you were thinking about…",
+// never "the user was thinking about…" or "they…".
+const VOICE = `Write every text field in the second person, addressed directly to the reader ("you", "your", e.g. "You were thinking about…", "You keep coming back to…").
+NEVER refer to them as "the user", "this person", "the person", "they", "them" or "their".`;
+
 const RULES = `Use ONLY the provided memories. Cite memory ids exactly as given (e.g. "a1b2c3d4").
 Never invent memories. If there is not enough evidence for a section, say so explicitly.
+ ${VOICE}
 Return ONLY valid JSON in the requested shape.`;
 
 export const DiscoverService = {
@@ -158,7 +164,8 @@ Max 6 alerts. Always include one calm_note (something going fine).`, "discover",
 MEMORIES (up to a year):
  ${contextBlock(all)}
 
-Rules: Only report tensions where BOTH sides are clearly evidenced by the cited memories. Skip trivia. NEVER moralize - changing your mind is normal: label it "preference_change" or "decision_revisit", not a failure. This must read as a thoughtful friend, not an auditor.
+Rules: ${VOICE}
+Only report tensions where BOTH sides are clearly evidenced by the cited memories. Skip trivia. NEVER moralize - changing your mind is normal: label it "preference_change" or "decision_revisit", not a failure. This must read as a thoughtful friend, not an auditor.
 
 Shape: { "framing": string (one sentence, warm, sets the non-judgmental tone), "conflicts": [ { "tension": string (2-4 word name, e.g. "Time vs ambition"), "kind": "goal_vs_action"|"priority_shift"|"commitment_vs_reality"|"preference_change"|"decision_revisit", "earlier": { "claim": string (paraphrase), "date": string, "memory_id": string }, "later": { "claim": string, "date": string, "memory_id": string }, "question": string (one gentle question for the person) } ] (max 4, most meaningful first) }`, "discover", { userId, feature: `discover_${kind}` });
       return { result, items: all };

@@ -158,7 +158,14 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
           autoFocus={autoFocus}
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save(); }}
+          onKeyDown={(e) => {
+            // Enter remembers, Shift+Enter starts a new line (and never
+            // submit mid-composition, e.g. while an IME is picking characters)
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              save();
+            }
+          }}
           rows={2}
           maxLength={MAX_CHARS}
           aria-describedby={text.length > COUNTER_FROM ? "capture-counter" : undefined}
@@ -179,7 +186,7 @@ export function CaptureBox({ autoFocus }: { autoFocus?: boolean }) {
             <DateTimePicker value={atValue} onChange={setAtValue} />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-2 hidden sm:inline" title="Ctrl/⌘ + Enter">⌘↵</span>
+            <span className="text-xs text-ink-2 hidden sm:inline" title="Enter to remember, Shift + Enter for a new line">↵</span>
             <button onClick={save} disabled={!text.trim() || saving} className="btn-primary">
               {saving ? "Remembering..." : "Remember"}
             </button>
@@ -238,7 +245,6 @@ function Interpretation({ result, onClose, updatingCounts }: { result: CaptureRe
   const [due, setDue] = useState(s?.due_at ? localISO(new Date(s.due_at)) : "");
   const [reminder, setReminder] = useState(s?.reminder_at ? localISO(new Date(s.reminder_at)) : "");
   const [saving, setSaving] = useState(false);
-  const [goalCreated, setGoalCreated] = useState(false);
   const toast = useToast();
 
   async function correct() {
@@ -257,16 +263,6 @@ function Interpretation({ result, onClose, updatingCounts }: { result: CaptureRe
     posthog.capture("memory_corrected", { new_type: type });
     setSaving(false); setEdit(false);
     toast("Corrected - thank you.");
-  }
-
-  async function createGoal() {
-    await fetch("/api/goals", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title || "Untitled goal", from_memory_id: result.id }),
-    });
-    posthog.capture("goal_created_from_memory", { similar_count: result.similar.length });
-    setGoalCreated(true);
-    toast("Goal created.");
   }
 
   return (
@@ -305,9 +301,6 @@ function Interpretation({ result, onClose, updatingCounts }: { result: CaptureRe
             ))}
           </ul>
           <p className="mt-1.5 text-ink-2">This seems to be a recurring thought.</p>
-          <button onClick={createGoal} disabled={goalCreated} className="btn-ghost mt-2 !py-1.5 !text-xs">
-            {goalCreated ? "Goal created ✓" : "Create a goal"}
-          </button>
         </div>
       )}
 

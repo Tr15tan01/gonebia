@@ -8,6 +8,7 @@ const DOW = ["Mo","Tu","We","Th","Fr","Sa","Su"];
 /** Clickable calendar + time selects. Value format: "YYYY-MM-DDTHH:mm" (local). */
 export function DateTimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [folding, setFolding] = useState(false);
   const selected = value ? new Date(value) : null;
   const [month, setMonth] = useState(() => {
     const s = selected ?? new Date();
@@ -23,6 +24,15 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // fold the popover shut (short animation, then unmount) instead of
+  // snapping it away, so it reads as tucking back into the chip
+  function close() {
+    if (!open || folding) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setOpen(false); return; }
+    setFolding(true);
+    setTimeout(() => { setOpen(false); setFolding(false); }, 180);
+  }
+
   function emit(d: Date) {
     onChange(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
   }
@@ -30,9 +40,9 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
   function pickDay(day: number) {
     const base = selected ?? new Date();
     emit(new Date(month.getFullYear(), month.getMonth(), day, base.getHours(), base.getMinutes()));
-    // picking the day is the main act - close and let the chip show the
-    // result; the time selects stay available by reopening.
-    setOpen(false);
+    // picking the day is the main act - fold away and let the chip show
+    // the result; the time selects stay available by reopening.
+    close();
   }
   function setTime(h: number, m: number) {
     const base = selected ?? new Date(month.getFullYear(), month.getMonth(), 15);
@@ -68,7 +78,7 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? close() : setOpen(true))}
         className={`btn-ghost !px-3 whitespace-nowrap max-w-[10.5rem] sm:max-w-none ${value ? "!border-ember !text-ember" : ""}`}
         aria-label={selected ? `Date and time: ${label}. Change` : "Choose date and time"}
         aria-expanded={open}
@@ -77,10 +87,10 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
         <span className="truncate">{label}</span>
       </button>
 
-      {open && <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 z-[60]" onClick={close} />}
 
       {open && (
-        <div className="absolute z-[61] mt-2 w-72 card p-3 shadow-lg rise">
+        <div className={`absolute z-[61] mt-2 w-72 card p-3 shadow-lg ${folding ? "fold-out pointer-events-none" : "rise"}`}>
           {/* month header */}
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => setMonth(new Date(y, m - 1, 1))} className="btn-ghost !px-2 !py-1" aria-label="Previous month">‹</button>
@@ -132,7 +142,8 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
             <select
               className="input !py-1.5 !text-xs w-auto"
               value={minute}
-              onChange={(e) => setTime(hour, +e.target.value)}
+              // minutes are the last thing you set - fold away once chosen
+              onChange={(e) => { setTime(hour, +e.target.value); close(); }}
               aria-label="Minutes"
             >
               {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((mm) => (
@@ -144,11 +155,11 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
           {/* footer actions */}
           <div className="flex justify-between mt-3">
             <button
-              onClick={() => { emit(new Date()); setOpen(false); }}
+              onClick={() => { emit(new Date()); close(); }}
               className="btn-ghost !py-1.5 !text-xs"
             >Now</button>
             <button
-              onClick={() => { onChange(""); setOpen(false); }}
+              onClick={() => { onChange(""); close(); }}
               className="btn-ghost !py-1.5 !text-xs"
             >Clear</button>
           </div>
