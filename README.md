@@ -28,6 +28,8 @@ You never organize anything manually.
    - 0024_book_identity.sql - books are told apart by title AND author
    - 0025_sleep_events_fuzzy_search.sql - bedtime/wake-up tags for sleep totals,
      and typo-tolerant search (installs the fuzzystrmatch extension)
+   - 0026_fix_hybrid_search.sql - semantic search actually runs (hybrid_search
+     failed on every call before this and fell back to keyword-only)
    (If a migration errors on "alter type ... add value" inside a transaction, run
    that line alone first, then the rest.)
 

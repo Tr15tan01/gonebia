@@ -164,7 +164,10 @@ export const MemoryRetrievalService = {
       if (retry.error) throw retry.error;
       return (retry.data ?? []) as MemoryRow[];
     } catch (e) {
+      // The fallback is keyword-only and recency-ordered - this once hid a
+      // hybrid_search that failed on every call (0026), so it has to be loud.
       console.error("[retrieval] hybrid_search failed, using fallback:", e);
+      Sentry.captureException(e, { extra: { query, stage: "hybrid_search" } });
       return this.basicFallback(sb, userId, f);
     }
   },
