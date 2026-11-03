@@ -9,6 +9,7 @@ import { MemoryOpener } from "@/components/memory-opener";
 import { relTime, hourInTimezone } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
 import { TYPE_CHIP, TYPE_COLOR, typeIcon } from "@/lib/type-style";
+import { watchEventStyle } from "@/lib/watch-style";
 
 export const dynamic = "force-dynamic";
 
@@ -142,7 +143,7 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const twoWeeksAgo = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const count = (r: { count: number | null; error?: unknown }) => (r?.error ? 0 : r?.count ?? 0);
-  const [openTasks, totalMems, booksDone, booksInProcess, movies, peopleN, researchRuns, deepRuns, kbItems, watchesActive, watchChanges, recentRes] = await Promise.all([
+  const [openTasks, totalMems, booksDone, booksInProcess, movies, peopleN, researchRuns, deepRuns, kbItems, watch, watchChanges, recentRes] = await Promise.all([
     sb.from("memory_metadata").select("memory_id", { count: "exact", head: true })
       .eq("status", "open").in("type", ["task", "promise", "commitment"]),
     sb.from("memories").select("id", { count: "exact", head: true }).is("deleted_at", null),
@@ -153,7 +154,7 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
     sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", "research").eq("status", "done"),
     sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", "deep_research").eq("status", "done"),
     sb.from("knowledge_items").select("id", { count: "exact", head: true }),
-    sb.from("watches").select("id", { count: "exact", head: true }).eq("status", "active"),
+    unseenWatchChanges(sb),
     sb.from("watch_events").select("id", { count: "exact", head: true })
       .not("kind", "in", "(baseline,error)").gte("created_at", weekAgo),
     sb.from("memories").select("created_at, memory_metadata(type)").is("deleted_at", null)
@@ -180,7 +181,8 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
 
   const knowledge = count(researchRuns) + count(deepRuns) + count(kbItems);
 
-  const stats: { label: string; icon: string; value: number | string; sub: React.ReactNode; color: string; href: string }[] = [
+  const unseen = watch.unseen.length;
+  const stats: { label: string; icon: string; value: number | string; sub: React.ReactNode; color: string; href: string; alert?: number }[] = [
     { label: "Open tasks", icon: "☑️", value: count(openTasks), sub: "promises included", color: "var(--c-task)", href: "/tasks" },
     { label: "Memories", icon: "💭", value: count(totalMems), sub: "everything you've said", color: "var(--ember)", href: "/timeline" },
     {
@@ -194,7 +196,12 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
     { label: "Movies", icon: "🎬", value: count(movies), sub: "watched & noted", color: "var(--c-movie)", href: "/timeline?type=movie" },
     { label: "People", icon: "👥", value: count(peopleN), sub: "in your circle", color: "var(--c-decision)", href: "/people" },
     { label: "Knowledge", icon: "🧠", value: knowledge, sub: count(deepRuns) ? `${count(deepRuns)} deep report${count(deepRuns) === 1 ? "" : "s"}` : "researched topics", color: "var(--c-know)", href: "/knowledge" },
-    { label: "Watching", icon: "👁️", value: count(watchesActive), sub: count(watchChanges) ? `${count(watchChanges)} change${count(watchChanges) === 1 ? "" : "s"} this week` : "pages & prices", color: "var(--c-ask)", href: "/agents?tab=watch" },
+    {
+      label: "Watching", icon: "👁️", value: watch.active, color: "var(--c-ask)", href: "/agents?tab=watch", alert: unseen,
+      sub: unseen
+        ? <span className="font-semibold" style={{ color: "var(--c-ask)" }}>{unseen} new change{unseen === 1 ? "" : "s"} · review</span>
+        : count(watchChanges) ? `${count(watchChanges)} change${count(watchChanges) === 1 ? "" : "s"} this week` : "pages & prices",
+    },
     {
       label: "This week", icon: "📈", color: "var(--c-idea)",
       href: topType ? `/timeline?type=${topType}` : "/timeline",
@@ -209,10 +216,14 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
     },
   ];
   return (
+    <>
+    {watch.events.length > 0 && <WatchAlertBanner unseen={watch.unseen} events={watch.events} />}
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 stagger">
       {stats.map((s) => (
-        <Link key={s.label} href={s.href} className="stat-tile"
+        <Link key={s.label} href={s.href} className={`stat-tile ${s.alert ? "has-alert" : ""}`}
+          aria-label={s.alert ? `${s.label}: ${s.alert} new` : undefined}
           style={{ "--tile": s.color } as React.CSSProperties}>
+          {!!s.alert && <span className="stat-alert-badge" aria-hidden>{s.alert}</span>}
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-ink-2">{s.label}</span>
             <span className="stat-icon" aria-hidden>{s.icon}</span>
@@ -224,6 +235,79 @@ async function StatsRow({ sb, userId, timezone }: { sb: any; userId: string; tim
         </Link>
       ))}
     </div>
+    </>
+  );
+}
+
+type UnseenWatch = { id: string; label: string; url: string };
+type WatchChange = { watch_id: string; kind: string; summary: string; created_at: string };
+
+/** Active watch count, plus the watches whose last change the user hasn't
+ *  looked at yet (migration 0027) and those changes. Never throws: without
+ *  the migration it degrades to "nothing unseen". */
+async function unseenWatchChanges(sb: any): Promise<{ active: number; unseen: UnseenWatch[]; events: WatchChange[] }> {
+  const cols = "id, label, url, status, created_at, last_changed_at";
+  let { data, error } = await sb.from("watches").select(`${cols}, seen_at`).limit(100);
+  if (error) ({ data, error } = await sb.from("watches").select(cols).limit(100));
+  if (error || !data) return { active: 0, unseen: [], events: [] };
+
+  const seenAt = new Map<string, number>();
+  const unseen: UnseenWatch[] = [];
+  for (const w of data as any[]) {
+    if (!w.last_changed_at || w.seen_at === undefined) continue;
+    const since = new Date(w.seen_at ?? w.created_at).getTime();
+    if (new Date(w.last_changed_at).getTime() > since) {
+      seenAt.set(w.id, since);
+      unseen.push({ id: w.id, label: w.label || hostOf(w.url), url: w.url });
+    }
+  }
+  const active = (data as any[]).filter((w) => w.status === "active").length;
+  if (!unseen.length) return { active, unseen, events: [] };
+
+  const { data: evs } = await sb.from("watch_events").select("watch_id, kind, summary, created_at")
+    .in("watch_id", unseen.map((w) => w.id)).not("kind", "in", "(baseline,error)")
+    .order("created_at", { ascending: false }).limit(20);
+  const events = ((evs ?? []) as WatchChange[])
+    .filter((e) => new Date(e.created_at).getTime() > (seenAt.get(e.watch_id) ?? 0));
+  return { active, unseen, events };
+}
+
+function hostOf(u: string) {
+  try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; }
+}
+
+function WatchAlertBanner({ unseen, events }: { unseen: UnseenWatch[]; events: WatchChange[] }) {
+  const labelFor = (id: string) => unseen.find((w) => w.id === id)?.label ?? "Watch";
+  const shown = events.slice(0, 3);
+  return (
+    <Link href="/agents?tab=watch" className="watch-alert card block p-4 md:p-5 soft-shadow fade-up group" role="status">
+      <div className="flex items-center gap-3">
+        <span className="watch-alert-dot" aria-hidden />
+        <p className="font-display text-lg font-bold flex-1 min-w-0" style={{ color: "var(--c-ask)" }}>
+          👁️ Your watch{unseen.length === 1 ? "" : "es"} found {events.length === 1 ? "a change" : `${events.length} changes`}
+        </p>
+        <span className="text-sm font-semibold shrink-0 group-hover:translate-x-1 transition-transform" style={{ color: "var(--c-ask)" }}>Review →</span>
+      </div>
+      <ul className="mt-2.5 space-y-1.5 text-sm">
+        {shown.map((e, i) => {
+          const st = watchEventStyle(e.kind);
+          return (
+            <li key={i} className="flex items-start gap-2">
+              <span aria-hidden>{st.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold">{labelFor(e.watch_id)}</span>
+                <span className="text-ink-2"> · </span>
+                <span style={{ color: st.color }}>{e.summary}</span>
+              </span>
+              <span className="text-[11px] text-ink-2 shrink-0 pt-0.5">{relTime(e.created_at)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {events.length > shown.length && (
+        <p className="text-xs text-ink-2 mt-2">+{events.length - shown.length} more</p>
+      )}
+    </Link>
   );
 }
 

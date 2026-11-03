@@ -38,6 +38,32 @@ function Callout({ color, title, children }: { color: string; title: string; chi
   );
 }
 
+/** Report text with "[S3]" / "[S3, S7]" citations turned into small links
+ *  to those sources. */
+function Cited({ text, sources }: { text: unknown; sources: { title: string; uri: string }[] }) {
+  const parts = String(text ?? "").split(/\s*\[(S\d+(?:\s*,\s*S?\d+)*)\]/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part;
+        const nums = part.split(",").map((n) => Number(n.trim().replace(/^S/, "")));
+        return (
+          <sup key={i} className="ml-0.5 whitespace-nowrap">
+            {nums.map((n, j) => {
+              const src = sources[n - 1];
+              if (!src) return null;
+              return (
+                <a key={j} href={src.uri} target="_blank" rel="noopener noreferrer" title={src.title || domainOf(src.uri)}
+                  className="font-semibold no-underline hover:underline mr-0.5" style={{ color: "var(--c-know)" }}>{n}</a>
+              );
+            })}
+          </sup>
+        );
+      })}
+    </>
+  );
+}
+
 export function ResearchResult({
   run, onFollowUp, onSaveTask, compact = false,
 }: {
@@ -80,13 +106,13 @@ export function ResearchResult({
       {r.answer && (
         <div className={deep ? "rounded-2xl p-4 bg-paper-2" : ""}>
           {deep && <p className="label mb-1.5">Bottom line</p>}
-          <p className="text-[15px] leading-relaxed">{r.answer}</p>
+          <p className="text-[15px] leading-relaxed"><Cited text={r.answer} sources={sources} /></p>
         </div>
       )}
 
       {Array.isArray(r.key_numbers) && r.key_numbers.length > 0 && (
-        <div className="grid grid-cols-2 gap-2">
-          {r.key_numbers.slice(0, 4).map((n: any, i: number) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {r.key_numbers.slice(0, 6).map((n: any, i: number) => (
             <div key={i} className="rounded-2xl border border-line p-3">
               <p className="font-display text-xl font-bold" style={{ color: "var(--c-know)" }}>{n.value}</p>
               <p className="text-xs font-semibold mt-0.5">{n.label}</p>
@@ -103,7 +129,7 @@ export function ResearchResult({
               <span className="shrink-0 grid place-items-center size-7 rounded-lg bg-paper-2" aria-hidden>
                 {typeof p === "string" ? "•" : (p.icon || "•")}
               </span>
-              <span className="pt-1 leading-snug">{typeof p === "string" ? p : p.point}</span>
+              <span className="pt-1 leading-snug"><Cited text={typeof p === "string" ? p : p.point} sources={sources} /></span>
             </li>
           ))}
         </ul>
@@ -124,12 +150,48 @@ export function ResearchResult({
                 </button>
                 {open && (
                   <div className="px-4 pb-4 space-y-2.5 text-sm leading-relaxed text-ink-2 phase-in">
-                    {String(sec.body ?? "").split(/\n\n+/).map((para, j) => <p key={j}>{para}</p>)}
+                    {String(sec.body ?? "").split(/\n\n+/).map((para, j) => <p key={j}><Cited text={para} sources={sources} /></p>)}
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {Array.isArray(r.timeline) && r.timeline.length > 0 && (
+        <div>
+          <p className="label mb-2">Timeline</p>
+          <ol className="relative border-l-2 ml-1.5 space-y-3" style={{ borderColor: "color-mix(in srgb, var(--c-know) 30%, transparent)" }}>
+            {r.timeline.map((t: any, i: number) => (
+              <li key={i} className="pl-4 relative text-sm">
+                <span aria-hidden className="absolute -left-[7px] top-1.5 size-3 rounded-full" style={{ background: "var(--c-know)" }} />
+                <p className="text-xs font-semibold" style={{ color: "var(--c-know)" }}>{t.date}</p>
+                <p className="leading-snug">{t.event}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {Array.isArray(r.recommendations) && r.recommendations.length > 0 && (
+        <div>
+          <p className="label mb-2">What to do with this</p>
+          <ul className="space-y-2">
+            {r.recommendations.map((rec: any, i: number) => (
+              <li key={i} className="rounded-2xl border border-line p-3 flex items-start gap-2.5 text-sm">
+                <span className="shrink-0 grid place-items-center size-7 rounded-lg" aria-hidden
+                  style={{ background: "color-mix(in srgb, var(--success) 13%, transparent)" }}>{rec.icon || "→"}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold leading-snug">{rec.action}</span>
+                  {rec.why && <span className="block text-ink-2 mt-0.5 leading-snug"><Cited text={rec.why} sources={sources} /></span>}
+                </span>
+                {onSaveTask && rec.action && (
+                  <button onClick={() => onSaveTask(rec.action)} className="btn-ghost !py-1 !px-2 !text-xs shrink-0">+ Task</button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -139,6 +201,14 @@ export function ResearchResult({
             {r.debates.map((d: any, i: number) => (
               <li key={i}><span className="font-medium">{d.question}</span> <span className="text-ink-2">— {d.sides}</span></li>
             ))}
+          </ul>
+        </Callout>
+      )}
+
+      {Array.isArray(r.gaps) && r.gaps.length > 0 && (
+        <Callout color="var(--ink-2)" title="🔍 What we couldn't verify">
+          <ul className="list-disc list-inside space-y-1">
+            {r.gaps.map((g: string, i: number) => <li key={i}>{g}</li>)}
           </ul>
         </Callout>
       )}
@@ -161,9 +231,18 @@ export function ResearchResult({
 
       {deep && Array.isArray(r.angles) && r.angles.length > 0 && (
         <details className="text-sm">
-          <summary className="cursor-pointer text-ink-2 font-medium">How this was researched ({r.angles.length} angles)</summary>
+          <summary className="cursor-pointer text-ink-2 font-medium">
+            How this was researched ({r.angles.filter((a: any) => a.round !== 2).length} angles
+            {r.angles.some((a: any) => a.round === 2) ? ` + ${r.angles.filter((a: any) => a.round === 2).length} follow-ups` : ""}
+            {sources.length ? ` · ${sources.length} sources` : ""}{r._duration_s ? ` · ${r._duration_s}s` : ""})
+          </summary>
           <ol className="mt-2 space-y-1 list-decimal list-inside text-ink-2">
-            {r.angles.map((a: any, i: number) => <li key={i}>{a.question}{a.why ? <span className="opacity-70"> — {a.why}</span> : null}</li>)}
+            {r.angles.map((a: any, i: number) => (
+              <li key={i}>
+                {a.round === 2 && <span className="chip !py-0 !text-[10px] mr-1" style={{ color: "var(--c-know)" }}>follow-up</span>}
+                {a.question}{a.why ? <span className="opacity-70"> — {a.why}</span> : null}
+              </li>
+            ))}
           </ol>
         </details>
       )}

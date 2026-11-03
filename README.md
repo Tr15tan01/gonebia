@@ -30,6 +30,8 @@ You never organize anything manually.
      and typo-tolerant search (installs the fuzzystrmatch extension)
    - 0026_fix_hybrid_search.sql - semantic search actually runs (hybrid_search
      failed on every call before this and fell back to keyword-only)
+   - 0027_watch_seen.sql - remembers which watch changes you've seen, so the
+     dashboard can flag new ones
    (If a migration errors on "alter type ... add value" inside a transaction, run
    that line alone first, then the rest.)
 

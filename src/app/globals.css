@@ -390,6 +390,39 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01
   background: color-mix(in srgb, var(--tile) 14%, transparent);
 }
 .stat-tile .stat-value { font-family: var(--font-display); font-weight: 700; font-size: 1.65rem; line-height: 1; color: var(--tile); letter-spacing: -0.03em; }
+/* a tile with something new waiting (e.g. a watch found a change) */
+.stat-tile.has-alert {
+  border: 1.5px solid color-mix(in srgb, var(--tile) 75%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 20%, var(--card)) 0%, color-mix(in srgb, var(--tile) 6%, var(--card)) 100%);
+  animation: alertRing 2.4s ease-in-out infinite;
+}
+.stat-alert-badge {
+  position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; padding: 0 6px;
+  display: grid; place-items: center; border-radius: 9999px;
+  font-size: 11px; font-weight: 700; color: var(--card); background: var(--tile);
+  box-shadow: 0 0 0 2px var(--paper), 0 2px 8px color-mix(in srgb, var(--tile) 50%, transparent);
+}
+@keyframes alertRing {
+  0%, 100% { box-shadow: var(--shadow-soft), 0 0 0 0 color-mix(in srgb, var(--tile) 0%, transparent); }
+  50% { box-shadow: var(--shadow-soft), 0 0 0 5px color-mix(in srgb, var(--tile) 22%, transparent); }
+}
+
+/* ---------- watch changes (dashboard banner + watch list) ---------- */
+.watch-alert {
+  --tile: var(--c-ask);
+  border: 1px solid color-mix(in srgb, var(--tile) 40%, transparent);
+  background: color-mix(in srgb, var(--tile) 10%, var(--card));
+}
+.watch-alert-dot {
+  flex-shrink: 0; width: 10px; height: 10px; border-radius: 9999px; background: var(--c-ask);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-ask) 22%, transparent);
+  animation: pulseDot 1.6s ease-in-out infinite;
+}
+.watch-new { border-color: color-mix(in srgb, var(--c-ask) 60%, transparent); box-shadow: inset 3px 0 0 var(--c-ask), var(--shadow-soft); }
+.watch-new-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 9999px; color: var(--card); background: var(--c-ask);
+}
 
 /* ---------- orbit loader (graph, agents, knowledge) ---------- */
 .orbit-loader {
@@ -426,7 +459,7 @@ body { background: var(--paper); color: var(--ink); font-feature-settings: "ss01
 .bar-grow { transform-origin: bottom; animation: barGrow .5s cubic-bezier(.2,.7,.2,1) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .orbit-loader > span, .orbit-loader > i, .phase-in, .bar-grow, .stat-tile { animation: none !important; transition: none !important; }
+  .orbit-loader > span, .orbit-loader > i, .phase-in, .bar-grow, .stat-tile, .watch-alert-dot { animation: none !important; transition: none !important; }
 }
 
 

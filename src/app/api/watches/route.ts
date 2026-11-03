@@ -13,11 +13,14 @@ export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const sb = await createClient();
-  const [{ data: watches, error }, { data: events }] = await Promise.all([
-    sb.from("watches").select(LIST_COLS).order("created_at", { ascending: false }).limit(100),
+  const listWatches = (cols: string) => sb.from("watches").select(cols).order("created_at", { ascending: false }).limit(100);
+  let [{ data: watches, error }, { data: events }] = await Promise.all([
+    listWatches(`${LIST_COLS}, seen_at`),
     sb.from("watch_events").select("id, watch_id, kind, summary, data, created_at")
       .order("created_at", { ascending: false }).limit(200),
   ]);
+  // seen_at arrives with migration 0027 - the list must still work without it
+  if (error && /seen_at/.test(error.message ?? "")) ({ data: watches, error } = await listWatches(LIST_COLS));
   if (error) {
     console.error("[watches] list failed - has migration 0023 been run?", error);
     return NextResponse.json({ watches: [], events: [], setupNeeded: true });

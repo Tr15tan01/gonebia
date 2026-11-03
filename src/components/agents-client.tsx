@@ -15,7 +15,7 @@ const MAX_INPUT = 500;
 
 const TABS: { id: AgentTab; icon: string; name: string; hint: string; color: string }[] = [
   { id: "research", icon: "🔎", name: "Research", hint: "A quick, sourced answer in under 30 seconds.", color: "var(--c-idea)" },
-  { id: "deep_research", icon: "🔭", name: "Deep research", hint: "Investigates several angles, cross-checks, writes a full report.", color: "var(--c-know)" },
+  { id: "deep_research", icon: "🔭", name: "Deep research", hint: "Six angles, follow-up checks, a full cited report.", color: "var(--c-know)" },
   { id: "watch", icon: "👁️", name: "Watch", hint: "Tracks a link for price drops, new jobs or changes.", color: "var(--c-ask)" },
 ];
 
@@ -25,10 +25,11 @@ const EXAMPLES: Record<"research" | "deep_research", string[]> = {
 };
 
 const DEEP_PHASES = [
-  { text: "Planning the investigation", sub: "Splitting your question into angles" },
-  { text: "Searching the web", sub: "Several searches run in parallel" },
-  { text: "Reading and cross-checking", sub: "Comparing what sources agree on" },
-  { text: "Writing your report", sub: "Summary, sections, numbers and sources" },
+  { text: "Planning the investigation", sub: "Splitting your question into 6 angles" },
+  { text: "Searching the web", sub: "Six investigations run in parallel" },
+  { text: "Checking for gaps", sub: "Finding weak claims and contradictions" },
+  { text: "Follow-up searches", sub: "Verifying what the first round left open" },
+  { text: "Writing your report", sub: "Sections, numbers, timeline and cited sources" },
 ];
 const QUICK_PHASES = [
   { text: "Searching the web", sub: "Looking for reliable sources" },
@@ -92,7 +93,8 @@ export function AgentsClient({
 
   useEffect(() => {
     if (!busy) { setPhase(0); return; }
-    const step = tab === "deep_research" ? 9000 : 5000;
+    // roughly matches how long each deep research phase takes (2-4 min total)
+    const step = tab === "deep_research" ? 28_000 : 5000;
     const t = setInterval(() => setPhase((p) => Math.min(p + 1, phases.length - 1)), step);
     return () => clearInterval(t);
   }, [busy, tab, phases.length]);
@@ -212,7 +214,7 @@ export function AgentsClient({
             {locked ? (
               <div className="rounded-2xl p-4 text-sm space-y-2" style={{ background: "color-mix(in srgb, var(--c-know) 9%, transparent)" }}>
                 <p className="font-semibold">Deep research is part of Premium and Pro</p>
-                <p className="text-ink-2">Each report investigates four angles in parallel, cross-checks sources and writes a structured report you keep in your knowledge base.</p>
+                <p className="text-ink-2">Each report investigates six angles in parallel, runs follow-up searches on gaps and contradictions, and writes a cited report you keep in your knowledge base.</p>
                 <UpgradeButton className="!py-1.5 !text-xs" showBenefitsLink />
               </div>
             ) : (
@@ -241,7 +243,7 @@ export function AgentsClient({
                 ))}
               </ol>
               {tab === "deep_research" && (
-                <p className="text-xs text-ink-2 text-center">Deep research takes 1–3 minutes. You'll also get a notification when the report is ready.</p>
+                <p className="text-xs text-ink-2 text-center">Deep research takes 2–4 minutes. You'll also get a notification when the report is ready.</p>
               )}
             </div>
           )}

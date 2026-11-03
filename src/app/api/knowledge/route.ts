@@ -32,7 +32,8 @@ function runToEntry(r: any): KnowledgeEntry {
     id: r.id,
     source: r.kind,
     title: String(res.title || r.input).slice(0, 160),
-    summary: String(res.answer ?? "").slice(0, 320),
+    // deep research cites sources inline as [S3] - not useful in a preview
+    summary: String(res.answer ?? "").replace(/\s*\[S\d+(?:\s*,\s*S?\d+)*\]/g, "").slice(0, 320),
     url: null,
     tags: r.tags?.length ? r.tags : cleanTags(res.tags),
     pinned: !!r.pinned,

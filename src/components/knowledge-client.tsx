@@ -207,7 +207,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
                 </ol>
                 <p className="text-xs text-ink-2 text-center">
                   {running.kind === "deep_research"
-                    ? "Deep research takes 1-3 minutes. You can keep this tab open - it lands in your knowledge base either way."
+                    ? "Deep research takes 2-4 minutes. You can keep this tab open - it lands in your knowledge base either way."
                     : "The research agent is working on this."}
                 </p>
               </>

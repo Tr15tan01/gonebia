@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast, SmartImage } from "@/components/ui";
 import { UpgradeButton } from "@/components/upgrade-button";
 import { OrbitBlock } from "@/components/page-loader";
 import { relTime } from "@/lib/dates";
+import { watchEventStyle } from "@/lib/watch-style";
 
 type Kind = "price" | "jobs" | "content";
 
@@ -13,7 +14,13 @@ interface Watch {
   target_price: number | null; currency: string | null; status: "active" | "paused";
   image_url: string | null; last_value: number | null; last_snapshot: any;
   history: { t: string; v: number }[]; last_checked_at: string | null; last_changed_at: string | null;
-  last_error: string | null; check_count: number; created_at: string;
+  last_error: string | null; check_count: number; created_at: string; seen_at?: string | null;
+}
+
+/** Changed since the user last opened the watch list (migration 0027). */
+function hasUnseenChange(w: Watch) {
+  if (!w.last_changed_at || w.seen_at === undefined) return false;
+  return new Date(w.last_changed_at).getTime() > new Date(w.seen_at ?? w.created_at).getTime();
 }
 
 const KINDS: { id: Kind; icon: string; name: string; hint: string; placeholder: string }[] = [
@@ -21,19 +28,6 @@ const KINDS: { id: Kind; icon: string; name: string; hint: string; placeholder: 
   { id: "jobs", icon: "💼", name: "Job openings", hint: "Careers page - alerts when roles open or close", placeholder: "https://company.com/careers" },
   { id: "content", icon: "📰", name: "Any change", hint: "Any page - alerts on meaningful changes only", placeholder: "https://site.com/page" },
 ];
-
-const EVENT_STYLE: Record<string, { icon: string; color: string }> = {
-  baseline: { icon: "📍", color: "var(--ink-2)" },
-  price_drop: { icon: "📉", color: "var(--success)" },
-  price_rise: { icon: "📈", color: "var(--danger)" },
-  target_hit: { icon: "🎯", color: "var(--success)" },
-  back_in_stock: { icon: "✅", color: "var(--success)" },
-  out_of_stock: { icon: "⛔", color: "var(--danger)" },
-  jobs_added: { icon: "💼", color: "var(--c-task)" },
-  jobs_removed: { icon: "🗂️", color: "var(--ink-2)" },
-  changed: { icon: "👀", color: "var(--c-decision)" },
-  error: { icon: "⚠️", color: "var(--danger)" },
-};
 
 function money(v: number | null | undefined, cur: string | null | undefined) {
   if (v == null) return "–";
@@ -70,6 +64,11 @@ function Sparkline({ points, color, target }: { points: { t: string; v: number }
   );
 }
 
+/** Everything changed so far has been seen - the dashboard stops flagging it. */
+function markSeen() {
+  fetch("/api/watches/seen", { method: "POST" }).catch(() => null);
+}
+
 export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: number }) {
   const [watches, setWatches] = useState<Watch[] | null>(null);
   const [events, setEvents] = useState<WatchEvent[]>([]);
@@ -83,17 +82,37 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
   const [formError, setFormError] = useState<{ msg: string; upgrade?: boolean } | null>(null);
   const [checking, setChecking] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // what was new when the list was opened - kept for this visit even though
+  // opening it marks everything seen on the server
+  const [newIds, setNewIds] = useState<Set<string> | null>(null);
+  const firstLoadDone = useRef(false);
   const toast = useToast();
 
   const load = useCallback(async () => {
     try {
       const d = await fetch("/api/watches", { cache: "no-store" }).then((r) => r.json());
-      setWatches(d.watches ?? []);
+      const list: Watch[] = d.watches ?? [];
+      setWatches(list);
       setEvents(d.events ?? []);
       setSetupNeeded(!!d.setupNeeded);
+      if (!firstLoadDone.current) {
+        firstLoadDone.current = true;
+        const fresh = new Set(list.filter(hasUnseenChange).map((w) => w.id));
+        setNewIds(fresh);
+        if (fresh.size) {
+          markSeen();
+          if (fresh.size === 1) setExpanded([...fresh][0]);
+        }
+      }
     } catch { setWatches([]); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // changed watches first, then the rest in their usual order
+  const ordered = useMemo(() => {
+    if (!watches || !newIds?.size) return watches;
+    return [...watches].sort((a, b) => Number(newIds.has(b.id)) - Number(newIds.has(a.id)));
+  }, [watches, newIds]);
 
   const eventsByWatch = useMemo(() => {
     const m = new Map<string, WatchEvent[]>();
@@ -121,6 +140,7 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
       setUrl(""); setTarget(""); setInstructions(""); setLabel("");
       toast(d.error ? `Watch added, but the first read failed: ${d.error}` : "Watching - you'll be notified about changes.");
       await load();
+      markSeen();
       if (d.watch?.id) setExpanded(d.watch.id);
     } catch {
       setFormError({ msg: "Connection problem - please try again." });
@@ -137,6 +157,8 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
       else {
         const changes = (d.events ?? []).filter((e: any) => e.kind !== "baseline");
         toast(changes.length ? changes.map((e: any) => e.summary).join(" · ") : "No changes since the last check.");
+        // the user just saw these in the toast
+        if (changes.length) markSeen();
       }
       await load();
     } finally { setChecking(null); }
@@ -232,9 +254,18 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
 
       <section className="space-y-2.5">
         <h2 className="font-display text-lg font-semibold">Your watch list</h2>
-        {watches === null ? (
+        {!!newIds?.size && (
+          <div className="watch-alert rounded-2xl p-3.5 flex items-center gap-3 text-sm fade-up" role="status">
+            <span className="watch-alert-dot" aria-hidden />
+            <span>
+              <span className="font-semibold">{newIds.size} watch{newIds.size === 1 ? "" : "es"} changed</span>
+              <span className="text-ink-2"> since you last looked - marked <b>New</b> below.</span>
+            </span>
+          </div>
+        )}
+        {ordered === null ? (
           <OrbitBlock title="Loading your watch list" height={220} />
-        ) : watches.length === 0 ? (
+        ) : ordered.length === 0 ? (
           <div className="card p-8 text-center">
             <div className="text-3xl mb-2" aria-hidden>👁️</div>
             <p className="font-semibold">Nothing watched yet</p>
@@ -242,17 +273,19 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
           </div>
         ) : (
           <ul className="space-y-2.5 stagger">
-            {watches.map((w) => {
+            {ordered.map((w) => {
               const k = KINDS.find((x) => x.id === w.kind)!;
               const evs = eventsByWatch.get(w.id) ?? [];
               const open = expanded === w.id;
+              const isNew = !!newIds?.has(w.id);
+              const latest = isNew ? evs.find((e) => e.kind !== "baseline" && e.kind !== "error") : undefined;
               const snap = w.last_snapshot ?? {};
               const color = w.kind === "price" ? "var(--c-buy)" : w.kind === "jobs" ? "var(--c-task)" : "var(--c-decision)";
               const first = w.history?.[0]?.v;
               const change = w.kind === "price" && first != null && w.last_value != null && first !== 0
                 ? ((w.last_value - first) / first) * 100 : null;
               return (
-                <li key={w.id} className={`card overflow-hidden ${w.status === "paused" ? "opacity-70" : ""}`}>
+                <li key={w.id} className={`card overflow-hidden ${w.status === "paused" ? "opacity-70" : ""} ${isNew ? "watch-new" : ""}`}>
                   <button onClick={() => setExpanded(open ? null : w.id)} aria-expanded={open}
                     className="w-full p-4 flex items-center gap-3 text-left cursor-pointer hover:bg-paper-2 transition-colors">
                     {w.image_url ? (
@@ -264,7 +297,15 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
                         style={{ background: `color-mix(in srgb, ${color} 13%, transparent)` }}>{k.icon}</span>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold truncate">{w.label || snap.title || host(w.url)}</p>
+                      <p className="font-semibold truncate flex items-center gap-1.5">
+                        {isNew && <span className="watch-new-badge shrink-0">New</span>}
+                        <span className="truncate">{w.label || snap.title || host(w.url)}</span>
+                      </p>
+                      {latest && (
+                        <p className="text-xs font-semibold mt-0.5 truncate" style={{ color: watchEventStyle(latest.kind).color }}>
+                          {watchEventStyle(latest.kind).icon} {latest.summary}
+                        </p>
+                      )}
                       <p className="text-xs text-ink-2 truncate">
                         {host(w.url)} · {w.status === "paused" ? "paused" : w.last_checked_at ? `checked ${relTime(w.last_checked_at)}` : "waiting for first check"}
                       </p>
@@ -347,7 +388,7 @@ export function WatchPanel({ plan, watchLimit }: { plan: string; watchLimit: num
                         {evs.length === 0 ? <p className="text-xs text-ink-2">No activity yet.</p> : (
                           <ol className="space-y-1.5 text-sm">
                             {evs.slice(0, 8).map((e) => {
-                              const st = EVENT_STYLE[e.kind] ?? EVENT_STYLE.changed;
+                              const st = watchEventStyle(e.kind);
                               return (
                                 <li key={e.id} className="flex items-start gap-2">
                                   <span aria-hidden>{st.icon}</span>
