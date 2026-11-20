@@ -67,4 +67,8 @@ export interface MemoryRow {
 
 export interface SimilarHit { id: string; title: string; created_at: string; similarity: number }
 
-export interface ChatReference { n: number; id: string; title: string; date: string; snippet: string }
+export interface ChatReference {
+  n: number; id: string; title: string; date: string; snippet: string;
+  /** "knowledge" = a Knowledge base entry, opened at `href` instead of as a memory */
+  kind?: "memory" | "knowledge"; href?: string;
+}

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MemorySheet } from "@/components/memory";
 import { useToast } from "@/components/ui";
 import posthog from "posthog-js";
@@ -9,7 +9,8 @@ import { CharCounter } from "@/components/capture";
 const MAX_Q = 180;
 const Q_COUNTER_FROM = 100;
 
-interface Ref { n: number; id: string; title: string; date: string; snippet: string }
+/** href is set for Knowledge base entries - they open on the Knowledge page, not as a memory */
+interface Ref { n: number; id: string; title: string; date: string; snippet: string; href?: string }
 interface Msg { role: "user" | "assistant"; content: string; refs?: Ref[]; detail?: string; fresh?: boolean }
 
 const EXAMPLES = [
@@ -159,7 +160,9 @@ function AssistantMessage({ msg, onOpen }: { msg: Msg; onOpen: (id: string) => v
     return () => clearTimeout(t);
   }, [shown, done, tokens.length]);
 
+  const router = useRouter();
   const refFor = (n: number) => msg.refs?.find((r) => r.n === n);
+  const openRef = (r: Ref) => (r.href ? router.push(r.href) : onOpen(r.id));
 
   return (
     <div className="max-w-[92%] card rounded-2xl rounded-bl-md px-4 py-3.5 text-[15px] leading-relaxed">
@@ -170,7 +173,7 @@ function AssistantMessage({ msg, onOpen }: { msg: Msg; onOpen: (id: string) => v
             const ref = refFor(+n);
             if (!ref) return null;
             return (
-              <button key={j} onClick={() => onOpen(ref.id)} title={`Open: ${ref.title}`}
+              <button key={j} onClick={() => openRef(ref)} title={`Open: ${ref.title}`}
                 className="word-in inline-grid place-items-center align-[0.15em] mx-0.5 min-w-[1.35rem] h-[1.35rem] px-1 rounded-full text-[11px] font-bold cursor-pointer transition-transform hover:scale-110"
                 style={{ background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>
                 {n}
@@ -188,11 +191,11 @@ function AssistantMessage({ msg, onOpen }: { msg: Msg; onOpen: (id: string) => v
 
       {done && msg.refs && msg.refs.length > 0 && (
         <div className="mt-3 pt-3 border-t border-line">
-          <p className="text-xs font-semibold text-ink-2 mb-2">From your memories</p>
+          <p className="text-xs font-semibold text-ink-2 mb-2">{msg.refs.some((r) => r.href) ? "From your memories & knowledge" : "From your memories"}</p>
           <ul className="grid gap-2 stagger">
             {msg.refs.map((r) => (
               <li key={r.n}>
-                <button onClick={() => onOpen(r.id)}
+                <button onClick={() => openRef(r)}
                   className="group w-full flex items-start gap-3 rounded-xl border border-line p-3 text-left cursor-pointer transition-all hover:border-ember hover:bg-ember-soft hover:-translate-y-px">
                   <span className="grid place-items-center size-7 shrink-0 rounded-full text-xs font-bold"
                     style={{ background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>{r.n}</span>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, createClient } from "@/lib/supabase/server";
 import { fetchPageMeta, normalizeUrl } from "@/lib/services/watch";
+import { KnowledgeSearchService } from "@/lib/services/knowledge-search";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,8 @@ export async function POST(req: NextRequest) {
     console.error("[knowledge] insert failed:", error);
     return NextResponse.json({ error: "Couldn't save. Has database migration 0023 been run?" }, { status: 500 });
   }
+  // so Ask my memory can find it straight away
+  await KnowledgeSearchService.embedItem(sb, user.id, data);
   return NextResponse.json({
     entry: { id: data.id, source: data.kind, title: data.title, summary: data.content.slice(0, 320), url: data.url, tags: data.tags, pinned: data.pinned, created_at: data.created_at },
   });
@@ -130,6 +133,11 @@ export async function PATCH(req: NextRequest) {
   const sb = await createClient();
   const { error } = await sb.from(isRun ? "agent_runs" : "knowledge_items").update(patch).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (!isRun && ("title" in patch || "content" in patch)) {
+    // the text Ask my memory searches by changed - re-embed it
+    const { data: item } = await sb.from("knowledge_items").select("id, title, content, url").eq("id", id).maybeSingle();
+    if (item) await KnowledgeSearchService.embedItem(sb, user.id, item);
+  }
   return NextResponse.json({ ok: true });
 }
 

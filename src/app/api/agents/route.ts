@@ -5,6 +5,7 @@ import { getPlan, getUsage, bumpUsage, LIMITS, isAiPaused, aiPausedResponse } fr
 import { DEEP_RESEARCH_COST } from "@/lib/plans";
 import { AgentService, AGENT_KINDS, type AgentKind } from "@/lib/services/agents";
 import { createNotification } from "@/lib/notifications";
+import { KnowledgeSearchService } from "@/lib/services/knowledge-search";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { aiOutageMessage, aiOutageOf } from "@/lib/ai/errors";
 
@@ -128,6 +129,8 @@ export async function POST(req: NextRequest) {
     else console.error("[agents] run log failed:", insertErr);
   } else if (saved) {
     run = saved;
+    // research reports are part of the Knowledge base Ask my memory searches
+    await KnowledgeSearchService.embedRun(admin, user.id, saved);
   }
 
   if (kind === "deep_research" && saved) {

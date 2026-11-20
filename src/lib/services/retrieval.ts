@@ -12,6 +12,8 @@ export interface SearchFilters {
   limit?: number;
   /** Free plan: keyword-only (basic search). Pro: hybrid semantic. */
   semantic?: boolean;
+  /** Query embedding the caller already has (skips a second embed call). */
+  embedding?: number[] | null;
 }
 
 const STOPWORDS = new Set([
@@ -46,7 +48,7 @@ function root(w: string): string {
   return w;
 }
 
-function keywords(query: string): string[] {
+export function keywords(query: string): string[] {
   return query.toLowerCase().split(/[^\p{L}\p{N}']+/u)
     .filter((w) => w.length > 2 && !STOPWORDS.has(w))
     .slice(0, 6);
@@ -118,8 +120,8 @@ export const MemoryRetrievalService = {
   async hybrid(sb: any, userId: string, f: SearchFilters): Promise<MemoryRow[]> {
     const query = (f.query ?? "").trim();
     const wantSemantic = f.semantic !== false;
-    let embedding: number[] | null = null;
-    if (query && wantSemantic) {
+    let embedding: number[] | null = wantSemantic ? f.embedding ?? null : null;
+    if (query && wantSemantic && !embedding) {
       // Previously silently swallowed - if embedding generation ever fails
       // (wrong model name, quota, transient API error), every question
       // quietly degrades to keyword-only matching with zero visibility. That

@@ -32,6 +32,8 @@ You never organize anything manually.
      failed on every call before this and fell back to keyword-only)
    - 0027_watch_seen.sql - remembers which watch changes you've seen, so the
      dashboard can flag new ones
+   - 0028_knowledge_in_ask.sql - Ask my memory also searches the Knowledge base
+     (saved notes, links, quotes and research reports)
    (If a migration errors on "alter type ... add value" inside a transaction, run
    that line alone first, then the rest.)
 

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ACCENT_COLORS, accentHex, type AccentId } from "@/lib/accent-colors";
+import { ACCENT_COLORS, accentShades, type AccentId } from "@/lib/accent-colors";
 
 export function useTheme() {
   const [theme, setTheme] = useState<string>("system");
@@ -68,10 +68,15 @@ export function ThemeToggle({ size = "sm" }: { size?: "sm" | "lg" }) {
   );
 }
 
-function applyAccentToDOM(hex: string) {
+/** globals.css turns these into --ember / --ember-soft for the current
+ *  light or dark mode. */
+function applyAccentToDOM(id: string) {
+  const { light, dark } = accentShades(id);
   const root = document.documentElement.style;
-  root.setProperty("--ember", hex);
-  root.setProperty("--ember-soft", `color-mix(in srgb, ${hex} 12%, transparent)`);
+  root.removeProperty("--ember");
+  root.removeProperty("--ember-soft");
+  root.setProperty("--accent", light);
+  root.setProperty("--accent-dark", dark);
 }
 
 export type { AccentId };
@@ -90,7 +95,7 @@ export function useAccent(initial: string | null | undefined, canCustomize: bool
   useEffect(() => {
     const effective = (canCustomize ? initial : "amber") as AccentId ?? "amber";
     setAccent(effective);
-    applyAccentToDOM(accentHex(effective));
+    applyAccentToDOM(effective);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial, canCustomize]);
 
@@ -98,7 +103,7 @@ export function useAccent(initial: string | null | undefined, canCustomize: bool
     if (!canCustomize && id !== "amber") return;
     const previous = accent;
     setAccent(id); // optimistic - instant visual feedback
-    applyAccentToDOM(accentHex(id));
+    applyAccentToDOM(id);
     setSaving(true);
     try {
       const res = await fetch("/api/profile", {
@@ -107,13 +112,13 @@ export function useAccent(initial: string | null | undefined, canCustomize: bool
       });
       if (!res.ok) {
         setAccent(previous);
-        applyAccentToDOM(accentHex(previous));
+        applyAccentToDOM(previous);
         return false;
       }
       return true;
     } catch {
       setAccent(previous);
-      applyAccentToDOM(accentHex(previous));
+      applyAccentToDOM(previous);
       return false;
     } finally {
       setSaving(false);

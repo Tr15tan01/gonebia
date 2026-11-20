@@ -1,6 +1,8 @@
 import { geminiJSON, geminiText } from "@/lib/ai/gemini";
 import { groundedAnswerPrompt, searchPlanPrompt } from "@/lib/ai/prompts";
-import { MemoryRetrievalService, literalPhrases } from "./retrieval";
+import { embedQuery } from "@/lib/ai/gemini";
+import { MemoryRetrievalService, literalPhrases, keywords } from "./retrieval";
+import { KnowledgeSearchService, KNOWLEDGE_LABEL, type KnowledgeHit } from "./knowledge-search";
 import { aiOutageMessage, aiOutageOf } from "@/lib/ai/errors";
 import { SLEEP_QUESTION, describeReport } from "@/lib/sleep";
 import { SleepService } from "./sleep";
@@ -26,14 +28,26 @@ export const AIChatService = {
     }
 
     const appliedTypes = (plan_.types as string[] | null) ?? null;
+    const searchQuery = (plan_.query as string) || question;
     let mentionedBook = false;
+    // one embedding for the whole question: memories and knowledge both use it
+    let embedding: number[] | null = null;
+    try { embedding = await embedQuery(searchQuery, { userId, feature: "chat_retrieval" }); } catch (e) {
+      console.error("[chat] embedQuery failed - knowledge search skipped, memories fall back to keywords:", e);
+    }
     // typo check runs alongside retrieval: the question's words (and the
     // planner's) against the words the user has actually written
     const typoCheck = MemoryRetrievalService.corrections(
       sb, userId, [question, (plan_.query as string) || ""].join(" ").slice(0, 400),
     );
+    // the Knowledge base (saved notes/links/quotes + research reports) is
+    // searched alongside memories; older entries get embedded on first use
+    const knowledgeSearch = KnowledgeSearchService.backfill(sb, userId)
+      .then(() => KnowledgeSearchService.search(sb, userId, embedding, keywords(`${question} ${searchQuery}`)))
+      .catch((e) => { console.error("[chat] knowledge search failed:", e); return [] as KnowledgeHit[]; });
     let rows = await MemoryRetrievalService.hybrid(sb, userId, {
-      query: (plan_.query as string) || question,
+      query: searchQuery,
+      embedding,
       types: appliedTypes,
       person: (plan_.person as string | null) ?? null,
       from: (plan_.from as string | null) ?? null,
@@ -83,7 +97,8 @@ export const AIChatService = {
     // (almost) empty, retry once without it rather than trusting the guess.
     if (appliedTypes?.length && rows.length < 2) {
       const unfiltered = await MemoryRetrievalService.hybrid(sb, userId, {
-        query: (plan_.query as string) || question,
+        query: searchQuery,
+        embedding,
         types: null,
         person: (plan_.person as string | null) ?? null,
         from: (plan_.from as string | null) ?? null,
@@ -153,17 +168,27 @@ export const AIChatService = {
       }
     }
 
-    if (!rows.length && !bookContext && !sleepContext) {
+    const knowledge = await knowledgeSearch;
+
+    if (!rows.length && !knowledge.length && !bookContext && !sleepContext) {
       return {
-        answer: "I couldn't find anything in your memories about that. If you tell me about it, I'll remember it for next time.",
+        answer: "I couldn't find anything in your memories or knowledge base about that. If you tell me about it, I'll remember it for next time.",
         references: [] as ChatReference[],
       };
     }
 
-    const references: ChatReference[] = rows.map((r: any, i: number) => ({
-      n: i + 1, id: r.id, title: r.title || r.original_text.slice(0, 60),
-      date: r.occurred_at ?? r.created_at, snippet: r.original_text.slice(0, 120),
-    }));
+    // knowledge entries are numbered after the memories, so [n] stays unique
+    const references: ChatReference[] = [
+      ...rows.map((r: any, i: number) => ({
+        n: i + 1, id: r.id, title: r.title || r.original_text.slice(0, 60),
+        date: r.occurred_at ?? r.created_at, snippet: r.original_text.slice(0, 120),
+      })),
+      ...knowledge.map((k, i) => ({
+        n: rows.length + i + 1, id: k.id, title: k.title,
+        date: k.created_at, snippet: `${KNOWLEDGE_LABEL[k.source]} · ${k.body.replace(/\s*\[S\d+(?:\s*,\s*S?\d+)*\]/g, "").slice(0, 110)}`,
+        kind: "knowledge" as const, href: `/knowledge?open=${k.id}`,
+      })),
+    ];
 
     let answer: string;
     let degraded = false; // true when the language model couldn't answer
@@ -171,13 +196,18 @@ export const AIChatService = {
       const memoryContext = rows.map((r: any, i: number) =>
         `[${i + 1}] (${fmt(r.occurred_at ?? r.created_at)}${r.occurred_at ? "" : ", written"} - ${r.type}) "${r.original_text}"`
       ).join("\n");
+      const knowledgeContext = knowledge.length
+        ? "KNOWLEDGE BASE - things the user saved or had researched (not their own diary notes):\n" + knowledge.map((k, i) =>
+            `[${rows.length + i + 1}] (${fmt(k.created_at)} - ${KNOWLEDGE_LABEL[k.source]}) "${k.title}": "${k.body.slice(0, 1500)}"${k.url ? ` (${k.url})` : ""}`
+          ).join("\n")
+        : "";
       const typoNote = corrections.length
         ? "SEARCH NOTE: some words in the question don't appear in the user's notes, so close matches were searched instead: " +
           corrections.map((c) => `"${c.from}" -> "${c.to}"`).join(", ") + ". Answer about the matched word and mention the match briefly."
         : "";
-      const context = [typoNote, bookContext, sleepContext, memoryContext].filter(Boolean).join("\n\n");
+      const context = [typoNote, bookContext, sleepContext, memoryContext, knowledgeContext].filter(Boolean).join("\n\n");
       answer = await geminiText(groundedAnswerPrompt(question, context), "chat_answer", { userId, feature: "chat_answer" }, 0.3);
-      answer = answer.replace(/\[(\d+)\]/g, (m, n) => (+n >= 1 && +n <= rows.length ? m : ""));
+      answer = answer.replace(/\[(\d+)\]/g, (m, n) => (+n >= 1 && +n <= references.length ? m : ""));
     } catch (e) {
       console.error("[chat] LLM answer failed, using retrieval fallback:", e);
       degraded = true;
@@ -190,7 +220,7 @@ export const AIChatService = {
         // numbers the app computed itself don't need the AI - show them anyway
         sleepSummary ? `\n${sleepSummary}` : "",
         "",
-        rows.map((r: any, i: number) => `[${i + 1}] ${r.title || r.original_text.slice(0, 60)} - ${fmt(r.occurred_at ?? r.created_at)}`).join("\n"),
+        references.map((r) => `[${r.n}] ${r.title} - ${fmt(r.date)}`).join("\n"),
         outage ? "" : "\nTry again in a moment for a full answer.",
       ].join("\n").replace(/\n{3,}/g, "\n\n").trim();
     }
