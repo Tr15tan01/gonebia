@@ -262,7 +262,7 @@ export function KnowledgeClient({ initialOpen }: { initialOpen: string | null })
             <span className="text-xs text-ink-2 mr-1">Tags</span>
             {topTags.map((t) => (
               <button key={t.tag} onClick={() => setTag(tag === t.tag ? null : t.tag)}
-                className={`chip cursor-pointer !text-[11px] ${tag === t.tag ? "!bg-ember !text-white !border-ember" : ""}`}>#{t.tag} <span className="opacity-60 ml-1">{t.count}</span></button>
+                className={`chip cursor-pointer !text-[11px] ${tag === t.tag ? "!bg-ember-strong !text-white !border-ember-strong" : ""}`}>#{t.tag} <span className="opacity-60 ml-1">{t.count}</span></button>
             ))}
           </div>
         )}

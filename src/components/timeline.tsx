@@ -58,7 +58,7 @@ export function TimelineClient({ initial, initialTypes = [], openMemoryId = null
         <div className="flex flex-wrap gap-1.5">
           {TYPES.map((t) => (
             <button key={t} onClick={() => toggle(t)}
-              className={`chip cursor-pointer ${types.includes(t) ? "!bg-ember !text-white !border-ember" : TYPE_CHIP[t] ?? ""}`}
+              className={`chip cursor-pointer ${types.includes(t) ? "!bg-ember-strong !text-white !border-ember-strong" : TYPE_CHIP[t] ?? ""}`}
               aria-pressed={types.includes(t)}><span aria-hidden className="mr-1">{typeIcon(t)}</span>{t}</button>
           ))}
         </div>

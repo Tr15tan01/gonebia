@@ -44,7 +44,7 @@ export function FontSizePicker() {
       <div className="flex gap-1.5" role="radiogroup" aria-label="Text size">
         {FONT_SIZES.map((f) => (
           <button key={f.id} role="radio" aria-checked={size === f.id} onClick={() => apply(f.id)}
-            className={`chip cursor-pointer !px-3 ${size === f.id ? "!bg-ember !text-white !border-ember" : ""}`}
+            className={`chip cursor-pointer !px-3 ${size === f.id ? "!bg-ember-strong !text-white !border-ember-strong" : ""}`}
             style={{ fontSize: `${f.px - 4}px` }}>
             A
             <span className="sr-only">{f.label}</span>

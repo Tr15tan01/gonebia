@@ -106,7 +106,7 @@ export function ChatClient() {
         {messages.map((m, i) => (
           <div key={i} className={`fade-up ${m.role === "user" ? "flex justify-end" : ""}`}>
             {m.role === "user" ? (
-              <div className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-3 text-[15px] leading-relaxed bg-ember text-white">{m.content}</div>
+              <div className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-3 text-[15px] leading-relaxed bg-ember-strong text-white">{m.content}</div>
             ) : (
               <AssistantMessage msg={m} onOpen={setOpenMemory} />
             )}

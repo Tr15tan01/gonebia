@@ -8,7 +8,7 @@ import { Empty } from "@/components/ui";
 import { MemoryOpener } from "@/components/memory-opener";
 import { relTime, hourInTimezone } from "@/lib/dates";
 import { TimeChip } from "@/components/time-chip";
-import { TYPE_CHIP, TYPE_COLOR, typeIcon } from "@/lib/type-style";
+import { TYPE_COLOR, typeIcon } from "@/lib/type-style";
 
 export const dynamic = "force-dynamic";
 
@@ -39,15 +39,18 @@ function endOfTodayMs() {
   return d.getTime();
 }
 
-function Section({ title, href, color, children }: { title: string; href?: string; color?: string; children: React.ReactNode }) {
+function Section({ title, icon, href, color, count, children }: {
+  title: string; icon: string; href?: string; color?: string; count?: number; children: React.ReactNode;
+}) {
   return (
     <section className="fade-up">
-      <div className="flex items-baseline justify-between mb-2.5">
-        <h2 className="font-display text-lg font-semibold flex items-center gap-2">
-          <span aria-hidden className="inline-block size-2 rounded-full" style={{ background: color ?? "var(--ink-2)" }} />
-          {title}
+      <div className="section-head">
+        <h2 className="flex items-center gap-2.5 min-w-0">
+          <span className="icon-tile sm" style={{ "--tile": color ?? "var(--ink-2)" } as React.CSSProperties} aria-hidden>{icon}</span>
+          <span className="font-display text-[1.05rem] font-semibold truncate">{title}</span>
+          {!!count && <span className="count-pill">{count}</span>}
         </h2>
-        {href && <Link href={href} className="text-xs font-semibold text-ember hover:underline underline-offset-2">See all</Link>}
+        {href && <Link href={href} className="section-link">See all <span aria-hidden>→</span></Link>}
       </div>
       {children}
     </section>
@@ -65,11 +68,47 @@ function Section({ title, href, color, children }: { title: string; href?: strin
  *  only its own data) is ready. */
 function SectionSkeleton({ title, rows = 2 }: { title: string; rows?: number }) {
   return (
-    <section>
-      <div className="mb-2.5"><h2 className="label text-ink-2">{title}</h2></div>
-      <div className="space-y-2">
+    <section aria-busy="true">
+      <div className="section-head">
+        <h2 className="flex items-center gap-2.5">
+          <span className="skeleton size-7 !rounded-[.55rem]" aria-hidden />
+          <span className="font-display text-[1.05rem] font-semibold text-ink-2">{title}</span>
+        </h2>
+      </div>
+      <div className="panel">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="card p-4 h-14 animate-pulse bg-paper-2" />
+          <div key={i} className="panel-row">
+            <span className="skeleton size-[2.1rem] !rounded-[.7rem] shrink-0" />
+            <div className="flex-1 space-y-2 pt-1">
+              <div className="skeleton h-3 w-2/3 !rounded-full" />
+              <div className="skeleton h-2.5 w-1/3 !rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const ASK_EXAMPLES = ["What did I buy last month?", "What books did I finish?", "What did I promise to do?"];
+
+/** Entry point to Ask my memory: opens the chat, or asks an example right away. */
+function AskCard() {
+  return (
+    <section className="ask-card fade-up">
+      <Link href="/chat" className="ask-main flex items-center gap-4">
+        <span className="ask-icon" aria-hidden>✦</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-lg md:text-xl font-bold leading-tight">Ask my memory</span>
+          <span className="block text-sm text-ink-2 mt-0.5">Answers from your notes and Knowledge base, with sources.</span>
+        </span>
+        <span className="ask-go" aria-hidden>→</span>
+      </Link>
+      <div className="mt-3.5 flex flex-wrap gap-2">
+        {ASK_EXAMPLES.map((q) => (
+          <Link key={q} href={`/chat?q=${encodeURIComponent(q)}`} className="ask-chip">
+            <span aria-hidden className="opacity-60">↳</span>{q}
+          </Link>
         ))}
       </div>
     </section>
@@ -107,16 +146,7 @@ export default async function Dashboard() {
         <StatsRow sb={sb} userId={user!.id} timezone={profile?.timezone} />
       </Suspense>
 
-      <Link href="/chat" className="card p-5 md:p-6 flex items-center gap-4 group soft-shadow fade-up"
-        style={{ background: "var(--ember-soft)", borderColor: "color-mix(in srgb, var(--ember) 35%, transparent)" }}>
-        <span className="grid place-items-center size-12 rounded-2xl shrink-0 text-2xl"
-          style={{ background: "color-mix(in srgb, var(--ember) 18%, transparent)" }} aria-hidden>💬</span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-display text-xl md:text-2xl font-bold" style={{ color: "var(--ember)" }}>Ask my memory</span>
-          <span className="block text-sm text-ink-2 mt-0.5 truncate">&ldquo;What did I buy last month?&rdquo; · &ldquo;What books did I finish?&rdquo;</span>
-        </span>
-        <span aria-hidden className="text-ember text-xl group-hover:translate-x-1 transition-transform">→</span>
-      </Link>
+      <AskCard />
 
       <Suspense fallback={<SectionSkeleton title="Today" />}>
         <BriefingSections userId={user!.id} />
@@ -257,15 +287,33 @@ function ItemMeta({ type, importance, createdAt, people }: {
   type?: string | null; importance?: number | null; createdAt?: string | null; people?: string[] | null;
 }) {
   const bits: React.ReactNode[] = [];
-  if (type) bits.push(<span key="t" className="capitalize" style={{ color: TYPE_COLOR[type] ?? "var(--ink-2)" }}>{typeIcon(type)} {type}</span>);
-  if ((importance ?? 0) >= 4) bits.push(<span key="p" style={{ color: "var(--ember)" }}>★ high priority</span>);
+  if (type) bits.push(<span key="t" className="capitalize font-medium" style={{ color: TYPE_COLOR[type] ?? "var(--ink-2)" }}>{type}</span>);
+  if ((importance ?? 0) >= 4) bits.push(<span key="p" className="font-medium" style={{ color: "var(--ember)" }}>★ high priority</span>);
   if (people?.length) bits.push(<span key="w">with {people.slice(0, 2).join(", ")}</span>);
   if (createdAt) bits.push(<span key="c">noted {relTime(createdAt)}</span>);
   if (!bits.length) return null;
   return (
-    <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-ink-2">
-      {bits.map((b, i) => <Fragment key={i}>{i > 0 && <span aria-hidden>·</span>}{b}</Fragment>)}
+    <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-ink-2">
+      {bits.map((b, i) => <Fragment key={i}>{i > 0 && <span aria-hidden className="opacity-50">·</span>}{b}</Fragment>)}
     </span>
+  );
+}
+
+/** One line in a dashboard panel: icon tile, title + details, optional
+ *  right-hand time or status. */
+function Row({ icon, color, title, children, trailing, strong = true }: {
+  icon: React.ReactNode; color?: string; title: React.ReactNode; children?: React.ReactNode;
+  trailing?: React.ReactNode; strong?: boolean;
+}) {
+  return (
+    <div className="panel-row">
+      <span className="icon-tile" style={{ "--tile": color ?? "var(--ember)" } as React.CSSProperties} aria-hidden>{icon}</span>
+      <div className="min-w-0 flex-1 pt-px">
+        <p className={strong ? "row-title" : "text-[0.9rem] leading-snug text-ink"}>{title}</p>
+        {children}
+      </div>
+      {trailing && <div className="shrink-0 pt-0.5">{trailing}</div>}
+    </div>
   );
 }
 
@@ -275,37 +323,33 @@ async function BriefingSections({ userId }: { userId: string }) {
 
   return (
     <>
-      <Section title="Today" color="var(--ember)">
-        {b.today.length ? (
-          <div className="space-y-2">
-            {b.today.map((t: any) => (
-              <MemoryOpener key={t.id} id={t.id}>
-                <div className="card p-4 text-sm flex justify-between gap-3 hover:border-ember/60 soft-shadow"
-                  style={{ borderLeft: `3px solid ${TYPE_COLOR[(t as any).type] ?? "var(--ember)"}` }}>
-                  <span className="min-w-0">
-                    <span className="block font-medium">{t.title || t.text}</span>
-                    <ItemMeta type={t.type} importance={t.importance} createdAt={t.created_at} people={t.people} />
-                  </span>
-                  {t.iso
+      <Section title="Today" icon="☀️" color="var(--ember)" count={b.today.length}>
+        <div className="panel">
+          {b.today.length ? b.today.map((t: any) => (
+            <MemoryOpener key={t.id} id={t.id} className="panel-click block">
+              <Row icon={typeIcon(t.type)} color={TYPE_COLOR[t.type] ?? "var(--ember)"} title={t.title || t.text}
+                trailing={t.iso
                   ? <TimeChip iso={t.iso} />
-                  : t.when
-                    ? <span className="whitespace-nowrap font-medium" style={{ color: "var(--ember)" }}>{t.when}</span>
-                    : null}
-                </div>
-              </MemoryOpener>
-            ))}
-          </div>
-        ) : <Empty icon="~" title="Nothing urgent today." hint="A quiet day is a good day." />}
+                  : t.when ? <span className="chip font-medium whitespace-nowrap" style={{ color: "var(--ember)" }}>{t.when}</span> : null}>
+                <ItemMeta type={t.type} importance={t.importance} createdAt={t.created_at} people={t.people} />
+              </Row>
+            </MemoryOpener>
+          )) : (
+            <Row icon="✓" color="var(--success)" title="Nothing urgent today.">
+              <p className="row-body">A quiet day is a good day.</p>
+            </Row>
+          )}
+        </div>
       </Section>
 
       {b.dontForget.length > 0 && (
-        <Section title="Don't forget" href="/insights" color="var(--danger)">
-          <ul className="space-y-2">
+        <Section title="Don't forget" icon="⚑" color="var(--danger)" href="/insights" count={b.dontForget.length}>
+          <ul className="panel panel-tone" style={{ "--tile": "var(--danger)" } as React.CSSProperties}>
             {b.dontForget.map((f: any) => (
-              <li key={f.id} className="card p-4 text-sm"
-                style={{ borderLeft: "3px solid var(--danger)", background: "var(--danger-soft)" }}>
-                <p className="font-medium" style={{ color: "var(--danger)" }}>{f.title}</p>
-                <p className="text-ink-2 mt-1">{f.body}</p>
+              <li key={f.id}>
+                <Row icon="!" color="var(--danger)" title={f.title}>
+                  <p className="row-body">{f.body}</p>
+                </Row>
               </li>
             ))}
           </ul>
@@ -313,29 +357,29 @@ async function BriefingSections({ userId }: { userId: string }) {
       )}
 
       {b.interesting && (
-        <Section title="Worth noticing" href="/insights" color="var(--c-decision)">
-          <div className="card p-4 text-sm" style={{ borderLeft: "3px solid var(--c-decision)" }}>
-            <p className="font-medium">{b.interesting.title}</p>
-            <p className="text-ink-2 mt-1">{b.interesting.body}</p>
-            <Link href="/insights" className="text-sm mt-2 inline-block" style={{ color: "var(--c-decision)" }}>
-              View connected memories
-            </Link>
+        <Section title="Worth noticing" icon="🧩" color="var(--c-decision)" href="/insights">
+          <div className="panel panel-tone" style={{ "--tile": "var(--c-decision)" } as React.CSSProperties}>
+            <Row icon="✦" color="var(--c-decision)" title={b.interesting.title}>
+              <p className="row-body">{b.interesting.body}</p>
+              <Link href="/insights" className="btn-tint !py-1 !px-2.5 !text-xs mt-2.5"
+                style={{ "--tint": "var(--c-decision)" } as React.CSSProperties}>
+                View connected memories <span aria-hidden>→</span>
+              </Link>
+            </Row>
           </div>
         </Section>
       )}
 
       {b.revisit.length > 0 && (
-        <Section title="Revisit" color="var(--c-know)">
-          <ul className="space-y-2">
+        <Section title="Revisit" icon="🕰️" color="var(--c-know)" count={b.revisit.length}>
+          <ul className="panel">
             {b.revisit.map((r: any) => (
-              <li key={r.id + r.kind} className="card p-4 text-sm"
-                style={r.kind === "future_note" ? { borderLeft: "3px solid var(--c-know)" } : undefined}>
-                {r.kind === "future_note" && (
-                  <p className="label mb-1" style={{ color: "var(--c-know)" }}>Future memory</p>
-                )}
-                <p className="font-medium">{r.title}</p>
-                <p className="text-ink-2 mt-1">"{r.text}"</p>
-                <ItemMeta type={r.type} importance={r.importance} createdAt={r.created_at} />
+              <li key={r.id + r.kind}>
+                <Row icon={r.kind === "future_note" ? "✉️" : typeIcon(r.type)} color={r.kind === "future_note" ? "var(--c-know)" : TYPE_COLOR[r.type] ?? "var(--c-know)"}
+                  title={<>{r.kind === "future_note" && <span className="chip !py-0 !text-[10.5px] font-semibold mr-1.5 align-[1px]" style={{ color: "var(--c-know)" }}>Future memory</span>}{r.title}</>}>
+                  <p className="row-body italic line-clamp-2">&ldquo;{r.text}&rdquo;</p>
+                  <ItemMeta type={r.type} importance={r.importance} createdAt={r.created_at} />
+                </Row>
               </li>
             ))}
           </ul>
@@ -360,26 +404,34 @@ async function BooksSection({ sb, userId }: { sb: any; userId: string }) {
 
   if (!((readingBooks && readingBooks.length > 0) || (booksWant ?? 0) > 0)) return null;
 
+  const stats = [
+    { label: "Finished", value: booksDone ?? 0, color: "var(--success)" },
+    { label: "Reading", value: readingBooks?.length ?? 0, color: "var(--c-book)" },
+    { label: "On the list", value: booksWant ?? 0, color: "var(--ink-2)" },
+  ];
   return (
-    <Section title="Books" href="/books" color="var(--success)">
-      <div className="card p-4 space-y-2.5 text-sm soft-shadow">
-        <p className="text-xs text-ink-2">
-          <span className="font-semibold" style={{ color: "var(--success)" }}>{booksDone ?? 0} finished</span>
-          {" · "}<span className="font-semibold" style={{ color: "var(--c-book)" }}>{readingBooks?.length ?? 0} in progress</span>
-          {" · "}{booksWant ?? 0} on the list
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(readingBooks ?? []).map((bk: any) => (
-            <span key={bk.id} className="chip chip-c-book !text-sm">📖&nbsp;
-              {bk.title}{bk.author ? <span className="text-ink-2"> - {bk.author}</span> : null}
-            </span>
-          ))}
-          {(wantBooks ?? []).map((bk: any) => (
-            <span key={bk.id} className="chip !text-sm">
-              up next: {bk.title}
-            </span>
+    <Section title="Books" icon="📚" color="var(--c-book)" href="/books">
+      <div className="panel">
+        <div className="grid grid-cols-3">
+          {stats.map((s) => (
+            <div key={s.label} className="mini-stat">
+              <p className="mini-stat-value" style={{ color: s.color }}>{s.value}</p>
+              <p className="text-[11.5px] font-medium text-ink-2 mt-1">{s.label}</p>
+            </div>
           ))}
         </div>
+        {(readingBooks ?? []).map((bk: any) => (
+          <Row key={bk.id} icon="📖" color="var(--c-book)" title={bk.title}
+            trailing={<span className="chip font-semibold" style={{ color: "var(--c-book)" }}>Reading</span>}>
+            {bk.author && <p className="row-body">{bk.author}</p>}
+          </Row>
+        ))}
+        {(wantBooks ?? []).map((bk: any) => (
+          <Row key={bk.id} icon="🔖" color="var(--ink-2)" title={bk.title} strong={false}
+            trailing={<span className="chip text-ink-2">Up next</span>}>
+            {bk.author && <p className="row-body">{bk.author}</p>}
+          </Row>
+        ))}
       </div>
     </Section>
   );
@@ -400,20 +452,16 @@ async function RemindersSection({ sb, userId }: { sb: any; userId: string }) {
     remMetas?.find((m: any) => m.memory_id === id)?.title ?? "Reminder";
 
   return (
-    <Section title="Upcoming reminders" color="var(--c-task)">
-      <div className="space-y-2">
+    <Section title="Upcoming reminders" icon="⏰" color="var(--c-task)" count={upcomingRems.length}>
+      <div className="panel">
         {upcomingRems.map((r: any) => {
-          const color = remindColor(r.remind_at);
           const urgent = new Date(r.remind_at).getTime() <= endOfTodayMs();
           const inner = (
-            <div className="card p-4 text-sm flex justify-between gap-3 hover:border-ember/60 soft-shadow"
-              style={{ borderLeft: `3px solid ${color}` }}>
-              <span className={urgent ? "font-semibold" : ""}>{titleFor(r.memory_id)}</span>
-              <TimeChip iso={r.remind_at} />
-            </div>
+            <Row icon="⏰" color={remindColor(r.remind_at)} title={titleFor(r.memory_id)} strong={urgent}
+              trailing={<TimeChip iso={r.remind_at} />} />
           );
           return r.memory_id
-            ? <MemoryOpener key={r.id} id={r.memory_id}>{inner}</MemoryOpener>
+            ? <MemoryOpener key={r.id} id={r.memory_id} className="panel-click block">{inner}</MemoryOpener>
             : <div key={r.id}>{inner}</div>;
         })}
       </div>
@@ -426,21 +474,23 @@ async function RecentSection({ sb, userId }: { sb: any; userId: string }) {
     .eq("user_id", userId).is("deleted_at", null).order("created_at", { ascending: false }).limit(5);
 
   return (
-    <Section title="Recent memories" href="/timeline">
+    <Section title="Recent memories" icon="🕘" color="var(--ember)" href="/timeline">
       {recent && recent.length > 0 ? (
-        <div className="space-y-2">
+        <div className="panel">
           {recent.map((m: any) => {
             const raw: unknown = m.memory_metadata;
             const meta = (Array.isArray(raw) ? raw[0] : raw) ?? {};
+            const type = meta.type ?? "thought";
             return (
-              <MemoryOpener key={m.id} id={m.id}>
-                <div className="card p-4 text-sm hover:border-ember/60 soft-shadow">
-                  <p>{m.original_text}</p>
-                  <div className="flex items-center gap-2 mt-2 text-xs text-ink-2">
-                    <span className={`chip ${(TYPE_CHIP as any)[meta.type] ?? ""}`}><span aria-hidden className="mr-1">{typeIcon(meta.type)}</span>{meta.type ?? "thought"}</span>
+              <MemoryOpener key={m.id} id={m.id} className="panel-click block">
+                <Row icon={typeIcon(type)} color={TYPE_COLOR[type] ?? "var(--ink-2)"} strong={false}
+                  title={<span className="line-clamp-2">{m.original_text}</span>}>
+                  <span className="mt-1 flex items-center gap-1.5 text-[11.5px] text-ink-2">
+                    <span className="capitalize font-medium" style={{ color: TYPE_COLOR[type] ?? "var(--ink-2)" }}>{type}</span>
+                    <span aria-hidden className="opacity-50">·</span>
                     <span>{relTime(m.created_at)}</span>
-                  </div>
-                </div>
+                  </span>
+                </Row>
               </MemoryOpener>
             );
           })}

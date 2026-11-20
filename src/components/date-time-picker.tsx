@@ -114,7 +114,7 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
                   key={i}
                   onClick={() => pickDay(day)}
                   className={`h-8 rounded-lg text-sm transition-colors cursor-pointer
-                    ${isSel ? "bg-ember text-white font-medium"
+                    ${isSel ? "bg-ember-strong text-white font-medium"
                       : isToday ? "border border-ember/50 text-ember hover:bg-ember-soft"
                       : "hover:bg-paper-2"}`}
                   aria-label={`${MONTHS[m]} ${day}`}

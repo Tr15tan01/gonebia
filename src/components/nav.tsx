@@ -164,7 +164,7 @@ export function AppNav({ children, plan }: { children: React.ReactNode; plan?: s
   const bell = (size: "sm" | "lg" = "sm") => (
     <button onClick={openPanel} className={`btn-ghost !px-2.5 relative ${size === "lg" ? "text-xl" : ""}`} aria-label="Notifications">
       {'\u{1F514}'}
-      {unreadCount > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-ember text-white text-[10px] grid place-items-center">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+      {unreadCount > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-ember-strong text-white text-[10px] grid place-items-center">{unreadCount > 9 ? "9+" : unreadCount}</span>}
     </button>
   );
 

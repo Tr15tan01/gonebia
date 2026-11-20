@@ -86,7 +86,7 @@ export function DiscoverClient({ plan, used, limit }: { plan: string; used: numb
                     <div className="flex gap-1.5">
                       {tool.windows.map((w) => (
                         <button key={w} onClick={() => setWindow(w)}
-                          className={`chip cursor-pointer ${window === w ? "!bg-ember !text-white !border-ember" : ""}`}>
+                          className={`chip cursor-pointer ${window === w ? "!bg-ember-strong !text-white !border-ember-strong" : ""}`}>
                           {w === 30 ? "30 days" : w === 90 ? "90 days" : w === 180 ? "6 months" : w === 365 ? "1 year" : `${w}d`}
                         </button>
                       ))}
