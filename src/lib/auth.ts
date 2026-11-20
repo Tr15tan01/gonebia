@@ -11,7 +11,6 @@ import { rateLimit } from "@/lib/rate-limit";
 // middleware.ts, which uses the lighter auth.config.ts instead.
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  trustHost: true,
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
